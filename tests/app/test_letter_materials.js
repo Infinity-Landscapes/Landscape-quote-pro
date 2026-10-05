@@ -1,7 +1,7 @@
 // Quote letter: one consolidated "Materials allowed for" list instead of a materials line under
 // each service. It sits straight after the last service (and the waste removal line that closes the
 // works list), before notes, totals and the closing. A material used by more than one service is
-// one line with the quantities added together. Same in the plain-text (email) version.
+// one line with the quantities added together. Consumables are left off. Same in the plain-text (email) version.
 const { chromium } = require('playwright');
 const fs = require('fs');
 (async () => {
@@ -47,7 +47,7 @@ const fs = require('fs');
     const T = window.__T; const q = T.buildQuoteFromDraft(T.S().draft, "draft");
     // what the list should be, worked out independently from each section's own materials
     const exp = {}, order = [], perKey = {};
-    q.sections.filter(s=>s.key!=="waste" && s.subtotal>0.004).forEach(s=>(s.materials||[]).forEach(m=>{
+    q.sections.filter(s=>s.key!=="waste" && s.subtotal>0.004).forEach(s=>(s.materials||[]).filter(m=>!/^consumables$/i.test(m.name.trim())).forEach(m=>{
       const key = m.name.trim().toLowerCase()+'|'+String(m.unit).trim().toLowerCase();
       if(!(key in exp)){ exp[key]=0; order.push(key); perKey[key]=new Set(); }
       exp[key] += Number(m.qty)||0; perKey[key].add(s.key);
@@ -59,6 +59,7 @@ const fs = require('fs');
       exp: order.map(k=>[k, Math.round(exp[k]*100)/100]), shared,
       list: list.map(m=>[m.name.trim().toLowerCase()+'|'+String(m.unit).trim().toLowerCase(), m.qty, m.name, m.unit]),
       text: T.quoteLetterPlainText(q),
+      hasConsumables: q.sections.some(s=>(s.materials||[]).some(m=>/^consumables$/i.test(m.name.trim()) && m.qty>0 && m.cost>=0)),
     };
   });
   console.log('sections:', JSON.stringify(r.sections));
@@ -93,6 +94,8 @@ const fs = require('fs');
   }
   const rows = await page.$$eval('#letterCapture table.letter-mats tr', trs => trs.length);
   check('letter table has one row per material', rows === r.list.length);
+  check('consumables are left off the customer letter', !/Consumables/i.test(letter));
+  check('consumables are still in the costing (only hidden from the letter)', r.hasConsumables);
   await (await page.$('#letterCapture')).screenshot({ path: __dirname+'/letter_materials.png' });
 
   // ---- plain-text (email) version ----
@@ -102,6 +105,7 @@ const fs = require('fs');
   check('plain text: block after the services and waste, before the totals', tMat > t.indexOf('Waste removal & site clearance') && tMat < t.indexOf('Subtotal (ex VAT)'));
   const block = t.slice(tMat).split('\n\n')[0].split('\n').slice(1);
   check('plain text: one line per material', block.length === r.list.length);
+  check('plain text: no consumables line', !/Consumables/i.test(t));
 
   // ---- the letter HTML itself (what the PDF and the saved quote's letter are drawn from) ----
   const h = await page.evaluate(() => { const T = window.__T; return T.quoteLetterHtml(T.buildQuoteFromDraft(T.S().draft, "draft")); });

@@ -2473,11 +2473,13 @@ function sectionMaterialsList(s){
 // The quote letter's one materials list: every material across all the quote's services, in the
 // order they first appear. The same material (same name and unit) used by more than one service
 // — the same screws, the same sand — becomes one line with the quantities added together.
+// Consumables are left off the customer's letter (still costed in the price, as before).
 function quoteMaterialsList(q){
   const out = [], byKey = {};
   (q.sections||[]).filter(s=>s.key!=="waste" && s.subtotal>0.004).forEach(s=>{
     sectionMaterialsList(s).forEach(m=>{
       const qty = Number(m.qty)||0; if(!qty) return;
+      if(/^consumables$/i.test(String(m.name||'').trim())) return;
       const k = String(m.name||'').trim().toLowerCase()+'|'+String(m.unit||'').trim().toLowerCase();
       if(byKey[k]) byKey[k].qty += qty;
       else { byKey[k] = {name:m.name, unit:m.unit, qty}; out.push(byKey[k]); }
