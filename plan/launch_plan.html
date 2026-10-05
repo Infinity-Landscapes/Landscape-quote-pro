@@ -141,8 +141,8 @@ const PLAN = [
    ["fb-connect","Connect the app to Firebase","claude","Progress 4 Oct: built and tested against a local copy of Firebase — logins and the database work. Still to do: put it live (needs a deploy key from you), file storage, server functions."],
    ["fb-storage","Swap the app's storage over to Firebase","claude","Done 4 Oct (tested locally): settings, quotes, jobs, calendar, unfinished quotes and logos save to Firestore under each business's own account. The claude.ai version and the website version run the same app code."],
    ["auth","Sign-up and login screens","claude","Progress 4 Oct: email and password sign-up, sign-in, password reset and verification email are built and tested. Still to do: Sign in with Google and Sign in with Apple (Apple requires its own option if Google login is offered on iPhone)."],
-   ["devices-limit","Device limit per login (2 / 5 / 10 by tier)","claude","Each phone, tablet or browser that signs in is recorded. When the limit is reached, the app lists the current devices (name, last used) and asks which to sign out, like WhatsApp. Also a Devices list in settings to remove one at any time."],
-   ["swap-limit","Monthly device-swap limit","claude","Up to 2 device changes a month. After that: \"You've swapped devices twice this month — you can swap again on the 1st.\" Stops people rotating one login round a team. You can reset it from your admin view if a genuine customer gets stuck (e.g. a broken phone)."],
+   ["devices-limit","Device limit per login (2 / 5 / 10 by tier)","claude","Done 5 Oct (tested locally): each login is limited to 2 / 5 / 10 devices by plan (2 during the trial). On one too many, the app lists the current devices and asks which to sign out; the signed-out device gets a message. Also a Devices list in Account. Enforced by the database rules, not just the app."],
+   ["swap-limit","Monthly device-swap limit","claude","Done 5 Oct (tested locally): 2 device removals a calendar month, enforced by the database rules. When used up, the app says when it resets and gives the support email. Resetting it for a customer (lost phone) will be an admin-view button."],
    ["signin-email","Email the owner on every new sign-in","claude","\"New sign-in on Samsung Galaxy A54, 4 Oct, 7:42am. Not you? Change your password.\" Sent by a Firebase function through an email service."],
    ["pw-signout","Password change signs out every device","claude","So the owner can take the account back in one step if the login has been passed on."],
    ["pin","Decide what happens to the PIN lock","both","Suggested: keep it as a quick lock on the phone, on top of the login."],
@@ -153,7 +153,7 @@ const PLAN = [
    ["migrate-check","Check Infinity's data in the new app","you","Open a few quotes and jobs and confirm they look right."],
   ]},
   {g:"Reliability", tasks:[
-   ["offline","Working with no signal","claude","Firestore keeps working offline and syncs later; show a clear \"offline\" note."],
+   ["offline","Working with no signal","claude","Done 5 Oct (tested locally): with no signal the app opens from its local copy and saves straight away; changes sync when the signal returns, with an 'offline' banner meanwhile."],
    ["backups","Daily backups","claude","Scheduled database exports, kept for 30 days."],
    ["errors","Crash and error reporting","claude","So problems on customers' phones reach us (Firebase Crashlytics or similar)."],
    ["admin","An admin view for you","claude","List of businesses, when they joined, subscription status, and a switch to give an account free access."],
@@ -173,10 +173,10 @@ const PLAN = [
    ["rc-connect","Connect Stripe, Apple and Google to RevenueCat","both","One \"Pro\" entitlement that every plan unlocks. You add the keys; I wire it up."],
   ]},
   {g:"In the app", tasks:[
-   ["paywall","Subscribe screen","claude","Web: Stripe Checkout. Android: Google Play purchase. iPhone: Apple purchase. In the UK the iPhone app must not mention or link to the web price."],
-   ["gate","Lock and unlock features by subscription","claude","Reads the tier's device limit. Trial, active, grace period, lapsed (read-only) — following your decision in step 0."],
+   ["paywall","Subscribe screen","claude","Progress 5 Oct: plans screen built (Solo / Team / Business, monthly or yearly, current plan marked). On the website it explains subscribing in the phone app (store-only launch). In the phone apps it hands the purchase to the store — to be connected to RevenueCat once the accounts exist."],
+   ["gate","Lock and unlock features by subscription","claude","Done 5 Oct (tested locally): trial (7 days) → active / grace (7 days after a failed payment) → read-only when lapsed. Read-only is enforced by the database rules too. Banners show trial days left, payment problems and read-only."],
    ["status-sync","Keep subscription status up to date","claude","RevenueCat tells our server about every purchase, renewal, cancellation and refund."],
-   ["manage","\"Manage subscription\" and \"Restore purchases\"","claude","Web opens the Stripe customer portal; phones open the Play / App Store subscription pages. Restore purchases is an Apple requirement."],
+   ["manage","\"Manage subscription\" and \"Restore purchases\"","claude","Progress 5 Oct: Account panel has Manage subscription (opens the App Store / Google Play subscription page) and the plans screen has Restore purchases, both ready to connect to RevenueCat."],
    ["invoices","VAT invoices for web customers","claude","Stripe emails a proper VAT invoice with your VAT number each month."],
   ]},
   {g:"Test every case", tasks:[
@@ -185,16 +185,16 @@ const PLAN = [
  ]},
  {n:"5", title:"Legal and policies", why:"Both stores check these before approving.", groups:[
   {g:"Documents", tasks:[
-   ["privacy","Privacy policy","claude","What's stored (business details, their customers' names, addresses, phone numbers and emails, quotes), who processes it (Google Firebase, Stripe, RevenueCat, Apple, Google), how long it's kept, people's rights, your ICO number and contact. Drafted by me — have a solicitor check it."],
-   ["terms","Terms of service and subscription terms","claude","Fair use: one subscription covers one business, and sharing a login with another business can lead to the account being closed. Plus auto-renewal, cancellation, refunds, that quotes are calculated from the business's own prices and are its responsibility, limits of liability."],
-   ["dpa","Data processing terms","claude","Your customers are in charge of their own customers' data and you process it for them — this needs to be in the terms."],
+   ["privacy","Privacy policy","claude","Drafted 5 Oct in the 'Legal drafts' doc, for the solicitor. Needs company number, registered office and ICO number."],
+   ["terms","Terms of service and subscription terms","claude","Drafted 5 Oct in the 'Legal drafts' doc (terms of service + subscription terms), including the one-business-per-subscription fair use rule."],
+   ["dpa","Data processing terms","claude","Drafted 5 Oct in the 'Legal drafts' doc (UK GDPR Article 28 terms)."],
    ["solicitor","Have the documents checked","you","A solicitor who handles software or data protection."],
    ["publish-docs","Publish them on the website","both","At fixed addresses (e.g. /privacy and /terms) — the stores ask for the links."],
   ]},
   {g:"In the app", tasks:[
-   ["delete-account","Delete account inside the app","claude","Apple requires it. Deletes the business's data and cancels the web subscription; tells phone subscribers how to cancel in their store."],
-   ["delete-web","Account deletion page on the website","claude","Google requires a web link where people can ask for their account and data to be deleted."],
-   ["export","Download all my data","claude","A full export of quotes and customers, so businesses can leave with their data."],
+   ["delete-account","Delete account inside the app","claude","Done 5 Oct (tested locally): Account → Delete my account (type DELETE + password) deletes all business data and the login, and reminds store subscribers to cancel in their store."],
+   ["delete-web","Account deletion page on the website","claude","Done 5 Oct: /delete-account page explains how, with an email fallback. Goes live with the website."],
+   ["export","Download all my data","claude","Done 5 Oct (tested locally): Account → Download all my data saves settings, quotes, calendar, drafts and logo as one file."],
    ["consent","Cookie and analytics consent on the website","claude","Only if we add analytics. Without tracking cookies no banner is needed."],
   ]},
  ]},
@@ -219,17 +219,17 @@ const PLAN = [
  ]},
  {n:"7", title:"Store listings", why:"What customers and reviewers see.", groups:[
   {g:"Words", tasks:[
-   ["listing-text","Name, subtitle and descriptions","claude","Apple: name and subtitle (30 characters each), keywords (100 characters), description. Google: name (30), short description (80), full description (4,000)."],
+   ["listing-text","Name, subtitle and descriptions","claude","Done 5 Oct in the 'Store listings' doc: names, subtitle, promotional text, keywords, descriptions, all within the limits."],
    ["category","Category and age rating","both","Business. Age rating questionnaires in both stores (it'll be suitable for everyone)."],
-   ["review-notes","Notes and a demo login for the reviewers","both","A demo business with sample quotes and jobs, plus a short explanation of the subscription and who the app is for."],
+   ["review-notes","Notes and a demo login for the reviewers","both","Notes written 5 Oct in the 'Store listings' doc. Still to do: create the demo account with sample quotes (after Firebase goes live)."],
   ]},
   {g:"Pictures", tasks:[
    ["screenshots","Screenshots","claude","iPhone (6.9\" size) and Android phone, showing a quote being built, the letter, a job's finance tracker and the calendar. iPad only if we choose to support it."],
    ["feature-graphic","Google Play feature graphic","claude","1024×500 banner."],
   ]},
   {g:"Forms", tasks:[
-   ["apple-privacy","Apple App Privacy answers","both","What data is collected and why — must match the privacy policy."],
-   ["play-safety","Google Play Data safety form","both","Same information in Google's format, plus the account deletion link."],
+   ["apple-privacy","Apple App Privacy answers","both","Answers drafted 5 Oct in the 'Store listings' doc — you enter them in App Store Connect."],
+   ["play-safety","Google Play Data safety form","both","Answers drafted 5 Oct in the 'Store listings' doc, with the account deletion link — you enter them in Play Console."],
    ["availability","Countries and price availability","you","UK only to start is simplest."],
   ]},
  ]},

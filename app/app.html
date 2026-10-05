@@ -89,7 +89,8 @@
     flex-wrap:wrap;
     row-gap:10px;
   }
-  .brand{display:flex;align-items:center;gap:10px;}
+  .brand{display:flex;align-items:center;gap:10px;min-width:0;}
+  .topbar-actions{display:flex;gap:8px;flex:none;}
   .brand-mark{width:34px;height:34px;flex:none;}
   .brand-logo{display:block;object-fit:contain;flex:none;}
   .brand-initials{width:34px;height:34px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;background:var(--primary);color:#fff;font-family:'Poppins';font-weight:800;font-size:14px;}
@@ -278,6 +279,7 @@
     .topbar{padding:6px 2px 16px;}
     .brand-word{font-size:15.5px;}
     .topbar .nav-tabs{order:3;flex:1 1 100%;justify-content:center;}
+    .topbar .brand{flex:1 1 0;}
     .nav-tab{padding:9px 13px;font-size:12px;}
     .icon-btn{width:42px;height:42px;}
     .btn{padding:12px 18px;}
@@ -4761,7 +4763,10 @@ function shell(content, active){
     <div class="nav-tabs">
       ${tabs.map(([k,l])=>`<button class="nav-tab ${active===k?'active':''}" data-action="nav" data-nav="${k}">${l}</button>`).join('')}
     </div>
-    <button class="icon-btn" data-action="lock" title="Lock">🔒</button>
+    <div class="topbar-actions">
+      ${window.__platform ? `<button class="icon-btn" data-action="account" title="Account, plan and devices">👤</button>` : ''}
+      <button class="icon-btn" data-action="lock" title="Lock">🔒</button>
+    </div>
   </div>
   ${content}`;
 }
@@ -7873,12 +7878,23 @@ async function finalizeQuote(status){
 /* =========================================================================
    EVENT DELEGATION
    ========================================================================= */
+// Actions still allowed while the own-website build is read-only (see the click handler).
+const READ_ONLY_OK = new Set(["nav","openQuote","jobsFilter","showChaseList","calNextMonth","calPrevMonth","calToday","calTeamFilter",
+  "settingsTab","downloadQuotePdf","downloadPaymentPdf","printQuote","copyOrder","modalCancel","modalCopy","modalOk","lock","login",
+  "platformSignOut","account"]);
 App.addEventListener("click", async (e)=>{
   const t = e.target.closest("[data-action]");
   if(!t) return;
   const action = t.getAttribute("data-action");
   const d = S.draft;
+  // Own-website build: once the trial or subscription has ended the app is read-only — quotes,
+  // jobs and the calendar can be looked at and downloaded, but nothing can be created or changed.
+  if(window.__platform && window.__platform.readOnly && window.__platform.readOnly()){
+    const nav = action==="nav" ? t.getAttribute("data-nav") : null;
+    if(!READ_ONLY_OK.has(action) || nav==="newquote"){ e.preventDefault(); window.__platform.explainReadOnly(); return; }
+  }
   switch(action){
+    case "account": { if(window.__platform) window.__platform.openAccount(); break; }
     case "nav": {
       const n = t.getAttribute("data-nav");
       if(n==="settings" && S.screen==="settings"){ render(); break; }

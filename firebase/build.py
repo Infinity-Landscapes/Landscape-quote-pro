@@ -17,27 +17,7 @@ CONFIG = {
     "appId": "1:572546781213:web:3f3cf8a3869b8f1b2776f4",
 }
 
-GATE_CSS = """
-#authGate{position:fixed;inset:0;z-index:100000;display:none;align-items:center;justify-content:center;padding:16px;
-  background:#f2f8ea;font-family:Manrope,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1d2a12;}
-@media (prefers-color-scheme: dark){#authGate{background:#111a0b;color:#e8f0df;}}
-#authGate .ag-box{width:100%;max-width:400px;background:#fff;border-radius:16px;padding:26px 22px;box-shadow:0 8px 30px rgba(0,0,0,.08);}
-@media (prefers-color-scheme: dark){#authGate .ag-box{background:#1b2613;}}
-#authGate .ag-brand{font-family:Poppins,system-ui,sans-serif;font-weight:700;color:#56822b;margin-bottom:14px;font-size:15px;}
-@media (prefers-color-scheme: dark){#authGate .ag-brand{color:#b7dd8a;}}
-#authGate h1{font-family:Poppins,system-ui,sans-serif;font-size:22px;margin:0 0 4px;}
-#authGate .ag-sub{margin:0 0 16px;opacity:.75;font-size:14px;}
-#authGate label{display:block;font-weight:700;font-size:13px;margin:0 0 12px;}
-#authGate input{display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:11px 12px;font-size:16px;border:1px solid #c9d6bb;border-radius:10px;background:transparent;color:inherit;}
-#authGate .ag-btn{width:100%;padding:12px;border:0;border-radius:10px;background:#56822b;color:#fff;font-weight:800;font-size:15px;cursor:pointer;margin-top:4px;}
-#authGate .ag-btn[disabled]{opacity:.6;cursor:default;}
-#authGate .ag-links{display:flex;flex-direction:column;gap:8px;margin-top:14px;font-size:14px;text-align:center;}
-#authGate .ag-links a{color:#56822b;}
-@media (prefers-color-scheme: dark){#authGate .ag-links a{color:#b7dd8a;}}
-#authGate .ag-msg{padding:10px 12px;border-radius:10px;font-size:14px;margin-bottom:12px;}
-#authGate .ag-msg.err{background:#fde8e8;color:#9b1c1c;}
-#authGate .ag-msg.ok{background:#e2f0d3;color:#3f611f;}
-"""
+CSS_FILE = os.path.join(ROOT, "src", "platform.css")
 
 def main():
     app = open(SRC_APP, encoding="utf-8").read()
@@ -46,11 +26,13 @@ def main():
     for f in ("firebase-app-compat.js", "firebase-auth-compat.js", "firebase-firestore-compat.js"):
         shutil.copy(os.path.join(SDK, f), os.path.join(PUB, "sdk", f))
     shutil.copy(os.path.join(ROOT, "src", "platform.js"), os.path.join(PUB, "platform.js"))
+    for f in os.listdir(os.path.join(ROOT, "src", "legal")):
+        shutil.copy(os.path.join(ROOT, "src", "legal", f), os.path.join(PUB, f))
     html = (
         "<!doctype html>\n<html lang=\"en-GB\">\n<head>\n<meta charset=\"utf-8\">\n"
         "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n"
         "<title>Infinity Landscape Quote Pro</title>\n"
-        "<style>html,body{margin:0;padding:0;}" + GATE_CSS + "</style>\n"
+        "<style>html,body{margin:0;padding:0;}\n" + open(CSS_FILE, encoding="utf-8").read() + "</style>\n"
         "<script>window.__FIREBASE_CONFIG__ = " + json.dumps(CONFIG) + ";</script>\n"
         "<script src=\"/sdk/firebase-app-compat.js\"></script>\n"
         "<script src=\"/sdk/firebase-auth-compat.js\"></script>\n"

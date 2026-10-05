@@ -1,13 +1,77 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Each business's data lives under businesses/{uid}: only that signed-in account can read
-    // or write it. Nothing else in the database is reachable from the app.
+
+    function signedIn(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+    function acct(uid) {
+      return get(/databases/$(database)/documents/accounts/$(uid)).data;
+    }
+    // Trial (7 days from account creation), a paid period, a payment-retry grace period, or a
+    // permanent free account. Only the server (store webhooks / admin) can set the paid fields.
+    function entitled(uid) {
+      let a = acct(uid);
+      return a.get('freeForever', false) == true
+        || (a.get('periodEnd', null) != null && a.periodEnd > request.time)
+        || (a.get('graceUntil', null) != null && a.graceUntil > request.time)
+        || (a.createdAt + duration.value(7, 'd') > request.time);
+    }
+    function tierLimit(uid) {
+      let a = acct(uid);
+      let tier = a.get('tier', 'solo');
+      return a.get('freeForever', false) == true ? 10
+        : tier == 'business' ? 10
+        : tier == 'team' ? 5
+        : 2;
+    }
+    function monthKey() {
+      return request.time.year() * 100 + request.time.month();
+    }
+
+    // ---- Each business's quotes, jobs, settings, calendar, logo ----
+    // Readable (and deletable, for "delete my account") by its owner at any time; writable only
+    // while the trial or subscription is running — after that the app is read-only.
     match /businesses/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read, delete: if signedIn(uid);
+      allow create, update: if signedIn(uid) && entitled(uid);
       match /{rest=**} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read, delete: if signedIn(uid);
+        allow create, update: if signedIn(uid) && entitled(uid);
       }
+    }
+
+    // ---- Account: trial start, plan, subscription status ----
+    match /accounts/{uid} {
+      allow read: if signedIn(uid);
+      // The app records when the account was first opened (server time — can't be backdated).
+      // Everything else on this document is written only by the server.
+      allow create: if signedIn(uid)
+        && request.resource.data.keys().hasOnly(['createdAt'])
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+
+      // ---- Devices signed in to this account, and the monthly swap count ----
+      match /private/devices {
+        allow read: if signedIn(uid);
+        allow create, update: if signedIn(uid) && validDevices(uid);
+        allow delete: if false;
+      }
+    }
+
+    function validDevices(uid) {
+      let n = request.resource.data;
+      let oldDevices = resource == null ? {} : resource.data.devices;
+      let oldMonth = resource == null ? 0 : resource.data.swapMonth;
+      let oldUsed = resource == null ? 0 : resource.data.swapsUsed;
+      let removed = oldDevices.keys().removeAll(n.devices.keys()).size();
+      let prevUsed = oldMonth == monthKey() ? oldUsed : 0;
+      return n.keys().hasOnly(['devices', 'swapMonth', 'swapsUsed'])
+        && n.devices is map
+        && n.devices.size() <= tierLimit(uid)
+        && n.swapMonth == monthKey()
+        && n.swapsUsed == prevUsed + removed
+        && n.swapsUsed <= 2;
     }
   }
 }
