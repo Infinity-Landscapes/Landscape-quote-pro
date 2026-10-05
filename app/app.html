@@ -265,6 +265,9 @@
   .letter-body h4{font-family:'Poppins';font-size:14.5px;margin:20px 0 6px;color:#26302a;}
   .letter-body ul{margin:4px 0 10px 18px;padding:0;}
   .letter-body li{margin-bottom:3px;}
+  .letter-body table.letter-mats{width:100%;border-collapse:collapse;font-size:13px;margin:2px 0 14px;}
+  .letter-body table.letter-mats td{padding:4px 0;border-bottom:1px solid #e3e8df;color:#2c352e;vertical-align:top;}
+  .letter-body table.letter-mats td.q{text-align:right;white-space:nowrap;padding-left:14px;color:#5d685f;}
   .letter-total-box{background:var(--brand-50);border:1px solid var(--brand-100);border-radius:10px;padding:14px 18px;margin:18px 0;font-size:15px;}
   .letter-total-box b{font-family:'Poppins';font-size:19px;}
   .letter-foot img{width:100%;display:block;margin-top:20px;}
@@ -2466,6 +2469,22 @@ function qtyText(area, unit){
    "material" so it's deliberately left out — only s.materials, never s.plant. */
 function sectionMaterialsList(s){
   return (s.materials||[]).map(m=>({name:m.name, qty:m.qty, unit:m.unit}));
+}
+// The quote letter's one materials list: every material across all the quote's services, in the
+// order they first appear. The same material (same name and unit) used by more than one service
+// — the same screws, the same sand — becomes one line with the quantities added together.
+function quoteMaterialsList(q){
+  const out = [], byKey = {};
+  (q.sections||[]).filter(s=>s.key!=="waste" && s.subtotal>0.004).forEach(s=>{
+    sectionMaterialsList(s).forEach(m=>{
+      const qty = Number(m.qty)||0; if(!qty) return;
+      const k = String(m.name||'').trim().toLowerCase()+'|'+String(m.unit||'').trim().toLowerCase();
+      if(byKey[k]) byKey[k].qty += qty;
+      else { byKey[k] = {name:m.name, unit:m.unit, qty}; out.push(byKey[k]); }
+    });
+  });
+  out.forEach(m=>{ m.qty = Math.round(m.qty*100)/100; });
+  return out;
 }
 
 /* Scope-of-work bullets for a priced section — built-ins use their SERVICE_COPY narrative;
@@ -5481,15 +5500,15 @@ function quoteLetterHtml(q, opts){
       <h4>Works to be completed</h4>
       ${sections.map(s=>{
         const {unit, area, totalIncVat, rate} = sectionMeasureRate(s, vatRate);
-        const mats = sectionMaterialsList(s);
         return `
         <p style="margin-bottom:2px;"><b>${esc(s.label)}</b> – ${qtyText(area,unit)} – ${gbp(totalIncVat)}${vatOn?' inc VAT':''}${rate!=null?` (${gbp(rate)}/${unit})`:''}</p>
         ${editing ? letterEditBox('section:'+s.key, q, sectionLetterLines(q,s).join('\n')) : `<ul>${sectionLetterLines(q,s).map(li=>`<li>${esc(li)}</li>`).join('')}${customerFacingNoteTexts(s.notes).map(n=>`<li>${esc(n)}</li>`).join('')}</ul>`}
-        ${mats.length?`<p style="margin:2px 0 12px;font-size:12.5px;color:#5d685f;"><b>Materials allowed for:</b> ${mats.map(m=>`${esc(m.name)} (${m.qty} ${esc(m.unit)})`).join(', ')}</p>`:''}
       `;}).join('')}
       ${waste ? (()=>{ const {unit, area, totalIncVat, rate} = sectionMeasureRate(waste, vatRate);
         return `<p style="margin-bottom:2px;"><b>Waste removal &amp; site clearance</b> – ${qtyText(area,unit)} – ${gbp(totalIncVat)}${vatOn?' inc VAT':''}${rate!=null?` (${gbp(rate)}/${unit})`:''}</p>${editing ? letterEditBox('section:waste', q, sectionLetterLines(q,waste).join('\n')) : ''}<ul>${editing?'':sectionLetterLines(q,waste).map(li=>`<li>${esc(li)}</li>`).join('')}${customerFacingNoteTexts(waste.notes).map(n=>`<li>${esc(n)}</li>`).join('')}</ul>`;
       })() : ''}
+      ${(()=>{ const mats = quoteMaterialsList(q); return mats.length ? `<h4>Materials allowed for</h4>
+      <table class="letter-mats"><tbody>${mats.map(m=>`<tr><td>${esc(m.name)}</td><td class="q">${m.qty} ${esc(m.unit)}</td></tr>`).join('')}</tbody></table>` : ''; })()}
       ${(q.extras&&q.extras.length)?`<h4>Additional works</h4><ul>${q.extras.map(e=>`<li>${esc(e.description)}${extraParts(e).legacy&&(Number(e.qty)||0)>1?` (x${e.qty})`:''} – ${gbp(extraSellPrice(q,e))}${vatOn?' inc VAT':''}</li>`).join('')}</ul>`:''}
       ${customerFacingNoteTexts(q.generalNotes).length?`<h4>Notes</h4><ul>${customerFacingNoteTexts(q.generalNotes).map(n=>`<li>${esc(n)}</li>`).join('')}</ul>`:''}
       ${editing ? letterEditBox('siteTidy', q) : `<p>${esc(letterPart(q,'siteTidy'))}</p>`}
@@ -5523,11 +5542,9 @@ function quoteLetterPlainText(q){
   L.push('WORKS TO BE COMPLETED');
   sections.forEach(s=>{
     const {unit, area, totalIncVat, rate} = sectionMeasureRate(s, vatRate);
-    const mats = sectionMaterialsList(s);
     L.push(`${unesc(s.label)} - ${qtyText(area,unit)} - ${gbp(totalIncVat)}${vatOn?' inc VAT':''}${rate!=null?` (${gbp(rate)}/${unit})`:''}`);
     sectionLetterLines(q,s).forEach(li=>L.push(`  - ${li}`));
     customerFacingNoteTexts(s.notes).forEach(n=>L.push(`  - ${unesc(n)}`));
-    if(mats.length) L.push(`  Materials allowed for: ${mats.map(m=>`${unesc(m.name)} (${m.qty} ${unesc(m.unit)})`).join(', ')}`);
     L.push('');
   });
   if(waste){
@@ -5535,6 +5552,12 @@ function quoteLetterPlainText(q){
     L.push(`Waste removal & site clearance - ${qtyText(area,unit)} - ${gbp(totalIncVat)}${vatOn?' inc VAT':''}${rate!=null?` (${gbp(rate)}/${unit})`:''}`);
     sectionLetterLines(q,waste).forEach(li=>L.push(`  - ${li}`));
     customerFacingNoteTexts(waste.notes).forEach(n=>L.push(`  - ${unesc(n)}`));
+    L.push('');
+  }
+  const mats = quoteMaterialsList(q);
+  if(mats.length){
+    L.push('MATERIALS ALLOWED FOR');
+    mats.forEach(m=>L.push(`  - ${unesc(m.name)}: ${m.qty} ${unesc(m.unit)}`));
     L.push('');
   }
   if(q.extras && q.extras.length){

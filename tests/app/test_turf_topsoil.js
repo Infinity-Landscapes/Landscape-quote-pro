@@ -32,9 +32,9 @@ const fs = require('fs');
     await page.fill('[data-row="0"] input[data-mf="length"]', String(l));
     await page.waitForTimeout(200);
   }
-  function materialsAllowedText(bodyText){
-    const m = bodyText.match(/Materials allowed for:[^\n]*/);
-    return m ? m[0] : '';
+  // The letter's consolidated "Materials allowed for" list, as "Name (qty unit), ..."
+  async function materialsAllowedText(){
+    return (await page.$$eval('#letterCapture table.letter-mats tr', trs => trs.map(tr => `${tr.cells[0].textContent} (${tr.cells[1].textContent})`))).join(', ');
   }
 
   await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html'));
@@ -76,8 +76,8 @@ const fs = require('fs');
   // -> people -> extras -> preview, i.e. 4 "Next" clicks from here.
   for(let i=0;i<4;i++){ await (await page.$('button[data-action="wizNext"]')).click(); await page.waitForTimeout(250); }
   bodyText = await page.$eval('#App', el => el.textContent);
-  check('[default depth] 10 tonnes of Quality topsoil allowed for', /Quality topsoil \(10 tonnes\)/.test(materialsAllowedText(bodyText)) || /Quality topsoil \(10 /.test(bodyText));
-  check('[default depth] 110 m² of Turf allowed for (10% wastage)', /Turf \(110 /.test(bodyText));
+  check('[default depth] 10 tonnes of Quality topsoil allowed for', /Quality topsoil \(10 tonnes\)/.test(await materialsAllowedText()));
+  check('[default depth] 110 m² of Turf allowed for (10% wastage)', /Turf \(110 /.test(await materialsAllowedText()));
 
   // --- Double the dig-out depth to 100mm -> topsoil scales to ru((100/10)*(100/50)) = 20 tonnes,
   //     turf (unaffected by depth) stays at 110 m² ---
@@ -89,8 +89,8 @@ const fs = require('fs');
   await page.waitForTimeout(200);
   for(let i=0;i<4;i++){ await (await page.$('button[data-action="wizNext"]')).click(); await page.waitForTimeout(250); }
   bodyText = await page.$eval('#App', el => el.textContent);
-  check('[100mm dig-out, double the 50mm baseline] topsoil doubles to 20 tonnes', /Quality topsoil \(20 /.test(bodyText));
-  check('[100mm dig-out] turf quantity unaffected by depth, still 110 m²', /Turf \(110 /.test(bodyText));
+  check('[100mm dig-out, double the 50mm baseline] topsoil doubles to 20 tonnes', /Quality topsoil \(20 /.test(await materialsAllowedText()));
+  check('[100mm dig-out] turf quantity unaffected by depth, still 110 m²', /Turf \(110 /.test(await materialsAllowedText()));
 
   console.log('\nERRORS:', errors.length ? errors : 'none');
   console.log('\n' + (pass && errors.length===0 ? 'ALL CHECKS PASSED' : 'SOME CHECKS FAILED'));
