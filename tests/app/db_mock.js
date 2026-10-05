@@ -1,3 +1,4 @@
+window.__NO_AUTO_TOUR__ = true; // the first-login walkthrough is tested on its own in test_tour.js
 // Mock "db" capability backed by localStorage so it survives a page reload,
 // mimicking the real artifact db capability's persistence + merge semantics
 // (recursive merge for update(), full replace for set()) closely enough to

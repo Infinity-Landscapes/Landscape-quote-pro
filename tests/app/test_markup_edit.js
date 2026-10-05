@@ -7,6 +7,7 @@ const { chromium } = require('playwright');
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', msg => { if (msg.type() === 'error' && !/net::ERR/.test(msg.text())) errors.push('CONSOLE: ' + msg.text()); });
 
+  await page.addInitScript('window.__NO_AUTO_TOUR__ = true;');
   await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html'));
   await page.waitForTimeout(400);
   // Oct 2026: a new business must enter its own rates in setup; Infinity's are restored by name.

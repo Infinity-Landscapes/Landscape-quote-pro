@@ -48,7 +48,7 @@ async function adminGet(docPath){ return rest('GET', `${FS}/${docPath}`, 'owner'
   const URL0 = 'http://127.0.0.1:5057/?emulator=1';
   async function device(){
     const ctx = await browser.newContext({ viewport:{width:1200,height:1000}, acceptDownloads:true });
-    const page = await ctx.newPage();
+    const page = await ctx.newPage(); await page.addInitScript('window.__NO_AUTO_TOUR__ = true;');
     page.on('pageerror', e=>errors.push('PAGEERROR: '+e.message));
     page.on('console', m=>{ if(m.type()==='error' && !/favicon|fonts\.g|Failed to load resource|offline|Could not reach Cloud Firestore/i.test(m.text())) errors.push('CONSOLE: '+m.text()); });
     page.on('dialog', d=>{ page._lastDialog = d.message(); d.accept(); });

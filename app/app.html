@@ -91,6 +91,35 @@
   }
   .brand{display:flex;align-items:center;gap:10px;min-width:0;}
   .topbar-actions{display:flex;gap:8px;flex:none;}
+  /* ---- First-time tour + Help/FAQ ---- */
+  #tourLayer{position:fixed;inset:0;z-index:99990;}
+  #tourLayer .tour-block{position:absolute;inset:0;}
+  #tourLayer.no-spot .tour-block{background:rgba(10,16,6,.55);}
+  #tourLayer .tour-spot{position:fixed;border-radius:12px;box-shadow:0 0 0 9999px rgba(10,16,6,.55);outline:3px solid var(--green-300);pointer-events:none;transition:all .18s ease;}
+  #tourLayer .tour-tip{position:fixed;left:50%;transform:translateX(-50%);width:min(440px, calc(100vw - 32px));max-height:min(62vh, 520px);overflow:auto;
+    background:var(--bg-raised);color:var(--ink);border-radius:16px;padding:16px 18px;box-shadow:0 12px 40px rgba(0,0,0,.35);}
+  #tourLayer .tour-tip.dock-bottom{bottom:16px;}
+  #tourLayer .tour-tip.dock-top{top:16px;}
+  #tourLayer .tour-tip.dock-centre{top:50%;transform:translate(-50%,-50%);}
+  #tourLayer .tour-tip.dock-side{transform:none;width:min(380px, calc(100vw - 32px));}
+  #tourLayer .tour-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;}
+  #tourLayer .tour-count{font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+  #tourLayer .tour-x{background:none;border:0;color:var(--muted);font-weight:700;font-size:13px;cursor:pointer;padding:4px 6px;font-family:inherit;text-decoration:underline;}
+  #tourLayer h3{margin:2px 0 6px;font-family:'Poppins';font-size:18px;}
+  #tourLayer .tour-body{font-size:14px;line-height:1.5;}
+  #tourLayer .tour-body p{margin:0 0 8px;}
+  #tourLayer .tour-body ul,#tourLayer .tour-body ol{margin:0 0 8px;padding-left:20px;}
+  #tourLayer .tour-body li{margin-bottom:4px;}
+  #tourLayer .tour-dots{display:flex;gap:5px;justify-content:center;margin:8px 0 10px;flex-wrap:wrap;}
+  #tourLayer .tour-dots span{width:6px;height:6px;border-radius:50%;background:var(--line);}
+  #tourLayer .tour-dots span.on{background:var(--primary);width:16px;border-radius:3px;}
+  #tourLayer .tour-btns{display:flex;justify-content:space-between;gap:10px;}
+  #tourLayer .tour-btns .btn{flex:1;}
+  details.faq{border-top:1px solid var(--line);padding:10px 0;}
+  details.faq:first-of-type{border-top:0;}
+  details.faq summary{cursor:pointer;font-weight:700;list-style-position:outside;}
+  details.faq .faq-a{margin-top:6px;color:var(--muted);font-size:14px;line-height:1.55;}
+
   .brand-mark{width:34px;height:34px;flex:none;}
   .brand-logo{display:block;object-fit:contain;flex:none;}
   .brand-initials{width:34px;height:34px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;background:var(--primary);color:#fff;font-family:'Poppins';font-weight:800;font-size:14px;}
@@ -4435,7 +4464,7 @@ async function writeDraftSnapshot(snapshot, editingQuoteId){
   try{ await doc.collection("drafts").doc("current").set(toStorable({draft: snapshot, editingQuoteId, savedAt: new Date().toISOString()})); }catch(e){ try{ console.warn("Draft save failed", e); }catch(_){} }
 }
 function scheduleDraftSave(immediate){
-  if(!db || !tenantUid || !S.draft) return;
+  if(!db || !tenantUid || !S.draft || S._tour) return;
   clearTimeout(_draftSaveTimer);
   const snapshot = deepClone(S.draft);
   const editingQuoteId = S.editingQuoteId || null;
@@ -4760,10 +4789,11 @@ function shell(content, active){
       ${brandMarkHtml()}
       <div class="brand-word">${esc(S.settings.company.name)}<small>Quote builder</small></div>
     </div>
-    <div class="nav-tabs">
+    <div class="nav-tabs" data-tour="nav">
       ${tabs.map(([k,l])=>`<button class="nav-tab ${active===k?'active':''}" data-action="nav" data-nav="${k}">${l}</button>`).join('')}
     </div>
     <div class="topbar-actions">
+      <button class="icon-btn" data-action="help" title="Help, FAQ and the tutorial" aria-label="Help">?</button>
       ${window.__platform ? `<button class="icon-btn" data-action="account" title="Account, plan and devices">👤</button>` : ''}
       <button class="icon-btn" data-action="lock" title="Lock">🔒</button>
     </div>
@@ -4799,7 +4829,7 @@ function renderLogin(){
 }
 function doLogin(){
   const pin = document.getElementById("loginPin").value;
-  if(pin === S.settings.pin){ S.err=""; S.authed=true; goto("menu"); }
+  if(pin === S.settings.pin){ S.err=""; S.authed=true; goto("menu"); if(S.settings.tutorialPending) autoStartTour(); }
   else { S.err = "That PIN doesn't match. Try again."; renderLogin(); }
 }
 
@@ -4963,9 +4993,13 @@ async function setupNext(){
     if(!p1 || p1.length<4){ S.err="Choose a PIN of at least 4 digits."; renderSetup(); return; }
     if(p1!==p2){ S.err="PINs don't match."; renderSetup(); return; }
     S.settings.pin = p1; S.settings.onboarded = true; S.err=""; delete S.settings._infApplied; S._freshTenant = false;
+    // First login: the walkthrough starts now, and again at the next unlock until it's finished
+    // or skipped (see startTour / endTour).
+    S.settings.tutorialPending = true;
     await saveSettings();
     S.authed = true;
     goto("menu");
+    autoStartTour();
     return;
   }
   S.err = ""; S._setupStep = st+1; renderSetup();
@@ -5011,7 +5045,7 @@ function renderMenu(){
           <div class="eyebrow" style="color:var(--brand-100);">Ready when you are</div>
           <h2 style="margin:6px 0 8px;color:#fff;font-size:22px;">Start a new quote</h2>
           <div style="opacity:.92;margin-bottom:16px;max-width:440px;">Walk through services, measurements and extras — priced automatically from your materials list.</div>
-          <button class="btn" style="background:#fff;color:var(--brand-800);" data-action="nav" data-nav="newquote">${inProgress?'Continue quote →':'Start a quote →'}</button>
+          <button class="btn" style="background:#fff;color:var(--brand-800);" data-action="nav" data-nav="newquote" data-tour="start-quote">${inProgress?'Continue quote →':'Start a quote →'}</button>
         </div>
         <div class="card">
           <h3 style="margin:0 0 12px;font-size:15px;">Recent quotes</h3>
@@ -5290,10 +5324,12 @@ function renderQuoteDetail(){
             <span class="pill ${statusPillClass(q.status)}">${statusLabel(q.status)}</span>
           </div>
           <div class="hint" style="margin:6px 0 14px;">Created ${fmtDate(q.createdAt)}</div>
-          <div class="stack" style="gap:8px;">
+          <div class="stack" style="gap:8px;" data-tour="quote-actions">
             <button class="btn btn-ghost btn-block" data-action="editQuote">✎ Edit quote</button>
+            <div class="stack" style="gap:8px;" data-tour="quote-pdf">
             <button class="btn btn-ghost btn-block" data-action="emailQuote">📧 Email quote to customer${q.customer.email?'':' (no email on file)'}</button>
             <button class="btn btn-ghost btn-block" data-action="downloadQuotePdf" ${S._pdfBusy?'disabled':''}>${S._pdfBusy?'Preparing PDF…':'⬇ Download PDF'}</button>
+            </div>
             ${q.status==="draft"?`<button class="btn btn-ghost btn-block" data-action="markSent">Mark as sent to customer</button>`:''}
             ${pending?`<button class="btn btn-primary btn-block" data-action="showAccept">✓ Quote accepted — set up payment plan</button>`:''}
             <button class="btn btn-ghost btn-block" data-action="printQuote">🖨 Print / save as PDF</button>
@@ -5909,7 +5945,7 @@ function wizServices(d){
   return `
   <h2 style="margin:0 0 4px;font-size:19px;">Which services does this job involve?</h2>
   <div class="hint" style="margin-bottom:16px;">Tick everything that applies — we'll ask for measurements next.</div>
-  <div class="row" style="gap:8px;">
+  <div class="row" style="gap:8px;" data-tour="wiz-services">
     ${enabled.map(k=>{
       const on = d.serviceKeys.includes(k);
       return `<div class="service-tile ${on?'on':''}" data-action="toggleQuoteService" data-key="${k}" style="min-width:230px;">
@@ -6012,7 +6048,7 @@ function wizMeasure(d){
     <div class="hint">Step ${d.serviceIdx+1} of ${totalPages}</div>
   </div>
   <div class="two-col" style="margin-top:12px;">
-    <div>
+    <div data-tour="meas-inputs">
       <label style="margin-bottom:8px;">Measurements</label>
       <div id="measRows">
         ${def.rowHtml ? '' : measHeadHtml(def, st.options)}
@@ -6023,7 +6059,7 @@ function wizMeasure(d){
       ${def.options.length? `<div style="margin-top:20px;"><label style="margin-bottom:8px;">Options</label>${serviceOptionsFor(def, st.options).map(o=>optionFieldHtml(o,st.options)).join('')}</div>` : ''}
       ${sectionNotesHtml(key, st.notes)}
     </div>
-    <div class="stack" style="gap:10px;">
+    <div class="stack" style="gap:10px;" data-tour="meas-cost">
       <div class="row">${priced.keyFigures.map(([l,v])=>`<div class="kfig"><div class="l">${esc(l)}</div><div class="v">${esc(v)}</div></div>`).join('')}</div>
       <div class="card" style="padding:14px 16px;">
         <div style="font-weight:800;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Section cost</div>
@@ -6286,7 +6322,7 @@ function wizPeople(d){
   return `
   <h2 style="margin:0 0 4px;font-size:19px;">How many people will this job take?</h2>
   <div class="hint" style="margin-bottom:18px;">This drives the labour cost across every section of the quote.</div>
-  <div class="field" style="max-width:220px;"><label>People on site</label><input id="q_people" type="text" inputmode="numeric" value="${d.people}"></div>
+  <div class="field" style="max-width:220px;" data-tour="wiz-people"><label>People on site</label><input id="q_people" type="text" inputmode="numeric" value="${d.people}"></div>
   <div class="hint">Day rate: ${gbp(S.settings.dayRatePerPerson)} / person / day &nbsp;·&nbsp; Crew day rate: ${gbp((d.people||1)*S.settings.dayRatePerPerson)} / day</div>
   <div class="btnbar"><button class="btn btn-ghost" data-action="wizBack">Back</button><button class="btn btn-primary" data-action="wizNext">Continue →</button></div>`;
 }
@@ -7302,12 +7338,15 @@ function renderSettings(){
   }
   App.innerHTML = shell(`
     <div class="card">
-      <h2 style="margin:0 0 14px;font-size:18px;">Materials &amp; settings</h2>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 14px;">
+        <h2 style="margin:0;font-size:18px;">Materials &amp; settings</h2>
+        <a href="#" class="hint" data-action="help" style="display:inline;">Help, FAQ &amp; tutorial</a>
+      </div>
       <div class="nav-tabs" style="display:inline-flex;margin-bottom:18px;">
         ${tabs.map(([k,l])=>`<button class="nav-tab ${tab===k?'active':''}" data-action="settingsTab" data-tab="${k}">${l}</button>`).join('')}
       </div>
       ${S._savedMsg?`<div class="msg msg-ok">${esc(S._savedMsg)}</div>`:''}
-      ${body}
+      <div data-tour="settings-body">${body}</div>
     </div>
   `, "settings");
   // (The search box is no longer focused on every visit — that popped the phone keyboard up.)
@@ -7322,8 +7361,8 @@ function wizPreview(d){
   <h2 style="margin:0 0 14px;font-size:19px;">${editing?'Review changes':'Quote ready'}</h2>
   ${blockers.length ? `<div class="msg msg-err" id="quoteBlockers"><strong>This quote can't be finalised yet:</strong><ul style="margin:6px 0 0 18px;padding:0;">${blockers.map(m=>blockerItemHtml(m)).join('')}</ul></div>` : ''}
   <div class="two-col">
-    <div>${quoteLetterHtml(q)}</div>
-    <div class="stack">${quoteNotesHtml(q)}${quoteBreakdownHtml(q)}</div>
+    <div data-tour="preview-letter">${quoteLetterHtml(q)}</div>
+    <div class="stack" data-tour="preview-breakdown">${quoteNotesHtml(q)}${quoteBreakdownHtml(q)}</div>
   </div>
   <div class="btnbar">
     <button class="btn btn-ghost" data-action="wizBack">Back</button>
@@ -7351,6 +7390,7 @@ function render(){
   else if(S.screen==="calendar"){ renderCalendar(); }
   else if(S.screen==="overview"){ renderOverview(); }
   else if(S.screen==="settings"){ renderSettings(); reapplySettingsEdits(); }
+  else if(S.screen==="help"){ renderHelp(); }
   else { renderMenu(); }
   if(S._modal){
     App.insertAdjacentHTML('beforeend', modalHtml());
@@ -7881,7 +7921,7 @@ async function finalizeQuote(status){
 // Actions still allowed while the own-website build is read-only (see the click handler).
 const READ_ONLY_OK = new Set(["nav","openQuote","jobsFilter","showChaseList","calNextMonth","calPrevMonth","calToday","calTeamFilter",
   "settingsTab","downloadQuotePdf","downloadPaymentPdf","printQuote","copyOrder","modalCancel","modalCopy","modalOk","lock","login",
-  "platformSignOut","account"]);
+  "platformSignOut","account","help","startTour"]);
 App.addEventListener("click", async (e)=>{
   const t = e.target.closest("[data-action]");
   if(!t) return;
@@ -7895,6 +7935,8 @@ App.addEventListener("click", async (e)=>{
   }
   switch(action){
     case "account": { if(window.__platform) window.__platform.openAccount(); break; }
+    case "help": { e.preventDefault(); leaveSettingsThen(()=>{ S._stDirty = null; goto("help"); }); break; }
+    case "startTour": { startTour(); break; }
     case "nav": {
       const n = t.getAttribute("data-nav");
       if(n==="settings" && S.screen==="settings"){ render(); break; }
@@ -9317,6 +9359,312 @@ const flushRcSave = ()=>{ if(_rcSaveTimer) rcSaveNow(); };
 document.addEventListener("visibilitychange", ()=>{ if(document.hidden){ flushDraftSave(); flushRcSave(); } });
 window.addEventListener("pagehide", ()=>{ flushDraftSave(); flushRcSave(); });
 window.addEventListener("beforeunload", ()=>{ flushDraftSave(); flushRcSave(); });
+
+/* =========================================================================
+   FIRST-TIME WALKTHROUGH (tour) + HELP / FAQ
+   The tour runs over the real screens: each step opens the screen it talks about, dims the rest
+   and highlights the part it explains. The quote part walks an example quote through the real
+   wizard — built in memory only (never saved, never takes a quote number, draft autosave paused),
+   and whatever the user had in progress is put back afterwards. Starts automatically after a new
+   business finishes setup (settings.tutorialPending), and again at the next unlock until it's
+   finished or skipped; replay any time from Help.
+   ========================================================================= */
+const TOUR_SAMPLE_CUSTOMER = {name:"Mr & Mrs Example", knownAs:"Sam", email:"", phone:"", address:"1 Sample Road"};
+function tourHasPlatform(){ return !!window.__platform; }
+function tourSampleService(){
+  const avail = availableServiceKeys(S.settings);
+  const enabled = (S.settings.servicesEnabled||[]).filter(k=>SERVICES[k] && avail.includes(k));
+  return ["turf","paving","gravel"].find(k=>enabled.includes(k)) || enabled[0] || null;
+}
+function tourSteps(){
+  const plat = tourHasPlatform();
+  const svc = tourSampleService();
+  const svcLabel = svc ? SERVICES[svc].label : "a service";
+  const steps = [
+    {id:"welcome", title:"Welcome to Quote Pro",
+      body:`<p>This short tour (about 2 minutes) shows you around using the real screens:</p>
+        <ol><li>Setting up your business</li><li>Building a quote</li><li>How materials and prices are worked out</li><li>Your PDF quote</li><li>Billing and cancelling</li></ol>
+        <p>Nothing you see in the tour is saved.</p>`},
+    {id:"nav", go:{screen:"menu"}, target:'[data-tour="nav"]', title:"Getting around",
+      body:`<p>These tabs take you to your <b>Menu</b>, a <b>New quote</b>, your <b>Jobs</b>, the <b>Calendar</b>, the <b>Business overview</b> and <b>Materials &amp; settings</b>.</p>`},
+    {id:"company", section:"Account setup", go:{screen:"settings", tab:"company"}, target:'[data-tour="settings-body"]', title:"Your business details",
+      body:`<p>Your company name, contact details, logo and the bank details printed on invoices live in <b>Materials &amp; settings → Company details</b>.</p><p>Set them once and they appear on every quote, payment plan and invoice.</p>`},
+    {id:"rates", section:"Account setup", go:{screen:"settings", tab:"pricing"}, target:'[data-tour="settings-body"]', title:"Your rates",
+      body:`<p><b>Pricing</b> holds your day rate per person, daily running costs, markup, VAT and how much each person gets through in a day for each service.</p><p>Every quote is priced from these, so it's worth checking them before your first real quote.</p>`},
+    {id:"materials", section:"Account setup", go:{screen:"settings", tab:"materials"}, target:'[data-tour="settings-body"]', title:"Your materials list",
+      body:`<p>Every material has <b>your</b> price, unit and supplier. Tick "inc VAT" if the price you typed includes VAT — the app takes it off so your markup and VAT are added correctly.</p><p>You can also add or edit materials from inside a quote.</p>`},
+  ];
+  if(plat) steps.push({id:"account", section:"Account setup", go:{screen:"menu"}, target:'[data-action="account"]', title:"Your account",
+      body:`<p>The person button opens your <b>account</b>: your plan, the devices signed in, downloading your data and signing out.</p>`});
+  steps.push(
+    {id:"start", section:"Your first quote", go:{screen:"menu"}, target:'[data-tour="start-quote"]', title:"Building a quote",
+      body:`<p>Every quote starts here. We'll walk through one with an example customer so you can see each step — it won't be saved.</p>`},
+    {id:"who", section:"Your first quote", go:{quote:"who"}, target:".wiz-card", title:"Step 1: who it's for",
+      body:`<p>Your name (it signs off the letter) and the customer's details. Everything you type is saved as you go, so you can leave a quote and come back to it.</p>`},
+    {id:"services", section:"Your first quote", go:{quote:"services"}, target:'[data-tour="wiz-services"]', title:"Step 2: pick the services",
+      body:`<p>Tick every service the job involves. For this example we've picked <b>${esc(svcLabel)}</b>.</p><p>You choose which services appear here in <b>Materials &amp; settings → Services</b>.</p>`},
+  );
+  if(svc) steps.push(
+    {id:"measure", section:"Your first quote", go:{quote:"measure"}, target:'[data-tour="meas-inputs"]', title:"Step 3: measure it",
+      body:`<p>Enter each area's width and length (we've put in 5 m × 4 m). Use <b>+ Add line</b> for more areas, and the options underneath for things like dig-out depth.</p>`},
+    {id:"logic", section:"How prices are worked out", go:{quote:"measure"}, target:'[data-tour="meas-cost"]', title:"How the price is worked out",
+      body:`<ul><li><b>Materials:</b> quantities come from your measurements (area × depth, coverage per bag or tonne), rounded up to whole units, × your prices.</li>
+        <li><b>Labour:</b> area ÷ what one person does in a day = person-days, × your day rate. Days on site are split between the people on the job.</li>
+        <li><b>Running costs and plant:</b> your daily running costs × days on site, plus any hire.</li>
+        <li><b>Dig-out and waste</b> from every service are added up in their own step.</li>
+        <li>Your <b>markup</b> goes on top, then VAT if you're registered.</li></ul>
+        <p>A material with no price shows a box to add it right there.</p>`},
+    {id:"people", section:"Your first quote", go:{quote:"people"}, target:'[data-tour="wiz-people"]', title:"Step 4: people on site",
+      body:`<p>How many of you will be on the job. It sets how many days the work takes, and so the running costs.</p>`},
+    {id:"extras", section:"Your first quote", go:{quote:"extras"}, target:".wiz-card", title:"Step 5: extras",
+      body:`<p>Anything that isn't a standard service — a bird bath, a skip of rubbish — with its materials, plant and labour days.</p>`},
+    {id:"preview", section:"Your first quote", go:{quote:"preview"}, target:'[data-tour="preview-letter"]', title:"Step 6: check and save",
+      body:`<p>The finished quote letter, with the price breakdown alongside. <b>Save &amp; mark as sent</b> saves it to your Jobs; <b>Save as draft</b> keeps it for later.</p>`},
+    {id:"pdf", section:"Your PDF quote", go:{sampleQuote:true}, target:'[data-tour="quote-pdf"]', title:"Your PDF quote",
+      body:`<p>Open any saved quote from <b>Jobs</b> to:</p><ul><li><b>Download PDF</b> — the quote letter as a PDF to attach or print</li><li><b>Email quote to customer</b></li><li><b>Print / save as PDF</b> — further down the same list</li></ul><p>When the customer says yes, set up their deposit and payment plan here too.</p>`},
+  );
+  steps.push(
+    {id:"billing", section:"Billing and cancelling", go:{screen:"menu"}, target: plat ? '[data-action="account"]' : null, title:"Plans, billing and cancelling",
+      body:`<ul><li>You start with a <b>7-day free trial</b> with everything unlocked.</li>
+        <li>Plans: <b>Solo</b> (2 devices), <b>Team</b> (5) and <b>Business</b> (10), monthly or yearly — choose one in the iPhone or Android app.</li>
+        <li><b>Cancel</b> any time in your App Store or Google Play subscriptions. You keep everything until the end of the period you've paid for.</li>
+        <li>After that the app is read-only — you can still view and download your quotes — and your data is kept for 12 months.</li></ul>
+        ${plat ? '<p>Your plan and renewal date are under the person button.</p>' : ''}`},
+    {id:"help", go:{screen:"menu"}, target:'[data-action="help"]', title:"Help is always here",
+      body:`<p>Tap <b>?</b> at the top any time for answers to common questions — and to <b>replay this tour</b>.</p><p>That's it. Time to price your first job.</p>`},
+  );
+  return steps;
+}
+
+// Automatic start (first login). Test harnesses that drive the app set window.__NO_AUTO_TOUR__.
+function autoStartTour(){ if(!window.__NO_AUTO_TOUR__) startTour(); }
+function startTour(){
+  if(S._tour) return;
+  if(S._modal){ S._modal = null; }
+  S._tour = {i:0, steps: tourSteps(), stash:{draft:S.draft, savedDraft:S._savedDraft, editingQuoteId:S.editingQuoteId, settingsTab:S._settingsTab, openQuoteId:S.openQuoteId}, confirmSkip:false};
+  tourShow();
+}
+function tourEnsureSampleDraft(){
+  const t = S._tour;
+  if(t.sample) return t.sample;
+  const d = newDraft();
+  d.createdBy = d.createdBy || "You";
+  d.customer = Object.assign({}, TOUR_SAMPLE_CUSTOMER);
+  const svc = tourSampleService();
+  if(svc){
+    d.serviceKeys = [svc];
+    S.draft = d;  // ensureSectionState works on S.draft
+    const st = ensureSectionState(svc);
+    if(st.rows[0]){ st.rows[0].width = "5"; st.rows[0].length = "4"; }
+  }
+  t.sample = d;
+  return d;
+}
+function tourGo(go){
+  if(!go) return;
+  if(go.quote){
+    const d = tourEnsureSampleDraft();
+    S.draft = d; S.editingQuoteId = null;
+    d.step = go.quote; if(go.quote==="measure") d.serviceIdx = 0;
+    S.screen = "newquote"; render(); return;
+  }
+  if(go.sampleQuote){
+    const d = tourEnsureSampleDraft();
+    let q = null;
+    try{ q = buildQuoteFromDraft(Object.assign({}, d, {step:"preview"}), "draft"); }catch(e){ q = null; }
+    if(q){
+      q.id = "__tour__"; q.status = "draft"; q.quoteNumber = "EXAMPLE";
+      S.quotes = (S.quotes||[]).filter(x=>x.id!=="__tour__"); S.quotes.unshift(q);
+      S.openQuoteId = q.id; S.screen = "quotedetail"; render(); return;
+    }
+    S.screen = "menu"; render(); return;
+  }
+  // Ordinary screens show the business as it really is: no example draft or example quote.
+  const st = S._tour.stash;
+  S.draft = st.draft; S._savedDraft = st.savedDraft; S.editingQuoteId = st.editingQuoteId;
+  S.quotes = (S.quotes||[]).filter(x=>x.id!=="__tour__");
+  if(go.tab) S._settingsTab = go.tab;
+  S._stDirty = null;
+  S.screen = go.screen; render();
+}
+function tourLayer(){
+  let el = document.getElementById("tourLayer");
+  if(!el){
+    el = document.createElement("div"); el.id = "tourLayer";
+    el.innerHTML = `<div class="tour-block"></div><div class="tour-spot"></div><div class="tour-tip" role="dialog" aria-modal="true" aria-labelledby="tourTitle"></div>`;
+    document.body.appendChild(el);
+    el.addEventListener("click", e=>{
+      const b = e.target.closest("[data-tour-act]");
+      if(!b) return;
+      e.preventDefault();
+      tourAct(b.getAttribute("data-tour-act"));
+    });
+  }
+  return el;
+}
+function tourAct(a){
+  const t = S._tour; if(!t) return;
+  if(a==="next"){ if(t.i >= t.steps.length-1) return endTour(true); t.i++; tourShow(); }
+  else if(a==="back"){ if(t.i>0){ t.i--; tourShow(); } }
+  else if(a==="skip"){ t.confirmSkip = true; tourDrawTip(); }
+  else if(a==="keep"){ t.confirmSkip = false; tourDrawTip(); }
+  else if(a==="confirmSkip"){ endTour(false); }
+}
+function tourShow(){
+  const t = S._tour; if(!t) return;
+  t.confirmSkip = false;
+  const step = t.steps[t.i];
+  tourGo(step.go);
+  tourLayer();
+  tourDrawTip();
+  const target = step.target ? document.querySelector(step.target) : null;
+  if(target){
+    const tall = target.getBoundingClientRect().height > window.innerHeight*0.45;
+    try{ target.scrollIntoView({block: tall ? "start" : "center", behavior:"instant"}); }catch(e){ target.scrollIntoView(); }
+    if(tall) window.scrollBy(0, -12);
+  }
+  else window.scrollTo(0,0);
+  // No room above, below or beside it: move the target to the top of the screen so the card fits underneath.
+  if(tourPlace()==="cramped" && target){
+    window.scrollBy(0, target.getBoundingClientRect().top - 16);
+    tourPlace();
+  }
+  if(!t.timer) t.timer = setInterval(tourPlace, 400);
+}
+function tourDrawTip(){
+  const t = S._tour; if(!t) return;
+  const step = t.steps[t.i];
+  const tip = tourLayer().querySelector(".tour-tip");
+  const last = t.i===t.steps.length-1;
+  if(t.confirmSkip){
+    tip.innerHTML = `<div class="tour-head"><span class="tour-count">Skip the tour?</span></div>
+      <h3 id="tourTitle">Are you sure you want to skip?</h3>
+      <div class="tour-body"><p>You can replay it any time: tap <b>?</b> (Help) at the top of the screen, then <b>Replay the tutorial</b>. Help also has answers to common questions.</p></div>
+      <div class="tour-btns"><button class="btn btn-ghost" data-tour-act="keep">Keep going</button><button class="btn btn-primary" data-tour-act="confirmSkip">Yes, skip</button></div>`;
+  } else {
+    tip.innerHTML = `<div class="tour-head"><span class="tour-count">${step.section?esc(step.section)+' · ':''}${t.i+1} of ${t.steps.length}</span>
+        <button class="tour-x" data-tour-act="skip" aria-label="Skip the tour">Skip</button></div>
+      <h3 id="tourTitle">${esc(step.title)}</h3>
+      <div class="tour-body">${step.body}</div>
+      <div class="tour-dots">${t.steps.map((_,i)=>`<span class="${i===t.i?'on':''}"></span>`).join('')}</div>
+      <div class="tour-btns">${t.i>0?'<button class="btn btn-ghost" data-tour-act="back">Back</button>':'<span></span>'}
+        <button class="btn btn-primary" data-tour-act="next">${t.i===0?'Start the tour':last?'Finish':'Next'}</button></div>`;
+  }
+  const primary = tip.querySelector(".btn-primary"); if(primary) primary.focus({preventScroll:true});
+  tourPlace();
+}
+// Spotlight the step's target and put the card where it doesn't cover it: below or above the
+// target if there's room, else beside it (wide screens), else docked at the bottom.
+function tourPlace(){
+  const t = S._tour; if(!t) return;
+  const layer = document.getElementById("tourLayer"); if(!layer) return;
+  const step = t.steps[t.i];
+  const spot = layer.querySelector(".tour-spot"), tip = layer.querySelector(".tour-tip");
+  const target = step.target ? document.querySelector(step.target) : null;
+  const vh = window.innerHeight, vw = window.innerWidth, gap = 16;
+  const visible = !!(target && target.getClientRects().length);
+  layer.classList.toggle("no-spot", !visible);
+  tip.style.left = tip.style.top = "";
+  if(!visible){
+    spot.style.display = "none";
+    tip.className = "tour-tip dock-centre";
+    return;
+  }
+  const r = target.getBoundingClientRect(), pad = 6;
+  const top = Math.max(4, r.top-pad), bottom = Math.min(vh-4, r.bottom+pad);
+  const left = Math.max(4, r.left-pad), right = Math.min(vw-4, r.right+pad);
+  spot.style.display = "block";
+  spot.style.left = left+"px"; spot.style.top = top+"px";
+  spot.style.width = Math.max(0, right-left)+"px";
+  spot.style.height = Math.max(0, bottom-top)+"px";
+  const tipH = tip.offsetHeight, tipW = tip.offsetWidth;
+  const below = vh - bottom, above = top;
+  if(below >= tipH + gap*2 && below >= above){ tip.className = "tour-tip dock-bottom"; return; }
+  if(above >= tipH + gap*2){ tip.className = "tour-tip dock-top"; return; }
+  if(below >= tipH + gap*2){ tip.className = "tour-tip dock-bottom"; return; }
+  const roomLeft = left - gap, roomRight = vw - right - gap;
+  if(Math.max(roomLeft, roomRight) >= tipW + gap){
+    tip.className = "tour-tip dock-side";
+    const x = roomRight >= roomLeft ? right + gap : left - gap - tipW;
+    const y = Math.min(Math.max(gap, (top+bottom)/2 - tipH/2), vh - tipH - gap);
+    tip.style.left = Math.round(x)+"px"; tip.style.top = Math.round(Math.max(gap, y))+"px";
+    return;
+  }
+  tip.className = "tour-tip " + (below >= above ? "dock-bottom" : "dock-top");
+  return "cramped";
+}
+async function endTour(finished){
+  const t = S._tour; if(!t) return;
+  clearInterval(t.timer);
+  const layer = document.getElementById("tourLayer"); if(layer) layer.remove();
+  S.quotes = (S.quotes||[]).filter(x=>x.id!=="__tour__");
+  S.draft = t.stash.draft; S._savedDraft = t.stash.savedDraft; S.editingQuoteId = t.stash.editingQuoteId;
+  S._settingsTab = t.stash.settingsTab; S.openQuoteId = t.stash.openQuoteId;
+  S._tour = null;
+  S.screen = "menu"; render(); window.scrollTo(0,0);
+  if(S.settings.tutorialPending || S.settings.tutorialDone!==true){
+    S.settings.tutorialPending = false; S.settings.tutorialDone = true;
+    S.settings.tutorialOutcome = finished ? "finished" : "skipped";
+    try{ await saveSettings({tutorialPending:false, tutorialDone:true, tutorialOutcome:S.settings.tutorialOutcome}); }catch(e){}
+  }
+}
+document.addEventListener("keydown", e=>{
+  if(!S._tour) return;
+  if(e.key==="Escape"){ e.preventDefault(); tourAct(S._tour.confirmSkip ? "keep" : "skip"); }
+  else if(e.key==="ArrowRight" && !S._tour.confirmSkip){ tourAct("next"); }
+  else if(e.key==="ArrowLeft" && !S._tour.confirmSkip){ tourAct("back"); }
+});
+window.addEventListener("resize", ()=>{ if(S._tour) tourPlace(); });
+window.addEventListener("scroll", ()=>{ if(S._tour) tourPlace(); }, {passive:true});
+
+/* ---- Help screen: replay the tour + FAQ ---- */
+function helpFaq(){
+  const plat = tourHasPlatform();
+  return [
+    ["Account and setup", [
+      ["Where do I change my company details, logo or bank details?", "Materials &amp; settings → <b>Company details</b>. Your logo also sets the app's colours. Bank details are only printed on payment plans and invoices you send."],
+      ["Where do I set my day rate, markup and VAT?", "Materials &amp; settings → <b>Pricing</b>. Every quote is worked out from these, so check them before your first real quote."],
+      ["How do I change the services I offer?", "Materials &amp; settings → <b>Services</b>. Switch services on or off, or build your own custom service."],
+      ["I've forgotten my PIN.", "On the unlock screen tap <b>Reset it</b>. The PIN is just a quick lock on this device" + (plat ? "; your account login stays the same." : ".")],
+      ...(plat ? [["How do I sign out, or remove a device?", "Tap the <b>person button</b> at the top → Devices. Each plan allows a set number of devices (Solo 2, Team 5, Business 10); you can swap devices twice a month."]] : []),
+    ]],
+    ["Quotes", [
+      ["How do I build a quote?", "Tap <b>New quote</b>: who it's for → services → measurements → people on site → extras → check and save. Your progress is saved as you go."],
+      ["How are quantities and prices worked out?", "Quantities come from your measurements (area × depth, coverage per bag or tonne), rounded up to whole units, × your material prices. Labour is area ÷ what one person does in a day × your day rate. Running costs are added per day on site, dig-out and waste are pooled across the job, then your markup goes on top, then VAT if you're registered."],
+      ["A material says it has no price.", "Type the price into the box that appears under the warning and tap <b>Save price</b> — it's saved to your materials list for every future quote."],
+      ["Can I change a quote after saving it?", "Yes. Open it from <b>Jobs</b> and tap <b>Edit quote</b>. The letter wording can be edited too."],
+      ["Where's my PDF?", "Open the quote from <b>Jobs</b> and tap <b>Download PDF</b>, <b>Print / save as PDF</b>, or <b>Email quote to customer</b>."],
+      ["How do I follow up a quote?", "Quotes that need chasing are flagged on the menu and in Jobs, with buttons to call, text or email the customer."],
+    ]],
+    ["Billing and plans", [
+      ["Is there a free trial?", "Yes — 7 days with everything unlocked."],
+      ["What do the plans cost?", "Solo £35.99, Team £54.99 and Business £83.99 a month in the App Store and Google Play (yearly saves two months). Every plan has every feature; they differ in how many devices can be signed in."],
+      ["How do I subscribe or change plan?", "In the iPhone or Android app" + (plat ? ": person button → Choose a plan (or Change plan)." : ".") + " Your plan then works on all your devices, including the website."],
+      ["How do I get a VAT receipt?", "Apple and Google send a receipt for every payment to the email on your App Store or Google Play account."],
+    ]],
+    ["Cancelling", [
+      ["How do I cancel?", "In your <b>App Store</b> (Settings → your name → Subscriptions) or <b>Google Play</b> (Payments &amp; subscriptions → Subscriptions). Cancel at least 24 hours before it renews."],
+      ["What happens when my subscription ends?", "You keep full access until the end of the period you've paid for. After that the app is read-only — you can still open, download and print your quotes — and your data is kept for 12 months. Subscribe again and everything is back straight away."],
+      ["Can I get a refund?", "Payments go to Apple or Google, so refunds are requested from them (reportaproblem.apple.com, or your Google Play order history)."],
+      ["How do I delete my account and data?", plat ? "Person button → <b>Delete my account</b>. You can download all your data first. Deleting your account doesn't cancel a store subscription — cancel that too." : "Email support@landscapequotepro.co.uk."],
+    ]],
+  ];
+}
+function renderHelp(){
+  App.innerHTML = shell(`
+    <div class="card">
+      <h2 style="margin:0 0 6px;font-size:19px;">Help</h2>
+      <div class="hint" style="margin-bottom:14px;">New here, or want a refresher? The tutorial walks you through the app on the real screens in about 2 minutes.</div>
+      <button class="btn btn-primary" data-action="startTour">▶ Replay the tutorial</button>
+    </div>
+    ${helpFaq().map(([title, items])=>`
+    <div class="card">
+      <h3 style="margin:0 0 8px;font-size:16px;">${esc(title)}</h3>
+      ${items.map(([q,a])=>`<details class="faq"><summary>${esc(q)}</summary><div class="faq-a">${a}</div></details>`).join('')}
+    </div>`).join('')}
+    <div class="card"><div class="hint">Still stuck? Email <a href="mailto:support@landscapequotepro.co.uk">support@landscapequotepro.co.uk</a>.</div></div>
+  `, "help");
+}
 
 /* =========================================================================
    INIT

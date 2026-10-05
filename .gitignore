@@ -5,3 +5,4 @@ tests/app/*.png
 !tests/app/_logo_red.png
 tests/app/_*_exposed.html
 .firebase/
+tests/app/tour_shots/

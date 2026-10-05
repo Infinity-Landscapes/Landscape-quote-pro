@@ -54,12 +54,22 @@ async function signInRest(email, pass){
   await pa.click('#authGate .ag-btn'); await settle(pa);
   check('short password refused', /at least 8 characters/.test(await pa.textContent('#authGate')));
   await pa.fill('#agPass','password123'); await pa.fill('#agPass2','password123');
-  await pa.click('#authGate .ag-btn'); await settle(pa, 2500);
+  await pa.click('#authGate .ag-btn'); await pa.waitForSelector('#f_name', {timeout:15000}).catch(()=>{}); await settle(pa, 500);
   check('account created, gate gone, app setup shown', !(await pa.isVisible('#authGate')) && !!(await pa.$('#f_name')));
   await pa.fill('#f_name','Infinity Landscapes and Design');
   for (let i=0;i<3;i++) await click(pa, 'button[data-action="setupNext"]');
   await pa.fill('#f_pin','1234'); await pa.fill('#f_pin2','1234');
   await click(pa, 'button[data-action="setupNext"]'); await settle(pa, 800);
+  // First login: the walkthrough starts by itself, includes the account step, and skipping asks first.
+  check('first login: the walkthrough starts automatically', await pa.isVisible('#tourLayer .tour-tip'));
+  const tourSteps = await pa.evaluate(()=>{ const m=(document.querySelector('#tourLayer .tour-count')||{}).textContent||''; return parseInt((m.match(/of (\d+)/)||[])[1]||'0',10); });
+  let sawAccount = false;
+  for (let i=0;i<tourSteps-1;i++){ await pa.click('#tourLayer [data-tour-act="next"]'); await settle(pa, 120); if(/Your account/.test(await pa.textContent('#tourTitle'))){ sawAccount = await pa.evaluate(()=>{ const s=document.querySelector('#tourLayer .tour-spot'); return getComputedStyle(s).display!=='none'; }); break; } }
+  check('walkthrough shows the account (person) button on the website', sawAccount);
+  await pa.click('#tourLayer [data-tour-act="skip"]'); await settle(pa);
+  check('Skip asks first and says where to replay it', /Are you sure you want to skip\?/.test(await pa.textContent('#tourLayer')) && /Replay the tutorial/.test(await pa.textContent('#tourLayer')));
+  await pa.click('#tourLayer [data-tour-act="confirmSkip"]'); await settle(pa, 800);
+  check('skipped walkthrough closes', !(await pa.$('#tourLayer')));
   await click(pa, 'button[data-nav="newquote"]');
   await pa.fill('#q_creator','Matt'); await pa.fill('#q_cname','Firebase Customer');
   await click(pa, 'button[data-action="wizNext"]');
@@ -84,6 +94,7 @@ async function signInRest(email, pass){
   check('after reload: no sign-in screen (stays signed in), PIN screen shown', !(await pa.isVisible('#authGate')) && !!(await pa.$('#loginPin')));
   check('PIN screen shows the account + Sign out', /Signed in as matt@test\.co\.uk/.test(await pa.textContent('body')));
   await pa.fill('#loginPin','1234'); await click(pa, 'button[data-action="login"]'); await settle(pa, 600);
+  check('after skipping, the walkthrough does not start again (saved in Firestore)', !(await pa.$('#tourLayer')));
   const navs = await pa.$$eval('[data-nav]', els=>els.map(e=>e.getAttribute('data-nav')));
   const qNav = navs.find(n=>/quotes|jobs/.test(n)) || 'quotes';
   await click(pa, `button[data-nav="${qNav}"]`);
