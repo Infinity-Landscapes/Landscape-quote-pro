@@ -1,0 +1,7 @@
+node_modules/
+firebase/public/
+*.log
+tests/app/*.png
+!tests/app/_logo_red.png
+tests/app/_*_exposed.html
+.firebase/

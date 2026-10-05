@@ -1,0 +1,338 @@
+<title>Quote Builder Launch Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Manrope:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one reading column; a progress header, then the phases in the order they happen, each a checklist. */
+:root{
+  --bg:#f5f6f1; --paper:#ffffff; --ink:#20251f; --soft:#4d554c; --muted:#7a8378; --line:#e1e5da;
+  --accent:#56822b; --accent-soft:#e7f1da; --accent-ink:#3f611f;
+  --you:#8a5a12; --you-bg:#fbf0dc; --claude:#2f5f8a; --claude-bg:#e3eef8; --both:#5b4a8a; --both-bg:#ece7f7;
+  --display:'Poppins',system-ui,sans-serif; --body:'Manrope',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#151815; --paper:#1d211c; --ink:#eef1ec; --soft:#c7cdc4; --muted:#949b90; --line:#30352d;
+  --accent:#8cc152; --accent-soft:#25331b; --accent-ink:#b7dd8a;
+  --you:#f0c178; --you-bg:#3a2c14; --claude:#9ac4ea; --claude-bg:#1c2c3b; --both:#c4b5f0; --both-bg:#2b2440; color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#151815; --paper:#1d211c; --ink:#eef1ec; --soft:#c7cdc4; --muted:#949b90; --line:#30352d;
+  --accent:#8cc152; --accent-soft:#25331b; --accent-ink:#b7dd8a;
+  --you:#f0c178; --you-bg:#3a2c14; --claude:#9ac4ea; --claude-bg:#1c2c3b; --both:#c4b5f0; --both-bg:#2b2440; color-scheme:dark; }
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;margin:0}
+.wrap{max-width:860px;margin:0 auto;padding-inline:16px;padding-block:28px 64px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0}
+h1{font-size:clamp(24px,4vw,32px);font-weight:800;letter-spacing:-.01em}
+.lede{color:var(--soft);max-width:62ch;margin:8px 0 0}
+.top{display:flex;flex-direction:column;gap:14px;margin-bottom:22px}
+.overall{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:grid;gap:10px}
+.overall-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.big{font-family:var(--display);font-weight:800;font-size:26px;font-variant-numeric:tabular-nums}
+.bar{height:10px;background:var(--accent-soft);border-radius:99px;overflow:hidden}
+.bar > i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
+.legend{display:flex;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--soft);align-items:center}
+.who{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.who.you{background:var(--you-bg);color:var(--you)} .who.claude{background:var(--claude-bg);color:var(--claude)} .who.both{background:var(--both-bg);color:var(--both)}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.filters button{font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--paper);color:var(--soft);border-radius:99px;padding:6px 12px;cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.filters button:focus-visible,.task input:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.status{font-size:12.5px;color:var(--muted)}
+.phases{display:flex;flex-direction:column;gap:14px}
+details.phase{background:var(--paper);border:1px solid var(--line);border-radius:14px}
+details.phase > summary{list-style:none;cursor:pointer;padding:16px 18px;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center}
+details.phase > summary::-webkit-details-marker{display:none}
+.step{font-family:var(--display);font-weight:800;font-size:13px;color:var(--accent-ink);background:var(--accent-soft);width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.phase h2{font-size:17px;font-weight:700}
+.phase .why{color:var(--muted);font-size:13px;margin-top:2px}
+.count{font-size:13px;font-weight:700;color:var(--soft);font-variant-numeric:tabular-nums;white-space:nowrap}
+.phase.done .step{background:var(--accent);color:#fff}
+.phase-body{padding:0 18px 16px;display:flex;flex-direction:column;gap:2px}
+.group{font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:12px 0 4px}
+.task{display:grid;grid-template-columns:22px 1fr;gap:10px;padding:9px 0;border-top:1px solid var(--line);align-items:start}
+.task:first-of-type{border-top:none}
+.task input{width:18px;height:18px;margin:2px 0 0;accent-color:var(--accent);cursor:pointer}
+.task label{cursor:pointer;display:flex;flex-direction:column;gap:3px;min-width:0}
+.task .t{font-weight:600}
+.task .t .who{margin-left:6px;vertical-align:1px}
+.task .d{color:var(--soft);font-size:13.5px}
+.task.is-done .t{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--line)}
+.task.is-done .d{color:var(--muted)}
+.note{background:var(--accent-soft);color:var(--accent-ink);border-radius:10px;padding:10px 12px;font-size:13.5px;margin:6px 0 2px}
+.hidden-by-filter{display:none}
+footer{margin-top:24px;color:var(--muted);font-size:12.5px}
+@media (prefers-reduced-motion: reduce){.bar > i{transition:none}}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>Quote Builder launch plan</h1>
+      <p class="lede">Every step from today's app to subscriptions on the web, Google Play and the App Store — Stripe on the web, Google and Apple billing in their apps, RevenueCat keeping one subscription across all three. Tick things off as they're done.</p>
+    </div>
+    <div class="overall">
+      <div class="overall-row"><span class="big" id="pct">0%</span><span class="status" id="countAll">0 of 0 done</span></div>
+      <div class="bar" aria-hidden="true"><i id="barAll"></i></div>
+      <div class="legend"><span class="who you">You</span> needs you (accounts, money, decisions) <span class="who claude">Claude</span> I build or draft it <span class="who both">Both</span> together</div>
+    </div>
+    <div class="filters" role="group" aria-label="Show tasks for">
+      <button type="button" data-filter="all" aria-pressed="true">All</button>
+      <button type="button" data-filter="you" aria-pressed="false">Yours</button>
+      <button type="button" data-filter="claude" aria-pressed="false">Claude's</button>
+      <button type="button" data-filter="open" aria-pressed="false">Not done yet</button>
+    </div>
+    <div class="status" id="syncNote">Loading your ticks…</div>
+  </div>
+  <div class="phases" id="phases"></div>
+  <footer>Store rules and fees checked October 2026: Google Play allows outside billing in the UK from 30 June 2026 (10% on subscriptions); Apple still bars Stripe links inside UK iPhone apps while the CMA's proposal is undecided. Check again before each store submission. Legal documents I draft should be checked by a solicitor.</footer>
+</div>
+
+<script>
+const PLAN = [
+ {n:"0", title:"Decisions", why:"Settle these first — they shape everything after.", groups:[
+  {g:"The product", tasks:[
+   ["name","Decide the app's name","you","Decided: \"Infinity Landscape Quote Pro\" (28 characters — fits both stores). Changed from \"Landscape Quote Pro\" because a competitor, \"Landscape Quote AI\", is on the App Store. Store subtitle e.g. \"Quotes & jobs for landscapers\"; seller shown as Infinity Landscapes and Design LTD. Web address stays landscapequotepro.co.uk. Name under the app icon: \"Quote Pro\". Later trades can follow the same pattern (e.g. Infinity Fencing Quote Pro)."],
+   ["name-check","Check the name is free","you","UK IPO trademark search (classes 9 and 42) for \"Infinity Landscape Quote Pro\", \"Landscape Quote AI\", \"Landscape Quote\" and \"PRO Landscape\" (an American landscape design program) — optionally a trademark attorney clearance search. The words are descriptive, so protect the logo + name together. Search both stores. Domains: landscapequotepro.co.uk and .app looked free on 4 Oct 2026; the .com is in use."],
+   ["plans","Choose the plans and prices","you","Decided: one app, three tiers per business, chosen on the subscribe screen and changeable any time in settings. Solo — 2 devices, £30 + VAT/month or £300 + VAT/year. Team — 5 devices, £45 + VAT or £450 + VAT/year. Business — 10 devices, £70 + VAT or £700 + VAT/year. Store prices: £35.99 / £54.99 / £83.99 a month; £359.99 / £539.99 / £839.99 a year. One login (email) per subscription; signing in on one device too many means removing one first. No founding-member discount."],
+   ["trial","Choose the free trial","you","Decided: 7 days, everything unlocked. No card needed on the web; Apple and Google ask for the phone's payment details but don't charge until the trial ends."],
+   ["infinity-free","Confirm Infinity stays free","you","Decided: yes — Infinity Landscapes and Design LTD and any test accounts get a permanent free account (switched on from the admin view)."],
+   ["lapsed","Decide what happens when a subscription ends","you","Decided. Cancelling keeps full access to the end of the paid period. After the subscription or 7-day trial ends: read-only — they can see and download existing quotes and invoices, but nothing can be created, sent or changed. Failed payment: 7 days of full access while the card is retried. Data kept for 12 months after it ends (warning emails at 30 and 7 days before deletion; download available any time); resubscribing restores everything instantly."],
+  ]},
+  {g:"Contact points", tasks:[
+   ["support-email","Set up support@landscapequotepro.co.uk","you","Decided. After registering the domain: add it as a secondary domain in Google Workspace (admin.google.com), add support@ as an alias on your user, then add it under Gmail → Send mail as. Free; lands in your normal inbox."],
+   ["web-address","Pick the web addresses","you","Decided: landscapequotepro.co.uk for the website (what it does, prices, sign-up, support, privacy policy) and app.landscapequotepro.co.uk for the web app."],
+  ]},
+ ]},
+ {n:"1", title:"Company paperwork", why:"Start now — the D-U-N-S number can take up to 30 days.", groups:[
+  {g:"Start today", tasks:[
+   ["duns","Apply for a D-U-N-S number","you","Done: D-U-N-S number 231030406 (Infinity Landscapes and Design LTD). Used for both the Apple and Google developer accounts."],
+   ["domain","Buy the domain name","you","Done: landscapequotepro.co.uk, registered with GoDaddy (plus landscapequotepros.co.uk, to forward to it later). Check auto-renew is on for both."],
+   ["email-setup","Set up the support email","you","On the new domain (Google Workspace, Microsoft 365 or your registrar's email)."],
+  ]},
+  {g:"Money and data", tasks:[
+   ["accountant","Speak to your accountant","you","How to record Stripe income and store payouts, VAT on subscriptions sold through the stores (Apple and Google normally account for it) and through Stripe (you do), and whether the app should sit in the same company."],
+   ["bank","Check the business bank account","you","Stripe, Apple and Google all pay out to it. Have the sort code and account number ready."],
+  ]},
+ ]},
+ {n:"2", title:"Developer and service accounts", why:"Once the D-U-N-S number arrives. Only you can open these — they hold your money and your company's identity.", groups:[
+  {g:"Apple", tasks:[
+   ["apple-id","Create (or choose) the Apple ID for the business","you","Use a business email and turn on two-factor authentication."],
+   ["apple-enrol","Enrol in the Apple Developer Program as an organisation","you","Annual fee (about £79). Needs the D-U-N-S number, the company's legal name and a website. Apple may phone to verify."],
+   ["apple-agreements","Accept the Paid Apps agreement in App Store Connect","you","Required before any subscription can be sold. Add bank details and complete the tax forms (as a UK company)."],
+   ["apple-small","Join the App Store Small Business Program","you","Cuts Apple's commission to 15% while you earn under $1M a year."],
+  ]},
+  {g:"Google", tasks:[
+   ["play-account","Open a Google Play Console organisation account","you","One-off $25 fee. Needs the D-U-N-S number and identity checks. An organisation account is expected to avoid the 12-tester, 14-day closed test that new personal accounts must run."],
+   ["play-payments","Set up the Google Play payments profile","you","Bank details and tax information, so subscriptions can be sold and paid out."],
+  ]},
+  {g:"Payments and back end", tasks:[
+   ["stripe","Open the Stripe account (later — after the store launch)","you","Decided: launch with Apple and Google subscriptions first; web payments come later. Business verification, bank account, VAT number. Turn on Stripe Tax and the customer portal (lets customers change card or cancel on the web)."],
+   ["firebase","Create the Firebase project","you","With a Google account for the business. Switch to the pay-as-you-go (Blaze) plan when we reach subscriptions, and set a budget alert (e.g. £10/month) so there are no surprises."],
+   ["revenuecat","Open a RevenueCat account","you","The service that ties Stripe, Google and Apple purchases to one subscription."],
+   ["share-access","Give me access details","both","When I'm building I'll tell you exactly which keys or invites I need for each service, and how to send them safely. Never paste passwords into the chat."],
+  ]},
+  {g:"Equipment", tasks:[
+   ["mac","Sort out how the iPhone app gets built","you","Either a Mac with Apple's Xcode, or a cloud build service (e.g. Codemagic) that builds it for you."],
+   ["devices","Have an Android phone and an iPhone to test on","you","Real phones show problems that previews miss. An older, smaller phone is ideal for one of them."],
+  ]},
+ ]},
+ {n:"3", title:"Move the app onto its own back end", why:"Gives the app its own logins and database instead of Claude's. The biggest single job.", groups:[
+  {g:"Accounts and data", tasks:[
+   ["github","Keep the code in the business's own GitHub account","both","Free account owned by Infinity Landscapes and Design LTD. Holds the app's code and every change, so any future conversation with Claude can pick it up."],
+   ["fb-connect","Connect the app to Firebase","claude","Progress 4 Oct: built and tested against a local copy of Firebase — logins and the database work. Still to do: put it live (needs a deploy key from you), file storage, server functions."],
+   ["fb-storage","Swap the app's storage over to Firebase","claude","Done 4 Oct (tested locally): settings, quotes, jobs, calendar, unfinished quotes and logos save to Firestore under each business's own account. The claude.ai version and the website version run the same app code."],
+   ["auth","Sign-up and login screens","claude","Progress 4 Oct: email and password sign-up, sign-in, password reset and verification email are built and tested. Still to do: Sign in with Google and Sign in with Apple (Apple requires its own option if Google login is offered on iPhone)."],
+   ["devices-limit","Device limit per login (2 / 5 / 10 by tier)","claude","Each phone, tablet or browser that signs in is recorded. When the limit is reached, the app lists the current devices (name, last used) and asks which to sign out, like WhatsApp. Also a Devices list in settings to remove one at any time."],
+   ["swap-limit","Monthly device-swap limit","claude","Up to 2 device changes a month. After that: \"You've swapped devices twice this month — you can swap again on the 1st.\" Stops people rotating one login round a team. You can reset it from your admin view if a genuine customer gets stuck (e.g. a broken phone)."],
+   ["signin-email","Email the owner on every new sign-in","claude","\"New sign-in on Samsung Galaxy A54, 4 Oct, 7:42am. Not you? Change your password.\" Sent by a Firebase function through an email service."],
+   ["pw-signout","Password change signs out every device","claude","So the owner can take the account back in one step if the login has been passed on."],
+   ["pin","Decide what happens to the PIN lock","both","Suggested: keep it as a quick lock on the phone, on top of the login."],
+   ["rules","Security rules","claude","Progress 4 Oct: written and tested locally — a business can only read and write its own data, and nobody signed out can read anything. Goes live with the first deploy."],
+  ]},
+  {g:"Moving Infinity across", tasks:[
+   ["migrate","Copy Infinity's data from Claude to Firebase","claude","Settings, materials, quotes, jobs, calendar entries and logo. Plan: you create your account on the new app, then I copy everything across with the deploy key and check counts and totals match."],
+   ["migrate-check","Check Infinity's data in the new app","you","Open a few quotes and jobs and confirm they look right."],
+  ]},
+  {g:"Reliability", tasks:[
+   ["offline","Working with no signal","claude","Firestore keeps working offline and syncs later; show a clear \"offline\" note."],
+   ["backups","Daily backups","claude","Scheduled database exports, kept for 30 days."],
+   ["errors","Crash and error reporting","claude","So problems on customers' phones reach us (Firebase Crashlytics or similar)."],
+   ["admin","An admin view for you","claude","List of businesses, when they joined, subscription status, and a switch to give an account free access."],
+   ["hosting","Put the web app on its own address","both","app.yourdomain — you add two DNS records at the registrar; I set up the rest."],
+   ["tests","Move the automated tests across","claude","All 74 current tests run against a local copy of Firebase, so nothing breaks unnoticed."],
+  ]},
+  {g:"Trial run", tasks:[
+   ["ico","Register with the ICO — before the trial run","you","Pay the data protection fee before any other business puts customer details into the app (£52 a year, £47 by direct debit, for under 10 staff / under £632k turnover). Takes about 15 minutes at ico.org.uk. Note the registration number for the privacy policy."],
+   ["beta-web","Run it on the web with a few businesses","both","Three to five friendly landscapers for 2–4 weeks, using it for real quotes. Collect what confuses them."],
+  ]},
+ ]},
+ {n:"4", title:"Subscriptions", why:"One subscription, whichever way they paid.", groups:[
+  {g:"Set up the products", tasks:[
+   ["products-stripe","Create the plans in Stripe (later)","you","After the store launch. Solo, Team and Business, each monthly and yearly (6 prices), with the 7-day trial. I'll give you the exact settings."],
+   ["products-apple","Create the subscriptions in App Store Connect","you","Solo, Team and Business (monthly and yearly) in one subscription group, ranked so moving up or down a tier works, with UK prices chosen from Apple's price list. Apple reviews them with the first app version."],
+   ["products-play","Create the subscriptions in Google Play Console","you","Same plans and trial, with UK prices."],
+   ["rc-connect","Connect Stripe, Apple and Google to RevenueCat","both","One \"Pro\" entitlement that every plan unlocks. You add the keys; I wire it up."],
+  ]},
+  {g:"In the app", tasks:[
+   ["paywall","Subscribe screen","claude","Web: Stripe Checkout. Android: Google Play purchase. iPhone: Apple purchase. In the UK the iPhone app must not mention or link to the web price."],
+   ["gate","Lock and unlock features by subscription","claude","Reads the tier's device limit. Trial, active, grace period, lapsed (read-only) — following your decision in step 0."],
+   ["status-sync","Keep subscription status up to date","claude","RevenueCat tells our server about every purchase, renewal, cancellation and refund."],
+   ["manage","\"Manage subscription\" and \"Restore purchases\"","claude","Web opens the Stripe customer portal; phones open the Play / App Store subscription pages. Restore purchases is an Apple requirement."],
+   ["invoices","VAT invoices for web customers","claude","Stripe emails a proper VAT invoice with your VAT number each month."],
+  ]},
+  {g:"Test every case", tasks:[
+   ["test-buy","Test buying, renewing and cancelling on all three","both","Stripe test mode, Apple sandbox testers and Google licence testers. Also: failed card, refund, monthly-to-yearly switch, and a lapsed account."],
+  ]},
+ ]},
+ {n:"5", title:"Legal and policies", why:"Both stores check these before approving.", groups:[
+  {g:"Documents", tasks:[
+   ["privacy","Privacy policy","claude","What's stored (business details, their customers' names, addresses, phone numbers and emails, quotes), who processes it (Google Firebase, Stripe, RevenueCat, Apple, Google), how long it's kept, people's rights, your ICO number and contact. Drafted by me — have a solicitor check it."],
+   ["terms","Terms of service and subscription terms","claude","Fair use: one subscription covers one business, and sharing a login with another business can lead to the account being closed. Plus auto-renewal, cancellation, refunds, that quotes are calculated from the business's own prices and are its responsibility, limits of liability."],
+   ["dpa","Data processing terms","claude","Your customers are in charge of their own customers' data and you process it for them — this needs to be in the terms."],
+   ["solicitor","Have the documents checked","you","A solicitor who handles software or data protection."],
+   ["publish-docs","Publish them on the website","both","At fixed addresses (e.g. /privacy and /terms) — the stores ask for the links."],
+  ]},
+  {g:"In the app", tasks:[
+   ["delete-account","Delete account inside the app","claude","Apple requires it. Deletes the business's data and cancels the web subscription; tells phone subscribers how to cancel in their store."],
+   ["delete-web","Account deletion page on the website","claude","Google requires a web link where people can ask for their account and data to be deleted."],
+   ["export","Download all my data","claude","A full export of quotes and customers, so businesses can leave with their data."],
+   ["consent","Cookie and analytics consent on the website","claude","Only if we add analytics. Without tracking cookies no banner is needed."],
+  ]},
+ ]},
+ {n:"6", title:"Phone apps", why:"Wrap the web app as real Android and iPhone apps, with the phone features the stores expect.", groups:[
+  {g:"Set up", tasks:[
+   ["app-id","Choose the app ID","you","e.g. uk.co.yourdomain.quotebuilder. It can never be changed after the first upload."],
+   ["capacitor","Create the Capacitor project","claude","Android and iPhone projects from the same code."],
+   ["icon","App icon and splash screen","both","A square icon (1024×1024, no transparency for Apple). You choose the design; I produce every size."],
+  ]},
+  {g:"Phone features", tasks:[
+   ["share-pdf","Share quotes and payment plans as PDFs","claude","Through the phone's share sheet (email, WhatsApp, Files) instead of a download."],
+   ["photo-logo","Pick a logo from the photo library","claude",""],
+   ["native-links","Call, text and email buttons open the phone's apps","claude","Makes the chase buttons work properly."],
+   ["phone-polish","Phone polish","claude","Android back button, status bar colours, safe areas around the notch, keyboard not covering fields, app resuming where it was left."],
+   ["notify","Reminders (optional, later)","both","e.g. \"3 quotes need chasing\" or \"payment overdue\". Not needed for launch."],
+  ]},
+  {g:"Signing", tasks:[
+   ["android-key","Create the Android upload key — and back it up","both","Stored safely in two places. Losing it makes updating the app painful."],
+   ["ios-certs","iPhone signing certificates","both","Created through your Apple account (or the cloud build service)."],
+   ["device-test","Test on real phones","you","Both phones, light and dark mode, no signal, a full quote from start to sent."],
+  ]},
+ ]},
+ {n:"7", title:"Store listings", why:"What customers and reviewers see.", groups:[
+  {g:"Words", tasks:[
+   ["listing-text","Name, subtitle and descriptions","claude","Apple: name and subtitle (30 characters each), keywords (100 characters), description. Google: name (30), short description (80), full description (4,000)."],
+   ["category","Category and age rating","both","Business. Age rating questionnaires in both stores (it'll be suitable for everyone)."],
+   ["review-notes","Notes and a demo login for the reviewers","both","A demo business with sample quotes and jobs, plus a short explanation of the subscription and who the app is for."],
+  ]},
+  {g:"Pictures", tasks:[
+   ["screenshots","Screenshots","claude","iPhone (6.9\" size) and Android phone, showing a quote being built, the letter, a job's finance tracker and the calendar. iPad only if we choose to support it."],
+   ["feature-graphic","Google Play feature graphic","claude","1024×500 banner."],
+  ]},
+  {g:"Forms", tasks:[
+   ["apple-privacy","Apple App Privacy answers","both","What data is collected and why — must match the privacy policy."],
+   ["play-safety","Google Play Data safety form","both","Same information in Google's format, plus the account deletion link."],
+   ["availability","Countries and price availability","you","UK only to start is simplest."],
+  ]},
+ ]},
+ {n:"8", title:"Testing and release", why:"Through each store's test tracks, then live.", groups:[
+  {g:"Google Play", tasks:[
+   ["play-internal","Internal test","both","Upload the first build; you and I install it from the Play Store."],
+   ["play-closed","Closed test (only if it's a personal account)","both","At least 12 testers for 14 days in a row, then apply for production access."],
+   ["play-release","Release to production","you","Start with a staged rollout (e.g. 20%) and watch for crashes."],
+  ]},
+  {g:"App Store", tasks:[
+   ["testflight","TestFlight beta","both","Internal testers straight away; outside testers after a quick Apple beta review."],
+   ["apple-submit","Submit for App Review","you","With the subscriptions attached to the first version."],
+   ["apple-fix","Answer any review questions or rejections","both","Common first-time issues: subscription wording, missing Restore button, account deletion, demo login not working."],
+   ["apple-release","Release","you","Choose manual release so it goes live when you're ready."],
+  ]},
+  {g:"First weeks", tasks:[
+   ["monitor","Watch crashes, payments and reviews","both","Daily for the first two weeks."],
+  ]},
+ ]},
+ {n:"9", title:"After launch", why:"Keeping it running and growing.", groups:[
+  {g:"Ongoing", tasks:[
+   ["site","Marketing website","both","What it does, prices, sign-up, support — and where web subscriptions (cheapest for you) happen."],
+   ["onboarding","Welcome emails and help pages","claude","Getting started, pricing materials, first quote."],
+   ["support","Support routine","you","Who answers emails and how fast."],
+   ["cma","Watch the UK rule change on iPhone payments","both","If the CMA allows it, the iPhone app may later be able to link to Stripe."],
+   ["yearly","Yearly store requirements","both","Google raises the required Android version each year and Apple updates its SDK rules — plan an update each year."],
+  ]},
+ ]},
+];
+
+const STORE_KEY = 'qb-launch-plan';
+let done = {};
+let db = null, ref = null, saving = Promise.resolve();
+let filter = 'all';
+
+function allTasks(){ return PLAN.flatMap(p=>p.groups.flatMap(g=>g.tasks)); }
+const OWNER = {you:'You', claude:'Claude', both:'Both'};
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function render(){
+  const root = document.getElementById('phases');
+  const openState = {}; root.querySelectorAll('details.phase').forEach(d=>{ openState[d.dataset.n] = d.open; });
+  root.innerHTML = PLAN.map((p,pi)=>{
+    const ts = p.groups.flatMap(g=>g.tasks), d = ts.filter(t=>done[t[0]]).length;
+    const isOpen = openState[p.n]!==undefined ? openState[p.n] : (pi<=1 || (d>0 && d<ts.length));
+    return `<details class="phase ${d===ts.length?'done':''}" data-n="${p.n}" ${isOpen?'open':''}>
+      <summary><span class="step">${d===ts.length?'✓':p.n}</span><span><h2>${esc(p.title)}</h2><div class="why">${esc(p.why)}</div></span><span class="count">${d}/${ts.length}</span></summary>
+      <div class="phase-body">${p.groups.map(g=>`<div class="group">${esc(g.g)}</div>${g.tasks.map(([id,t,who,det])=>`
+        <div class="task ${done[id]?'is-done':''}" data-who="${who}" data-done="${done[id]?1:0}">
+          <input type="checkbox" id="t_${id}" data-id="${id}" ${done[id]?'checked':''}>
+          <label for="t_${id}"><span class="t">${esc(t)}<span class="who ${who}">${OWNER[who]}</span></span>${det?`<span class="d">${esc(det)}</span>`:''}</label>
+        </div>`).join('')}`).join('')}</div>
+    </details>`;
+  }).join('');
+  const all = allTasks(), n = all.filter(t=>done[t[0]]).length, pct = all.length ? Math.round(n*100/all.length) : 0;
+  document.getElementById('pct').textContent = pct + '%';
+  document.getElementById('countAll').textContent = `${n} of ${all.length} done`;
+  document.getElementById('barAll').style.width = pct + '%';
+  applyFilter();
+}
+function applyFilter(){
+  document.querySelectorAll('.task').forEach(el=>{
+    const show = filter==='all' || (filter==='open' ? el.dataset.done!=='1' : (el.dataset.who===filter || el.dataset.who==='both'));
+    el.classList.toggle('hidden-by-filter', !show);
+  });
+}
+document.querySelector('.filters').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  filter = b.dataset.filter;
+  document.querySelectorAll('.filters button').forEach(x=>x.setAttribute('aria-pressed', x===b ? 'true':'false'));
+  applyFilter();
+});
+document.getElementById('phases').addEventListener('change', e=>{
+  const cb = e.target.closest('input[data-id]'); if(!cb) return;
+  if(cb.checked) done[cb.dataset.id] = true; else delete done[cb.dataset.id];
+  render(); persist();
+});
+function persist(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(done)); }catch(e){}
+  if(ref){
+    const body = {done: Object.assign({}, done), updatedAt: new Date().toISOString()};
+    saving = saving.then(()=>ref.set(body)).then(()=>note('Saved — your ticks are kept for next time, on any device.')).catch(err=>note(err && err.code==='invalid_argument' ? 'Only the plan owner can tick items.' : 'Couldn’t save that tick just now — it’s kept on this device and will save with the next one.'));
+  }
+}
+function note(t){ document.getElementById('syncNote').textContent = t; }
+
+try{ done = JSON.parse(localStorage.getItem(STORE_KEY)||'{}') || {}; }catch(e){ done = {}; }
+render();
+(async ()=>{
+  const c = window.claude && window.claude.use ? await window.claude.use('db') : null;
+  if(!c){ note('Ticks are kept on this device.'); return; }
+  db = c; ref = db.doc('plan/progress');
+  let first = true;
+  ref.onSnapshot(snap=>{
+    const remote = snap.exists ? ((snap.data()||{}).done || {}) : null;
+    if(first){
+      first = false;
+      if(remote){ done = Object.assign({}, remote); render(); }
+      else if(Object.keys(done).length){ persist(); }
+      note('Your ticks are saved and follow you to any device.');
+      return;
+    }
+    if(remote && !snap.metadata.hasPendingWrites){ done = Object.assign({}, remote); render(); }
+  }, ()=>note('Ticks are kept on this device for now.'));
+})();
+</script>

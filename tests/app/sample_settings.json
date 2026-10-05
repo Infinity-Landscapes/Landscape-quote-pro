@@ -1,0 +1,48 @@
+{
+ "company": {
+  "name": "Example Gardens Ltd",
+  "address": "1 Sample Street, Exampletown, EX1 1AA",
+  "email": "hello@example.com",
+  "phone": "01234 567890",
+  "bankName": "Example Bank",
+  "sortCode": "00-00-00",
+  "accountNumber": "00000000",
+  "number": "00000000",
+  "vatNo": ""
+ },
+ "dayRatePerPerson": 150,
+ "expensesIncludeVat": false,
+ "expensesPerDay": 50,
+ "markupPercent": 20,
+ "onboarded": true,
+ "pin": "1234",
+ "productivity": {
+  "paving": 6.7,
+  "turf": 16.7,
+  "gravel": 16.7,
+  "concretebase": 5,
+  "wasteDigger": 50,
+  "wasteGrab": 35,
+  "wasteLabour": 70
+ },
+ "quoteCounter": 0,
+ "servicesEnabled": {},
+ "vatRate": 0.2,
+ "weeklyPaymentAmount": 0,
+ "materials": {
+  "Digger hire": {
+   "price": 300,
+   "unit": "week",
+   "section": "Plant",
+   "supplier": "Example Plant Hire",
+   "vatIncluded": false
+  },
+  "Grab hire": {
+   "price": 360,
+   "unit": "load",
+   "section": "Plant",
+   "supplier": "Example Haulage",
+   "vatIncluded": true
+  }
+ }
+}
