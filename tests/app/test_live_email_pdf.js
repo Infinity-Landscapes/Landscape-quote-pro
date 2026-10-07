@@ -109,7 +109,29 @@ const PLATFORM = `window.__platform = { email:()=>'matt@example.com', signOut(){
     await page.click('.modal-box [data-action="modalCancel"]'); await wait(300);
     check('activity log notes the email was created with the PDF', new RegExp('Email created with '+fname.replace('.','\\.')+' attached').test(await page.$eval('#app', e=>e.innerText)));
     check('no sideways scrolling', await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth+1));
-    await page.click('button[data-action="emailQuote"]'); await wait(300);
+    // ---- payment plan: same option, with the payment plan PDF attached ----
+    await page.click('button[data-action="showAccept"]'); await wait(300);
+    await page.fill('#acceptStart','2026-11-02');
+    await page.click('button[data-action="confirmAccept"]'); await wait(600);
+    const pname = qn.replace(/[^\w-]+/g,'_') + '_payment_plan.pdf';
+    await page.click('button[data-action="emailPaymentPlan"]'); await wait(300);
+    check(`payment plan: dialog says it creates an email with ${pname} attached`, (await box()).includes(`with ${pname} attached`));
+    await page.waitForSelector(primarySel+':not([disabled])', {timeout:30000});
+    if (share){
+      await page.evaluate(()=>{ window.__shareMode='ok'; window.__shared=null; });
+      // the earlier refusal switched this dialog to the download fallback; a fresh dialog offers sharing again
+      check('payment plan: phone offers "Create email with PDF attached"', !!(await page.$('[data-action="emailShare"]')));
+      await page.click('[data-action="emailShare"]'); await wait(500);
+      const sh = await page.evaluate(()=>window.__shared);
+      check('payment plan: share menu gets the payment plan PDF', sh && sh.n===1 && sh.name===pname && sh.head==='%PDF-' && sh.size>10000);
+      check('payment plan: message has the schedule and bank details', sh && /PAYMENT SCHEDULE/.test(sh.text) && /Bank details for payment/.test(sh.text) && /^Payment plan for your quote/.test(sh.title));
+    } else {
+      const [dl3] = await Promise.all([ page.waitForEvent('download', {timeout:10000}), page.click('[data-action="emailDownloadOpen"][data-via="mail"]') ]);
+      const b3 = fs.readFileSync(await dl3.path());
+      check('payment plan: the payment plan PDF downloads', dl3.suggestedFilename()===pname && b3.slice(0,5).toString()==='%PDF-');
+      await wait(200); opened = await page.evaluate(()=>window.__opened);
+      check('payment plan: a new email opens with the payment plan subject', opened.some(u=>u.startsWith('mailto:cust@example.com?') && decodeURIComponent(u).includes('subject=Payment plan for your quote')));
+    }
     await page.screenshot({path:`${__dirname}/live_email_${label}.png`});
     await ctx.close();
   }
