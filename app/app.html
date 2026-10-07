@@ -224,6 +224,9 @@
   .meas-row{display:grid;grid-template-columns:1.6fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px;}
   .meas-row.two{grid-template-columns:1.6fr 1fr auto;}
   .meas-row.four{grid-template-columns:1.3fr 0.8fr 0.8fr 0.9fr auto;}
+  .meas-row.four.chk{grid-template-columns:1.3fr 0.8fr 0.8fr 0.9fr 86px auto;}
+  .meas-row .row-check{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;height:42px;cursor:pointer;white-space:nowrap;}
+  .meas-row .row-check input{width:18px;height:18px;margin:0;accent-color:var(--primary);}
   .meas-row.six{grid-template-columns:1.1fr repeat(5,minmax(0,0.8fr)) auto;gap:6px;}
   .meas-row.six input{padding-left:8px;padding-right:6px;}
   .meas-head{margin-bottom:2px;font-size:11px;font-weight:700;color:var(--muted);line-height:1.2;align-items:end;}
@@ -302,7 +305,7 @@
 
   .two-col{display:grid;grid-template-columns:1.3fr .8fr;gap:16px;align-items:start;}
   .two-col > *{min-width:0;}
-  @media (max-width:760px){ .two-col{grid-template-columns:1fr;} .meas-row{grid-template-columns:1fr;} .meas-row.two{grid-template-columns:1fr;} .meas-row.four{grid-template-columns:1fr;} .meas-row.six{grid-template-columns:1fr;} .meas-head{display:none;} }
+  @media (max-width:760px){ .two-col{grid-template-columns:1fr;} .meas-row{grid-template-columns:1fr;} .meas-row.two{grid-template-columns:1fr;} .meas-row.four{grid-template-columns:1fr;} .meas-row.four.chk{grid-template-columns:1fr;} .meas-row .row-check{height:auto;} .meas-row.six{grid-template-columns:1fr;} .meas-head{display:none;} }
 
   /* ---------- mobile ---------- */
   @media (max-width:640px){
@@ -2211,6 +2214,9 @@ steeledging: { label:"Steel Edging", group:"Hard landscaping", unitLabel:"Length
 
 flowerbeds: { label:"Flower Beds", group:"Planting & beds", unitLabel:"Area", cols:["desc","width","length","digOutDepth"],
   colLabels:["Description","Width (m)","Length (m)","Dig-out depth (mm)"],
+  // Per-area tick (default on): untick an area that doesn't need bark mulch — compost then fills
+  // its whole dig-out instead.
+  rowChecks:[{field:"mulch", label:"Bark mulch"}],
   options:[
     // October 2026 rework: per-row dig-out depth (default 300mm, from Settings). Compost and bark
     // mulch are built in (Materials list, priced per 1-tonne bulk bag of fbBagVolume m³): the top
@@ -2250,12 +2256,15 @@ flowerbeds: { label:"Flower Beds", group:"Planting & beds", unitLabel:"Area", co
     // compost fills the rest of each row's dig-out; both come in bulk bags of fbBagVolume m³ (0.5).
     const bagVol = Number(ctx.fbBagVolume)>0 ? Number(ctx.fbBagVolume) : 0.5;
     const mulchMm = ctx.fbMulchDepth!=null && Number(ctx.fbMulchDepth)>=0 ? Number(ctx.fbMulchDepth) : 50;
-    let compostM3 = 0;
+    let compostM3 = 0, mulchArea = 0;
     rows.forEach(r=>{
       const a = r6((r6((Number(r.width)||0)*1000)*r6((Number(r.length)||0)*1000))/1e6);
-      if(a>0) compostM3 += a*Math.max(0, (Number(r.digOutDepth)||0) - mulchMm)/1000;
+      if(!(a>0)) return;
+      const mulched = r.mulch!==false;
+      if(mulched) mulchArea += a;
+      compostM3 += a*Math.max(0, (Number(r.digOutDepth)||0) - (mulched ? mulchMm : 0))/1000;
     });
-    const mulchM3 = area*mulchMm/1000;
+    const mulchM3 = mulchArea*mulchMm/1000;
     const steel = opt.edgingStyle===GRAVEL_STEEL_EDGING;
     const es = (!steel && opt.edgingStyle) ? (ctx.fbEdgingStyles||[]).find(x=>x.name===opt.edgingStyle) : null;
     const edgingLen = steel ? 0 : (Number(opt.edgingLength)||0);
@@ -2268,7 +2277,7 @@ flowerbeds: { label:"Flower Beds", group:"Planting & beds", unitLabel:"Area", co
     }
     mats.push(["Peat free compost bulk bag", has ? ru(r6(compostM3/bagVol)) : 0]);
     if(!opt.plantingNow) mats.push(["Geotextile membrane", r6(area)]);
-    mats.push(["Bark mulch", has ? ru(r6(mulchM3/bagVol)) : 0]);
+    mats.push(["Bark mulch", has && mulchM3>0 ? ru(r6(mulchM3/bagVol)) : 0]);
     if(es && edgingLen>0) mats.push([es.name, ru(edgingLen*(Number(es.piecesPerMetre)||0)), ctx.netPrice(es.price, es.vatIncluded), '', 'each']);
     mats.push(["Consumables", has ? (ctx.fbConsumablesQty!=null ? Number(ctx.fbConsumablesQty) : 1) : 0]);
     if(has) bldZeroPriceBlockers(mats, [], ctx).forEach(x=>blockers.push(x));
@@ -2435,9 +2444,11 @@ const SERVICE_COPY = {
     const dig = !depths.length ? `Bed area dug out.` : same ? `Bed area dug out to a depth of ${depths[0]}mm.`
       : `Bed areas dug out to: ${rows.map((r,i)=>`${esc((r.desc||'').trim()||('bed '+(i+1)))} ${depths[i]}mm`).join(', ')}.`;
     const md = (s && s.mulchDepth!=null) ? s.mulchDepth : 50;
+    const mulched = rows.filter(r=>r.mulch!==false);
     const lines = [dig, `Filled with good quality peat-free compost.`,
-      o.plantingNow ? `Flower bed ready for immediate planting.` : `Geotextile membrane laid on top to suppress weeds until ready for planting.`,
-      `Topped with ${md}mm of bark mulch.`];
+      o.plantingNow ? `Flower bed ready for immediate planting.` : `Geotextile membrane laid on top to suppress weeds until ready for planting.`];
+    if(mulched.length===rows.length) lines.push(`Topped with ${md}mm of bark mulch.`);
+    else if(mulched.length) lines.push(`Topped with ${md}mm of bark mulch: ${mulched.map(r=>esc((r.desc||'').trim()||('bed '+(rows.indexOf(r)+1)))).join(', ')}.`);
     if(o.edgingStyle && o.edgingStyle!==GRAVEL_STEEL_EDGING && Number(o.edgingLength)>0) lines.push(`Edging installed around the bed.`);
     return lines;
   },
@@ -6273,15 +6284,17 @@ function measRowClass(n){ return n===2 ? "meas-row two" : n===4 ? "meas-row four
 function measHeadHtml(def, options){
   const rc = rowColsFor(def, options);
   if(rc.cols.length<4) return '';
-  return `<div class="${measRowClass(rc.cols.length)} meas-head">${rc.labels.map(l=>`<div>${esc(l)}</div>`).join('')}<div class="icon-btn-spacer"></div></div>`;
+  const checks = def.rowChecks||[];
+  return `<div class="${measRowClass(rc.cols.length)}${checks.length?' chk':''} meas-head">${rc.labels.map(l=>`<div>${esc(l)}</div>`).join('')}${checks.map(ch=>`<div>${esc(ch.label)}</div>`).join('')}<div class="icon-btn-spacer"></div></div>`;
 }
 function measRowHtml(def, r, i, options){
   const rc = rowColsFor(def, options);
-  const cls = measRowClass(rc.cols.length);
+  const cls = measRowClass(rc.cols.length) + ((def.rowChecks||[]).length ? ' chk' : '');
   const numCols = rc.cols.slice(1);
   return `<div class="${cls}" data-row="${i}">
     <div><label class="mf-lbl">${rc.labels[0]}</label><input type="text" placeholder="${rc.labels[0]}" data-mf="desc" value="${esc(r.desc)}"></div>
     ${numCols.map((c,ci)=>`<div><label class="mf-lbl">${rc.labels[ci+1]}</label><input type="text" inputmode="decimal" placeholder="${rc.labels[ci+1]}" data-mf="${c}" value="${esc(r[c]!==undefined ? r[c] : (c==='digOutDepth' && options && options.digOutDepth!=null ? options.digOutDepth : (def.rowDefaults && def.rowDefaults[c]!=null ? def.rowDefaults[c] : '')))}"></div>`).join('')}
+    ${(def.rowChecks||[]).map(ch=>`<label class="row-check"><input type="checkbox" data-row-check="${ch.field}" ${r[ch.field]!==false?'checked':''}> ${esc(ch.label)}</label>`).join('')}
     <button class="icon-btn" data-action="delMeasRow" data-row="${i}" title="Remove">✕</button>
   </div>`;
 }
@@ -9293,6 +9306,13 @@ App.addEventListener("input", (e)=>{
     const k = t.getAttribute('data-rc-setting'); const n = parseFloat(t.value);
     S.settings[k] = t.value.trim()==='' || isNaN(n) ? null : n;
     rcRefreshFigures(); rcSaveSoon();
+    return;
+  }
+  if(t.matches('[data-row-check]')){
+    const row = parseInt(t.closest('[data-row]').getAttribute('data-row'),10);
+    const st = ensureSectionState(currentMeasureKey(d));
+    if(st.rows[row]){ st.rows[row][t.getAttribute('data-row-check')] = t.checked; reflow(); }
+    if(S.draft && S.screen==="newquote") scheduleDraftSave();
     return;
   }
   if(t.matches('[data-mf]')){
