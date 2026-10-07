@@ -17,7 +17,7 @@ const fs = require('fs');
   const click = async sel => { await (await page.$(sel)).click(); await settle(); };
   async function via(sel, val, f){ await page.selectOption(sel,val); await settle();
     for (const [k,x] of Object.entries(f)){ const el = await page.$('#mf_'+k); if(el) await el.fill(String(x)); }
-    await click('button[data-action="modalOk"]'); }
+    { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]'); }
   await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
   await page.fill('#f_name','Infinity Landscapes and Design');
   for (let i=0;i<3;i++) await click('button[data-action="setupNext"]');
@@ -37,7 +37,7 @@ const fs = require('fs');
   check('price before: 2 × £200 = £400.00', /400\.00/.test(await txt()));
   await page.selectOption(sel0,'__edit_current__'); await settle();
   check('edit dialog prefilled', await page.$eval('#mf_name',e=>e.value)==='Kaskada' && await page.$eval('#mf_price',e=>e.value)==='240' && /Edit water feature/.test(await txt()));
-  await page.fill('#mf_name','Kaskada Large'); await page.fill('#mf_price','300'); await click('button[data-action="modalOk"]');
+  await page.fill('#mf_name','Kaskada Large'); await page.fill('#mf_price','300'); { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]');
   let t = await txt();
   check('row keeps the renamed product', await page.$eval(sel0, e=>e.value)==='Kaskada Large');
   check('price after: 2 × £250 = £500.00', /Kaskada Large \(Aquatics\)\s*2/.test(t) && /500\.00/.test(t));
@@ -46,7 +46,7 @@ const fs = require('fs');
   await page.fill('[data-row="1"] input[data-mf="count"]','1'); await settle();
   await via('[data-row="1"] select[data-mf="feature"]', '__add_other__', {name:'Bubbler', price:120});
   await page.selectOption('[data-row="1"] select[data-mf="feature"]','__edit_current__'); await settle();
-  await page.fill('#mf_name','Kaskada Large'); await click('button[data-action="modalOk"]');
+  await page.fill('#mf_name','Kaskada Large'); { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]');
   check('renaming onto an existing name is refused', /already a water feature called "Kaskada Large"/.test(await txt()));
   await click('button[data-action="modalCancel"]').catch(()=>{});
   if (await page.$('.modal-box')) { const c = await page.$('[data-action="modalClose"], [data-action="modalCancel"]'); if (c) { await c.click(); await settle(); } }
@@ -62,7 +62,7 @@ const fs = require('fs');
   check('settings library has ✎ edit buttons', !!ed);
   await ed.click(); await settle();
   check('settings edit dialog prefilled', /Edit water feature/.test(await txt()) && ['Kaskada Large','Bubbler'].includes(await page.$eval('#mf_name',e=>e.value)));
-  await page.fill('#mf_price','99'); await click('button[data-action="modalOk"]');
+  await page.fill('#mf_price','99'); { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]');
   check('settings list shows new price', /£99\.00/.test(await txt()));
 
   // Paving: source-backed (jointing compound) + materials-list (slab type) dropdowns

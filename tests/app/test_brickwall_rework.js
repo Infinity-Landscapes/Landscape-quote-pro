@@ -17,7 +17,7 @@ const fs = require('fs');
   const settle = () => page.waitForTimeout(220);
   async function fillModal(f){ for (const [k,x] of Object.entries(f)){ const el = await page.$('#mf_'+k); if(!el) continue;
       if ((await el.evaluate(e=>e.tagName))==='SELECT') await el.selectOption(String(x)); else await el.fill(String(x)); }
-    await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250); }
+    { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250); }
   async function addVia(sel, f){ await page.selectOption(sel,'__add_other__'); await settle(); await fillModal(f); }
   async function tick(opt){ await (await page.$(`button[data-action="setOpt"][data-opt="${opt}"][data-val="true"]`)).click(); await settle(); }
 

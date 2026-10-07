@@ -92,7 +92,7 @@ const fs = require('fs');
   check('overview shows overdue total and an Overdue payments list', /Overdue£[1-9]/.test(t.replace(/\s+/g,'')) && /Overdue payments/.test(t));
   await click('button[data-nav="quotes"]'); await click('[data-action="openQuote"]');
   await click('button[data-action="markInstalmentPaid"]');
-  await click('button[data-action="modalOk"]');
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]');
   t = await txt();
   check('Mark paid logs the payment and the deposit shows Paid', /Payments against the plan[\s\S]*Deposit[^]*?Paid/.test(t));
   console.log('ERRORS:', errors.length?errors:'none');

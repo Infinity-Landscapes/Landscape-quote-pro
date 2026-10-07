@@ -73,7 +73,7 @@ const fs = require('fs');
         await el.fill(String(val));
       }
     }
-    await (await page.$('button[data-action="modalOk"]')).click();
+    { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click();
     await page.waitForTimeout(250);
   }
 
@@ -125,6 +125,7 @@ const fs = require('fs');
   await startPavingQuote('Paving rework — default depth', 10, 5); // area = 50 m²
   const digDepthVal = await page.$eval('[data-opt="digOutDepth"]', el => el.value).catch(()=>null);
   check('"Dig-out depth (mm)" option present, defaults to 150', digDepthVal === '150');
+  await page.fill('[data-opt="wastagePct"]','10'); await page.dispatchEvent('[data-opt="wastagePct"]','change'); await page.waitForTimeout(200);
 
   const styleSelect = await page.$('[data-row="0"] select[data-mf="slabType"]');
   check('slab-type select is marked customizable (the normal materials-pick mechanism)', (await styleSelect.getAttribute('data-row-material')) === 'paving');
@@ -140,7 +141,7 @@ const fs = require('fs');
   check('"+ Add new…" opens the add-a-material dialog', (await page.$('#modalMatName')) !== null);
   await (await page.$('#modalMatName')).fill('Premium Porcelain 900x600');
   await (await page.$('#modalMatPrice')).fill('60');
-  await (await page.$('button[data-action="modalOk"]')).click();
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click();
   await page.waitForTimeout(250);
   check('slab-type select now shows the new slab type selected', await page.$eval('[data-row="0"] select[data-mf="slabType"]', el => el.value) === 'Premium Porcelain 900x600');
 
@@ -151,7 +152,7 @@ const fs = require('fs');
   // Type 1 MOT at the 150mm default dig-out: MOT depth = 150-50 = 100mm, quantity =
   // ROUNDUP((50/5) * (100/100)) = 10 tonnes — matches the long-standing area/5 baseline exactly.
   check('[150mm dig-out, default] Type 1 MOT = 10 tonnes (matches the old area÷5 baseline)', hasMaterialQty(bodyText, 'Type 1 MOT', 10));
-  // Slab: 50 m² + the default 10% slab wastage = 55 m², at £60/m² Inc VAT -> net £50/m² ->
+  // Slab: 50 m² + 10% wastage for cuts (set in the wizard) = 55 m², at £60/m² Inc VAT -> net £50/m² ->
   // £2,750.00, via the normal shared-materials price lookup (ctx.price), exactly like gravel's style.
   check('slab type priced via the normal materials lookup (55 m² incl. 10% wastage × £50 net = £2,750.00)', /2,?750\.00/.test(bodyText));
   // Jointing compound: ROUNDUP(50/8) = 7 units at £30/unit Inc VAT -> net £25 -> £175.00.

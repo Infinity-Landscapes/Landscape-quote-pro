@@ -50,10 +50,10 @@ const fs = require('fs');
   // Oct 2026: paving now needs a slab type and jointing compound before it can be saved.
   await page.selectOption('[data-row="0"] select[data-mf="slabType"]', '__add_other__'); await page.waitForTimeout(200);
   await page.fill('#modalMatName', 'Test slab'); await page.fill('#modalMatPrice', '40');
-  await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
   await page.selectOption('select[data-opt="jointingCompound"]', '__add_other__'); await page.waitForTimeout(200);
   await page.fill('#mf_name', 'Test grout'); await page.fill('#mf_price', '30'); { const c = await page.$('#mf_coverage'); if (c) await c.fill('8'); }
-  await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
   // Paving inserts a waste-removal preview page after its own measurements, so this needs one
   // extra wizNext beyond the plain who→services→measure→people→extras→preview count.
   for (let i = 0; i < 4; i++) {

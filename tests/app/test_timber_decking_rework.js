@@ -14,7 +14,7 @@ const fs = require('fs');
   const txt = () => page.$eval('#App', el => el.textContent);
   const v = id => page.$eval(id, e=>e.value).catch(()=>null);
   async function fillModal(f){ for (const [k,x] of Object.entries(f)){ const el = await page.$('#mf_'+k); if(el) await el.fill(String(x)); }
-    await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250); }
+    { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250); }
   async function addVia(sel, f){ await page.selectOption(sel,'__add_other__'); await page.waitForTimeout(200); await fillModal(f); }
   async function login(){ const pin = await page.$('#loginPin'); if(pin){ await pin.fill('1234'); await (await page.$('button[data-action="login"]')).click(); await page.waitForTimeout(400); } }
 
@@ -81,7 +81,7 @@ const fs = require('fs');
   check('letter board line carries the board name', /Deck boards \(Test board\) laid with a consistent gap/.test(t));
   check('save buttons present', !!(await page.$('button[data-action="saveSentQuote"]')));
 
-  // Settings take effect; £0 joist blocks
+  // Settings take effect; a £0 joist can't be added
   await (await page.$('button[data-nav="settings"]')).click(); await page.waitForTimeout(200);
   await (await page.$('button[data-action="settingsTab"][data-tab="pricing"]')).click(); await page.waitForTimeout(200);
   await page.fill('#st_timPostcrete','3'); await page.fill('#st_timConsumables','2');
@@ -93,9 +93,8 @@ const fs = require('fs');
   check('consumables quantity 2', t.includes('Consumables2'));
   await page.selectOption('select[data-opt="joist"]','__add_other__'); await page.waitForTimeout(200);
   await fillModal({name:'Free joist', price:0, lengthMm:3000});
-  check('blocker: £0 joist price', /joist price can't be £0/.test(await txt()));
-  for (let i=0;i<6 && !(await page.$('#quoteBlockers')); i++){ const b = await page.$('button[data-action="wizNext"]'); if(!b) break; await b.click(); await page.waitForTimeout(300); }
-  check('preview lists blocker, hides save buttons', !!(await page.$('#quoteBlockers')) && !(await page.$('button[data-action="saveSentQuote"]')));
+  check('adding a product at £0 is refused — dialog stays open and asks for the cost', !!(await page.$('#mf_name')) && /more than £0/.test(await txt()));
+  await (await page.$('button[data-action="modalCancel"]')).click(); await page.waitForTimeout(250);
 
   // Existing-business joist seed, once only
   await page.evaluate(()=>{ const st = JSON.parse(localStorage.getItem('__mockdb__')); for (const k of Object.keys(st)){ const d = st[k]; if(d && d.materials){ delete d.timberJoistsSeeded; delete d.timberJoists; } } localStorage.setItem('__mockdb__', JSON.stringify(st)); });

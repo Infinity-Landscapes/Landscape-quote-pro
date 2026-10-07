@@ -87,7 +87,7 @@ const fs = require('fs');
   await page.fill('[data-svcmat-name="0"]','Trellis panel'); await page.fill('[data-svcmat-amount="0"]','1');
   await page.selectOption('[data-svcmat-basis="0"]','bay');
   await page.selectOption('[data-svcmat-onlyif="0"]', {label:'"Trellis?" ticked'});
-  await page.fill('[data-svcmat-price="0"]','25');
+  await page.fill('[data-svcmat-price="0"]','25'); await page.fill('[data-svcmat-supplier="0"]','Test supplier');
   await click('button[data-action="svcBuilderNext"]');
   await page.fill('#svcProductivity','4');
   await click('button[data-action="addSvcLetterRow"]');
@@ -137,7 +137,7 @@ const fs = require('fs');
   await page.fill('[data-svcmat-name="0"]','Green waste bag'); await page.fill('[data-svcmat-amount="0"]','1'); await page.fill('[data-svcmat-per="0"]','10');
   await page.check('[data-svcmat-roundup="0"]');
   await page.selectOption('[data-svcmat-onlyif="0"]', {label:'"Take away cuttings?" ticked'});
-  await page.fill('[data-svcmat-unit="0"]','bag'); await page.fill('[data-svcmat-price="0"]','3');
+  await page.fill('[data-svcmat-unit="0"]','bag'); await page.fill('[data-svcmat-price="0"]','3'); await page.fill('[data-svcmat-supplier="0"]','Test supplier');
   await click('button[data-action="svcBuilderNext"]');
   await page.fill('#svcProductivity','20');
   await click('button[data-action="addSvcPlantRow"]');
@@ -158,7 +158,7 @@ const fs = require('fs');
   await click('button[data-action="svcBuilderNext"]'); await click('button[data-action="saveServiceBuilder"]');
   // discard the fencing draft and quote the custom service
   await click('button[data-nav="menu"]');
-  const dd = await page.$('button[data-action="discardDraft"]'); if(dd){ await dd.click(); await settle(); const ok = await page.$('button[data-action="modalOk"]'); if(ok) await click('button[data-action="modalOk"]'); }
+  const dd = await page.$('button[data-action="discardDraft"]'); if(dd){ await dd.click(); await settle(); const ok = await page.$('button[data-action="modalOk"]'); if(ok) { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]'); }
   await click('button[data-nav="newquote"]');
   await page.fill('#q_creator','Matt'); await page.fill('#q_cname','Hedge test');
   await click('button[data-action="wizNext"]');

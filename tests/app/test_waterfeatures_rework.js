@@ -17,7 +17,7 @@ const fs = require('fs');
   const click = async sel => { await (await page.$(sel)).click(); await settle(); };
   async function addVia(sel, f){ await page.selectOption(sel,'__add_other__'); await settle();
     for (const [k,x] of Object.entries(f)){ const el = await page.$('#mf_'+k); if(el) await el.fill(String(x)); }
-    await click('button[data-action="modalOk"]'); }
+    { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]'); }
   const flag = (row, field, val) => click(`button[data-action="setRowFlag"][data-row="${row}"][data-field="${field}"][data-val="${val}"]`);
 
   await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
@@ -53,7 +53,7 @@ const fs = require('fs');
   await flag(0,'digOut','true');
   await page.selectOption('[data-row="0"] select[data-mf="holeSize"]','Small hole'); await settle();
   t = await txt();
-  check('two different features on one quote', /Kaskada \(Maidenhead Aquatics\)\s*2/.test(t) && t.includes('Bubbler1'));
+  check('two different features on one quote', /Kaskada \(Maidenhead Aquatics\)\s*2/.test(t) && /Bubbler( \([^)]*\))?\s*1\b/.test(t));
   check('pebbles = 3 bags', t.includes('Slate pebbles3'));
   check('consumables 1', t.includes('Consumables1'));
   check('labour = 3 / 0.7 × £150 = £642.86', /642\.86/.test(t));
@@ -70,10 +70,11 @@ const fs = require('fs');
   check('letter: electrician note for the ticked feature only', /The Bubbler requires a power connection — a price for this will be provided separately by an independent electrician\./.test(t));
   check('letter: pebbles line', /Surrounding area dressed with pebbles to finish\./.test(t));
   check('quote can be saved', !!(await page.$('button[data-action="saveSentQuote"]')));
-  // £0 feature blocks
+  // a £0 feature can't be added
   for (let i=0;i<6 && !(await page.$('[data-row="0"] select[data-mf="feature"]')); i++){ const b = await page.$('button[data-action="wizBack"]'); if(!b) break; await b.click(); await settle(); }
   await addVia('[data-row="0"] select[data-mf="feature"]', {name:'Freebie', price:0});
-  check('blocker: £0 feature price', /The price for "Freebie" can't be £0/.test(await txt()));
+  check('adding a product at £0 is refused — dialog stays open and asks for the cost', !!(await page.$('#mf_name')) && /more than £0/.test(await txt()));
+  await (await page.$('button[data-action="modalCancel"]')).click(); await page.waitForTimeout(250);
   console.log('ERRORS:', errors.length?errors:'none');
   console.log(pass&&!errors.length?'ALL CHECKS PASSED':'SOME CHECKS FAILED');
   await browser.close(); process.exit(pass&&!errors.length?0:1);

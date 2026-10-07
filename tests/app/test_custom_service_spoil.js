@@ -41,7 +41,7 @@ const fs = require('fs');
   await page.fill('[data-svcmat-amount="0"]', '1');
   await page.fill('[data-svcmat-per="0"]', '10');
   await page.fill('[data-svcmat-unit="0"]', 'tonne');
-  await page.fill('[data-svcmat-price="0"]', '58');
+  await page.fill('[data-svcmat-price="0"]', '58'); await page.fill('[data-svcmat-supplier="0"]','Test supplier');
   await (await page.$('button[data-action="svcBuilderNext"]')).click(); await page.waitForTimeout(200);
   await page.fill('#svcProductivity', '20');
   await (await page.$('button[data-action="svcBuilderNext"]')).click(); await page.waitForTimeout(200);

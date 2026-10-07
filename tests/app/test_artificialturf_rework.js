@@ -15,7 +15,7 @@ const fs = require('fs');
   const click = async sel => { await (await page.$(sel)).click(); await settle(); };
   async function addVia(sel, f){ await page.selectOption(sel,'__add_other__'); await settle();
     for (const [k,x] of Object.entries(f)){ const el = await page.$('#mf_'+k); if(el) await el.fill(String(x)); }
-    await click('button[data-action="modalOk"]'); }
+    { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]'); }
   const login = async () => { const pin = await page.$('#loginPin'); if(pin){ await pin.fill('1234'); await click('button[data-action="login"]'); } };
   await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
   await page.fill('#f_name','Infinity Landscapes and Design');
@@ -24,7 +24,8 @@ const fs = require('fs');
   await click('button[data-action="setupNext"]');
   await click('button[data-nav="settings"]'); await click('button[data-action="settingsTab"][data-tab="pricing"]');
   const v = id => page.$eval(id, e=>e.value);
-  check('settings defaults', await v('#st_atBuildUp')==='25' && await v('#st_atMotRate')==='0.3' && await v('#st_atMotDepth')==='150' && await v('#st_atWastage')==='20' && await v('#st_atRoll')==='20' && await v('#st_atInfill')==='5' && await v('#st_atConsumables')==='1' && await v('#st_atEdgingProd')==='12');
+  check('settings defaults', await v('#st_atBuildUp')==='25' && await v('#st_atMotRate')==='0.3' && await v('#st_atMotDepth')==='150' && await v('#st_atRoll')==='20' && await v('#st_atInfill')==='5' && await v('#st_atConsumables')==='1' && await v('#st_atEdgingProd')==='12');
+  check('no turf wastage field in Settings', !(await page.$('#st_atWastage')));
   check('new tenant: no turf product seeded', (await page.$$('button[data-action="removePavingProduct"][data-libkey="atTurf"]')).length===0);
 
   await click('button[data-nav="newquote"]');
@@ -38,6 +39,8 @@ const fs = require('fs');
   await page.fill('[data-row="1"] input[data-mf="digOutDepth"]','100'); await settle();
   let t = await txt();
   check('blockers: turf, grano, infill', /Select an artificial turf/.test(t) && /Select a grano dust/.test(t) && /Select an infill sand/.test(t));
+  check('artificial turf step asks wastage for cuts, starting at 0', await page.$eval('[data-opt="wastagePct"]', e=>e.value)==='0');
+  await page.fill('[data-opt="wastagePct"]','20'); await page.dispatchEvent('[data-opt="wastagePct"]','change'); await settle();
   await addVia('[data-row="0"] select[data-mf="turfType"]', {name:'AT 35mm', price:18});
   await addVia('select[data-opt="grano"]', {name:'Grano', price:50});
   await addVia('select[data-opt="infill"]', {name:'Kiln sand', price:5});

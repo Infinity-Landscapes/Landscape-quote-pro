@@ -17,7 +17,7 @@ const fs = require('fs');
   const click = async sel => { await (await page.$(sel)).click(); await settle(); };
   async function via(sel, val, f){ await page.selectOption(sel,val); await settle();
     for (const [k,x] of Object.entries(f)){ const el = await page.$('#mf_'+k); if(el) await el.fill(String(x)); }
-    await click('button[data-action="modalOk"]'); }
+    { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]'); }
   await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
   await page.fill('#f_name','Infinity Landscapes and Design');
   for (let i=0;i<3;i++) await click('button[data-action="setupNext"]');
@@ -31,12 +31,12 @@ const fs = require('fs');
   await page.fill('[data-row="0"] input[data-mf="width"]','5'); await page.fill('[data-row="0"] input[data-mf="length"]','4'); await settle();
   await page.selectOption('[data-row="0"] select[data-mf="gravelType"]','__add_other__'); await settle();
   await page.fill('#modalMatName','Test gravel'); await page.fill('#modalMatPrice','60');
-  await click('button[data-action="modalOk"]');
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]');
   check('gravel style has an Edit option', (await page.$eval('[data-row="0"] select[data-mf="gravelType"] option[value="__edit_current__"]', o=>o.textContent)).includes('Edit "Test gravel"'));
   const before = await txt();
   await page.selectOption('[data-row="0"] select[data-mf="gravelType"]','__edit_current__'); await settle();
   check('material edit dialog prefilled with price 60', /Edit Test gravel/.test(await txt()) && await page.$eval('#mf_price',e=>e.value)==='60');
-  await page.fill('#mf_price','120'); await page.fill('#mf_supplier','Quarry Co'); await click('button[data-action="modalOk"]');
+  await page.fill('#mf_price','120'); await page.fill('#mf_supplier','Quarry Co'); { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]');
   let t = await txt();
   check('style still selected', await page.$eval('[data-row="0"] select[data-mf="gravelType"]', e=>e.value)==='Test gravel');
   console.log('DBG', (t.match(/Test gravel.{0,120}/g)||[]).join(' || '));
@@ -49,7 +49,7 @@ const fs = require('fs');
   check('no Edit option on the Steel edging choice', true);
   await page.selectOption('select[data-opt="edgingStyle"]','__edit_current__'); await settle();
   check('edging edit prefilled', await page.$eval('#mf_name',e=>e.value)==='Kerb' && await page.$eval('#mf_piecesPerMetre',e=>e.value)==='4');
-  await page.fill('#mf_name','Kerb 2'); await page.fill('#mf_piecesPerMetre','5'); await click('button[data-action="modalOk"]');
+  await page.fill('#mf_name','Kerb 2'); await page.fill('#mf_piecesPerMetre','5'); { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]');
   t = await txt();
   check('edging renamed, still selected, 10 × 5 = 50 pieces', await page.$eval('select[data-opt="edgingStyle"]', e=>e.value)==='Kerb 2' && t.includes('Kerb 250'));
   await page.selectOption('select[data-opt="edgingStyle"]','__steel_edging__'); await settle();

@@ -17,7 +17,7 @@ const fs = require('fs');
   const click = async sel => { await (await page.$(sel)).click(); await settle(); };
   async function addVia(sel, f){ await page.selectOption(sel,'__add_other__'); await settle();
     for (const [k,x] of Object.entries(f)){ const el = await page.$('#mf_'+k); if(el) await el.fill(String(x)); }
-    await click('button[data-action="modalOk"]'); }
+    { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]'); }
   const fillRow = async (i, f, v) => { await page.fill(`[data-row="${i}"] input[data-mf="${f}"]`, v); await settle(); };
 
   await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
@@ -76,7 +76,8 @@ const fs = require('fs');
   check('quote can be saved', !!(await page.$('button[data-action="saveSentQuote"]')));
   for (let i=0;i<6 && !(await page.$('[data-row="0"] select[data-mf="pump"]')); i++){ const b = await page.$('button[data-action="wizBack"]'); if(!b) break; await b.click(); await settle(); }
   await addVia('[data-row="0"] select[data-mf="pump"]', {name:'Free pump', price:0});
-  check('blocker: £0 pump named', /"Free pump" has no price/.test(await txt()));
+  check('adding a product at £0 is refused — dialog stays open and asks for the cost', !!(await page.$('#mf_name')) && /more than £0/.test(await txt()));
+  await (await page.$('button[data-action="modalCancel"]')).click(); await page.waitForTimeout(250);
   console.log('ERRORS:', errors.length?errors:'none');
   console.log(pass&&!errors.length?'ALL CHECKS PASSED':'SOME CHECKS FAILED');
   await browser.close(); process.exit(pass&&!errors.length?0:1);

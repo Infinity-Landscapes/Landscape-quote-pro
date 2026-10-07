@@ -14,7 +14,7 @@ const fs = require('fs');
   const check = (l,c)=>{ console.log((c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
   const txt = () => page.$eval('#App', el => el.textContent);
   async function fillModal(f){ for (const [k,v] of Object.entries(f)){ const el = await page.$('#mf_'+k); if(el) await el.fill(String(v)); }
-    await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250); }
+    { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250); }
   async function addVia(sel, fields){ await page.selectOption(sel,'__add_other__'); await page.waitForTimeout(200); await fillModal(fields); }
 
   await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
@@ -108,12 +108,11 @@ const fs = require('fs');
   check('board gap 10 -> boards 60', t.includes('Test board60'));
   check('consumables quantity 3', t.includes('Consumables3'));
 
-  // £0 board blocks finalising
+  // a £0 board can't be added
   await page.selectOption('[data-row="0"] select[data-mf="boardType"]','__add_other__'); await page.waitForTimeout(200);
   await fillModal({name:'Free board', price:0, lengthMm:3600, widthMm:140});
-  check('blocker: £0 board price', /deck board price can't be £0/.test(await txt()));
-  for (let i=0;i<6 && !(await page.$('#quoteBlockers')); i++){ const b = await page.$('button[data-action="wizNext"]'); if(!b) break; await b.click(); await page.waitForTimeout(300); }
-  check('preview lists the blocker and hides the save buttons', !!(await page.$('#quoteBlockers')) && !(await page.$('button[data-action="saveSentQuote"]')));
+  check('adding a product at £0 is refused — dialog stays open and asks for the cost', !!(await page.$('#mf_name')) && /more than £0/.test(await txt()));
+  await (await page.$('button[data-action="modalCancel"]')).click(); await page.waitForTimeout(250);
 
   console.log('ERRORS:', errors.length?errors:'none');
   console.log(pass&&!errors.length?'ALL CHECKS PASSED':'SOME CHECKS FAILED');

@@ -733,6 +733,7 @@ function rowColsFor(def, options){
 const SERVICES = {
 
 paving: { label:"Paving", group:"Hard landscaping", unitLabel:"Area", cols:["desc","width","length"],
+  cut:{options:['style'], edging:['edgingStyle']},
   rowSelects:[{field:"slabType", label:"Slab type", optKey:"style", group:"paving", placeholder:"Select a slab…"}],
   colLabels:["Description","Width (m)","Length (m)"],
   options:[
@@ -760,6 +761,8 @@ paving: { label:"Paving", group:"Hard landscaping", unitLabel:"Area", cols:["des
       hint:"Pick one you've already added, or add a new one — it's saved to your Paving settings for future quotes too."},
     {key:"edgingProductivity",label:"Edging productivity (m/day/person)",type:"number",default:12,showIf:"edging",hint:"How much edging ONE PERSON lays per day — override for this job if needed."},
     {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:6,hint:"How much ONE PERSON lays per day — override for this job if the ground or access is different."},
+    {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0,
+      hint:"Extra paving slabs for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
   ],
   calc(rows, opt, ctx){
     const area = sum(rows.map(r=>r.width*r.length));
@@ -794,11 +797,9 @@ paving: { label:"Paving", group:"Hard landscaping", unitLabel:"Area", cols:["des
     const esQty = es ? edgingLen*(Number(es.piecesPerMetre)||0) : 0;
     const esPrice = es ? ctx.netPrice(es.price, es.vatIncluded) : 0;
     const primerCoverage = ctx.pavingPrimerCoverage||20;
-    // Slab wastage (tenant setting, default 10%) for cuts and breakages: applied ONLY to the slab
-    // quantity, rounded up — 100 m² at 10% → 110. Sub-base, sand, cement, primer, jointing
-    // compound and edging are all worked out from the measured area alone.
-    const wastagePct = ctx.pavingWastagePercent!=null && Number(ctx.pavingWastagePercent)>=0 ? Number(ctx.pavingWastagePercent) : 10;
-    const slabQty = area>0 ? ru(area*(1 + wastagePct/100)) : 0;
+    // Slabs = the measured area; the quote's own "Wastage for cuts" question adds extra slabs on top
+    // (see applyCutWastage) — never to sub-base, sand, cement, primer or jointing compound.
+    const slabQty = area;
     const mats = [
       ["Geotextile membrane", area],
       ["Type 1 MOT", motQty],
@@ -824,6 +825,7 @@ paving: { label:"Paving", group:"Hard landscaping", unitLabel:"Area", cols:["des
   }},
 
 gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Area", cols:["desc","width","length","digOutDepth"],
+  cut:{edging:['edgingStyle']},
   colLabels:["Description","Width (m)","Length (m)","Dig-out depth (mm)"],
   // Each area picks its own gravel type (materials-list pick, priced per tonne). A new line starts
   // with the type of the line above. Quotes saved before this used one type for the whole job
@@ -846,6 +848,8 @@ gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Are
     {key:"edgingProductivity",label:"Edging productivity (m/day/person)",type:"number",default:12,
       showIf:o=>!!o.edging && o.edgingStyle!==GRAVEL_STEEL_EDGING, hint:"How much edging ONE PERSON lays per day — override for this job if needed."},
     {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:16.7,hint:"How much ONE PERSON lays per day — override for this job if needed."},
+    {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0, showIf:o=>!!o.edging && o.edgingStyle!==GRAVEL_STEEL_EDGING,
+      hint:"Extra timber or composite edging strips for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
   ],
   calc(rows, opt, ctx){
     // Per row in whole mm (r6/ru round to 6dp first). Gravel and MOT tonnages are summed across
@@ -987,6 +991,7 @@ sleeperbeds: { label:"Sleeper raised beds", group:"Planting & beds", unitLabel:"
   }},
 
 turf: { label:"Turf", group:"Planting & beds", unitLabel:"Area", cols:["desc","width","length"],
+  cut:{fixed:['Turf']},
   colLabels:["Description","Width (m)","Length (m)"],
   options:[
     // Defaults to the business's baseline depth (Materials & settings › Pricing) — at that
@@ -994,6 +999,8 @@ turf: { label:"Turf", group:"Planting & beds", unitLabel:"Area", cols:["desc","w
     // override per job when this job's dig-out is shallower or deeper than usual.
     {key:"digOutDepth",label:"Dig-out depth (mm)",type:"number",default:50,hint:"How deep the ground is excavated before adding topsoil — more depth needs more topsoil."},
     {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:16.7,hint:"How much ONE PERSON lays per day — override for this job if needed."},
+    {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0,
+      hint:"Extra turf for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
   ],
   calc(rows, opt, ctx){
     const area = sum(rows.map(r=>r.width*r.length));
@@ -1005,7 +1012,7 @@ turf: { label:"Turf", group:"Planting & beds", unitLabel:"Area", cols:["desc","w
     const baselineDepth = ctx.turfTopsoilBaselineDepth||50;
     const digOutDepth = Number(opt.digOutDepth)||baselineDepth;
     const topsoilQty = ru((area/baselineCoverage) * (digOutDepth/baselineDepth));
-    const turfQty = ru(area * (1 + (ctx.turfWastagePercent!=null ? ctx.turfWastagePercent : 10)/100));
+    const turfQty = ru(area);   // + the quote's "Wastage for cuts" (applyCutWastage)
     const consumablesQty = ctx.turfConsumablesQty!=null ? ctx.turfConsumablesQty : 1;
     const mats = [
       ["Quality topsoil", topsoilQty],
@@ -1019,6 +1026,7 @@ turf: { label:"Turf", group:"Planting & beds", unitLabel:"Area", cols:["desc","w
   }},
 
 blockpaving: { label:"Block paving", group:"Hard landscaping", unitLabel:"Area", cols:["desc","width","length","digOutDepth"],
+  cut:{options:['style'], edging:['edgingStyle']},
   rowSelects:[{field:"blockType", label:"Block style", optKey:"style", group:"block", placeholder:"Select a block…"}],
   colLabels:["Description","Width (m)","Length (m)","Dig-out depth (mm)"],
   options:[
@@ -1041,6 +1049,8 @@ blockpaving: { label:"Block paving", group:"Hard landscaping", unitLabel:"Area",
       hint:"Pick one you've already added, or add a new one — it's saved to your Block paving settings for future quotes too."},
     {key:"edgingProductivity",label:"Edging productivity (m/day/person)",type:"number",default:12,hint:"How much edging ONE PERSON lays per day — override for this job if needed."},
     {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:5,hint:"How much ONE PERSON lays per day — override for this job if needed."},
+    {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0,
+      hint:"Extra blocks for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
   ],
   calc(rows, opt, ctx){
     const area = sum(rows.map(r=>r.width*r.length));
@@ -1078,10 +1088,8 @@ blockpaving: { label:"Block paving", group:"Hard landscaping", unitLabel:"Area",
     // Edging: sand = edging length ÷ 10 (rounded up to whole tonnes), cement uses the same
     // count as the sand — both ratios are fixed, not editable, per the spec.
     const sand = ru(edgingLen/10);
-    // Block cost gets a wastage % uplift (default 10%, editable) for cuts/offcuts — applied ONLY
-    // to the block purchase, never to any other material.
-    const wastagePercent = ctx.blockPavingWastagePercent!=null ? Number(ctx.blockPavingWastagePercent) : 10;
-    const blockQty = area * (1 + wastagePercent/100);
+    // Blocks = the measured area; the quote's "Wastage for cuts" adds extra blocks only (applyCutWastage).
+    const blockQty = area;
     // Jointing compound and edging style each look up their own tenant-built library entry (own
     // price AND ratio) — see ctx.blockJointingCompounds/blockEdgingStyles (ctxFor) and the "Block
     // paving" card in Settings → Pricing for how tenants add/remove these. ctx.netPrice applies
@@ -1164,6 +1172,7 @@ resinbound: { label:"Resin bound", group:"Hard landscaping", unitLabel:"Area", c
   }},
 
 artificialturf: { label:"Artificial turf", group:"Planting & beds", unitLabel:"Area", cols:["desc","width","length","digOutDepth"],
+  cut:{options:['turfProduct'], edging:['edgingStyle']},
   rowSelects:[{field:"turfType", label:"Artificial turf (£ per m²)", optKey:"turfProduct", source:"atTurf", placeholder:"Select a turf…"}],
   colLabels:["Description","Width (m)","Length (m)","Dig-out depth (mm)"],
   options:[
@@ -1173,7 +1182,7 @@ artificialturf: { label:"Artificial turf", group:"Planting & beds", unitLabel:"A
     // to the Steel Edging service as Gravel/Flower Beds do. See calc().
     {key:"turfProduct",label:"Artificial turf (£ per m²)",type:"select",source:"atTurf",default:"",placeholder:"Select a turf…",
       sourceLabel:e=>`${e.name} — £${(Number(e.price)||0).toFixed(2)} per m²`, addLabel:"artificial turf (price per m²)", addFields:["price"],
-      hint:"Quantity = ROUNDUP(area × (1 + wastage %)) — the wastage % is in Settings → Pricing → Artificial turf."},
+      hint:"Quantity = the area, plus the Wastage for cuts % below."},
     {key:"grano",label:"Grano dust (£ per tonne)",type:"select",source:"atGrano",default:"",placeholder:"Select a grano dust…",
       addLabel:"grano dust (price per tonne)", addFields:["price"]},
     {key:"infill",label:"Infill sand (£ per bag)",type:"select",source:"atInfill",default:"",placeholder:"Select an infill sand…",
@@ -1189,6 +1198,8 @@ artificialturf: { label:"Artificial turf", group:"Planting & beds", unitLabel:"A
     {key:"edgingProductivity",label:"Edging productivity (m/day/person)",type:"number",default:12,
       showIf:o=>o.edgingStyle!==GRAVEL_STEEL_EDGING && Number(o.edgingLength)>0, hint:"How much edging ONE PERSON lays per day — override for this job if needed."},
     {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:5,hint:"How much ONE PERSON lays per day — override for this job if needed."},
+    {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0,
+      hint:"Extra artificial grass for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
   ],
   calc(rows, opt, ctx){
     const blockers = [];
@@ -1236,7 +1247,7 @@ artificialturf: { label:"Artificial turf", group:"Planting & beds", unitLabel:"A
     const lib = (prod, qty, unit) => [prod.name, qty, ctx.netPrice(prod.price, prod.vatIncluded), '', unit];
     const mats = [["Type 1 MOT", has ? ru(motT) : 0], ["Geotextile membrane", r6(area)]];
     if(grano) mats.push(lib(grano, has ? ru(area/10) : 0, 'tonne'));
-    if(turf) mats.push(lib(turf, has ? ru(area*(1+(Number(ctx.atWastagePercent)||0)/100)) : 0, 'm²'));
+    if(turf) mats.push(lib(turf, has ? ru(area) : 0, 'm²'));   // + the quote's "Wastage for cuts"
     if(infill) mats.push(lib(infill, has ? ru(area/(Number(ctx.atInfillCoverage)||5)) : 0, 'bag'));
     if(tape) mats.push(lib(tape, ru(edgingLen/(Number(ctx.atSeamTapeRollLength)||20)), 'roll'));
     if(concrete){
@@ -1625,6 +1636,7 @@ pond: { label:"Pond", group:"Features", unitLabel:"Area", cols:["desc","length",
   }},
 
 pergola: { label:"Pergola", group:"Features", unitLabel:"Area", cols:["desc","length","width","heightMm"],
+  cut:{options:['postProduct','joistProduct','osbProduct','post'], fixed:['OSB board','6x2 oak joists','6x2 treated timber']},
   colLabels:["Description","Length (m)","Width (m)","Pergola height (mm)"],
   rowDefaults:{heightMm:2400},
   options:[
@@ -1642,6 +1654,8 @@ pergola: { label:"Pergola", group:"Features", unitLabel:"Area", cols:["desc","le
     {key:"coveringProduct",label:"Roof covering",type:"select",source:"pgCoverings",default:"",showIf:"roof",placeholder:"Select a roof covering…",
       sourceLabel:e=>`${e.name} — ${Number(e.coverageM2)||0}m² per unit`, addLabel:"roof covering",addFields:["price","coverageM2"]},
     {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:16.7,hint:"How much ONE PERSON builds per day — override for this job if needed."},
+    {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0,
+      hint:"Extra posts, joists and OSB boards for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
   ],
   calc(rows, opt, ctx){
     // A quote saved before the rework (old fixed post list) prices the old way.
@@ -1757,6 +1771,7 @@ decking: { label:"Decking", group:"Hard landscaping", unitLabel:"Area", cols:["d
    ========================================================================= */
 
 compositedecking: { label:"Composite Decking", group:"Hard landscaping", unitLabel:"Area", cols:["desc","width","length"],
+  cut:{options:['board','fasciaBoard'], fixed:['Composite joists','Composite fascia board']},
   rowSelects:[{field:"boardType", label:"Deck board", optKey:"board", source:"compositeDeckBoards", placeholder:"Select a board…"}],
   colLabels:["Description","Width (m)","Length (m)"],
   // When "Dig out necessary?" is ticked every measurement row gains its own "Dig-out depth (mm)"
@@ -1782,6 +1797,8 @@ compositedecking: { label:"Composite Decking", group:"Hard landscaping", unitLab
       addLabel:"fascia board", addFields:["price","lengthMm","widthMm"],
       hint:"Pick one you've already added, or add a new one (price per board, plus its length and width in mm)."},
     {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:2.7,hint:"How much decking ONE PERSON builds per day — override for this job if needed."},
+    {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0,
+      hint:"Extra deck boards, joists and fascia boards for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
   ],
   calc(rows, opt, ctx){
     // Every formula works in whole mm: rows are entered in metres and converted first. Each
@@ -1883,6 +1900,7 @@ compositedecking: { label:"Composite Decking", group:"Hard landscaping", unitLab
   }},
 
 timberdecking: { label:"Timber Decking", group:"Hard landscaping", unitLabel:"Area", cols:["desc","width","length"],
+  cut:{options:['board','joist','fasciaBoard']},
   rowSelects:[{field:"boardType", label:"Deck board", optKey:"board", source:"timberDeckBoards", placeholder:"Select a board…"}],
   colLabels:["Description","Width (m)","Length (m)"],
   // Per-row "Dig-out depth (mm)" column appears while "Dig out necessary?" is ticked — see rowColsFor.
@@ -1904,6 +1922,8 @@ timberdecking: { label:"Timber Decking", group:"Hard landscaping", unitLabel:"Ar
       addLabel:"decking screw", addFields:["price","screwsPerBox"], addFieldDefaults:{screwsPerBox:100},
       hint:"Pick a screw product you've already added, or add a new one (price per box and screws per box) — shared with Composite decking."},
     {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:2.7,hint:"How much decking ONE PERSON builds per day — override for this job if needed."},
+    {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0,
+      hint:"Extra deck boards and joists for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
   ],
   calc(rows, opt, ctx){
     // Same per-row, whole-mm approach as Composite decking — see SERVICES.compositedecking.calc
@@ -1997,6 +2017,7 @@ timberdecking: { label:"Timber Decking", group:"Hard landscaping", unitLabel:"Ar
    cut from stock posts at in-ground depth + fence height; sleeves on timber posts; postcrete;
    remove-old-fence, gates and consumables. */
 fence: { label:"Fencing", group:"Fencing", unitLabel:"Length", cols:["desc","length"],
+  cut:{match:/panel|board/i},
   colLabels:["Description","Length (m)"],
   options:[
     {key:"fenceType",label:"Fence type",type:"select",source:"fenceTypes",sourceValueKey:"id",default:"",placeholder:"Select a fence type…",
@@ -2008,6 +2029,8 @@ fence: { label:"Fencing", group:"Fencing", unitLabel:"Length", cols:["desc","len
     {key:"gateCount",label:"Number of gates",type:"number",default:1,showIf:"gate"},
     {key:"gatePrice",label:"Gate price for this job (£ each inc VAT, optional)",type:"number",default:"",showIf:"gate",placeholder:"Blank = the Gate price in Materials"},
     {key:"productivity",label:"Productivity (m/day/person)",type:"number",default:"",hint:"Starts at the fence type's own rate — override for this job if needed."},
+    {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0,
+      hint:"Extra fence panels, fence boards and gravel boards for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
   ],
   // The chosen fence type's own options (e.g. Panel's "Gravel board needed?"), stored on the job
   // as "t_<key>" so they can't collide with the common options above.
@@ -2286,6 +2309,7 @@ steeledging: { label:"Steel Edging", group:"Hard landscaping", unitLabel:"Length
   }},
 
 flowerbeds: { label:"Flower Beds", group:"Planting & beds", unitLabel:"Area", cols:["desc","width","length","digOutDepth"],
+  cut:{edging:['edgingStyle']},
   colLabels:["Description","Width (m)","Length (m)","Depth (mm)"],
   // Per-area ticks (both default on). "Dig out" off = a built-up (raised) bed: its depth is the
   // height it's built up and filled, and it adds nothing to the waste removal. "Bark mulch" off =
@@ -2306,6 +2330,8 @@ flowerbeds: { label:"Flower Beds", group:"Planting & beds", unitLabel:"Area", co
     {key:"edgingProductivity",label:"Edging productivity (m/day/person)",type:"number",default:12,
       showIf:o=>o.edgingStyle!==GRAVEL_STEEL_EDGING && Number(o.edgingLength)>0, hint:"How much edging ONE PERSON lays per day — override for this job if needed."},
     {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:6.7,hint:"How much ONE PERSON gets through per day — override for this job if needed."},
+    {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0, showIf:o=>!!o.edgingStyle && o.edgingStyle!==GRAVEL_STEEL_EDGING && Number(o.edgingLength)>0,
+      hint:"Extra timber or composite edging strips for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
   ],
   calc(rows, opt, ctx){
     const blockers = [];
@@ -2606,6 +2632,46 @@ function quoteMaterialsList(q){
    than one type, everything is priced across all areas as normal, and the chosen material's own
    line is replaced by one line per type, each worked out from just its own areas — so each type
    gets its own wastage and rounding, as it's bought separately. Gravel does this inside its calc. */
+/* "Wastage for cuts (%)" — asked on each service's wizard step (def.cut says which of its
+   materials get cut to size: the chosen slab/block/board/joist/turf…, any edging strip with
+   "timber" or "composite" in its name, or for fencing every panel and board). Only those lines go
+   up, rounded up: 100 at 10% → 110. Fixings, sub-base, sand, screws, adhesive etc. never change.
+   A quote saved before the question existed uses the business's last-used figure. */
+const CUT_EDGING_RE = /timber|composite|wood/i;
+let _wastageSaveTimer = null;
+function rememberWastage(key, value){
+  const n = parseFloat(value); if(isNaN(n) || n<0) return;
+  if(!S.settings.wastageDefaults) S.settings.wastageDefaults = {};
+  if(S.settings.wastageDefaults[key]===n) return;
+  S.settings.wastageDefaults[key] = n;
+  clearTimeout(_wastageSaveTimer);
+  _wastageSaveTimer = setTimeout(()=>{ saveSettings({wastageDefaults: S.settings.wastageDefaults}); }, 800);
+}
+function quoteWastagePct(key, options){
+  if(options && options.wastagePct!==undefined && options.wastagePct!=='' && options.wastagePct!==null) return Math.max(0, Number(options.wastagePct)||0);
+  const d = (S.settings && S.settings.wastageDefaults) || {};
+  return Math.max(0, Number(d[key])||0);
+}
+function cutMaterialNames(def, rows, options){
+  const c = def.cut || {}, names = new Set();
+  (c.options||[]).forEach(k=>{ if(options && options[k]) names.add(options[k]); });
+  (def.rowSelects||[]).forEach(sel=>{ if((c.options||[]).includes(sel.optKey)) (rows||[]).forEach(r=>{ if(r[sel.field]) names.add(r[sel.field]); }); });
+  (c.edging||[]).forEach(k=>{ const v = options && options[k]; if(v && CUT_EDGING_RE.test(v)) names.add(v); });
+  (c.fixed||[]).forEach(n=>names.add(n));
+  return names;
+}
+function applyCutWastage(key, def, rows, options, raw){
+  if(!def.cut || !raw || !Array.isArray(raw.materials)) return raw;
+  const pct = quoteWastagePct(key, options);
+  if(!(pct>0)) return raw;
+  const names = cutMaterialNames(def, rows, options);
+  raw.materials = raw.materials.map(m=>{
+    if(!m || !m[0] || !((Number(m[1])||0)>0)) return m;
+    if(!(names.has(m[0]) || (def.cut.match && def.cut.match.test(m[0])))) return m;
+    const out = m.slice(); out[1] = ru(Number(m[1])*(1+pct/100)); return out;
+  });
+  return raw;
+}
 function rowHasSize(def, r){ return def.cols.some(c=>c!=="desc" && (Number(r[c])||0)>0); }
 function rowChoiceSel(def, options){ return (def.rowSelects||[]).find(x=>!x.native && (!x.showIf || x.showIf(options||{}))) || null; }
 function rowChoiceGroups(def, rows, options){
@@ -2673,7 +2739,7 @@ function sectionCopy(s){
    prices/VAT/productivity for them are edited in the same places as any other service. */
 function priceSection(key, rows, options, ctx, notes){
   const def = SERVICES[key];
-  const raw = calcWithRowChoices(def, rows, options, ctx);
+  const raw = applyCutWastage(key, def, rows, options, calcWithRowChoices(def, rows, options, ctx));
   const materials = raw.materials
     .filter(([name,qty]) => name && qty && Math.abs(qty)>1e-9)
     // A material tuple is normally [name, qty] and its price comes from the shared materials
@@ -4271,6 +4337,23 @@ async function loadAll(){
   // editable, or before its tenant-built product libraries existed
   if(settings.pavingPrimerCoverage==null) settings.pavingPrimerCoverage = 20;
   if(settings.pavingWastagePercent==null) settings.pavingWastagePercent = 10;
+  // October 2026: wastage moved from Settings (turf / artificial turf / block paving / paving only)
+  // to a "Wastage for cuts" question on each service in the quote. A business that was already set
+  // up starts each of those at the figure it had; a new business starts everything at 0.
+  // Every existing product (jointing compounds, edging, turf, boards…) listed in the Materials list too.
+  if(!settings._productsMirrored){
+    const prev = S.settings; S.settings = settings;
+    try{ productLibraryKeys().forEach(k=>(settings[k]||[]).forEach(e=>{ if(e && e.name) mirrorProductToMaterials(k, e); })); }catch(e){}
+    S.settings = prev;
+    settings._productsMirrored = true;
+  }
+  if(!settings.wastageDefaults){
+    settings.wastageDefaults = settings.onboarded ? {turf: settings.turfWastagePercent!=null ? Number(settings.turfWastagePercent) : 10,
+      paving: settings.pavingWastagePercent!=null ? Number(settings.pavingWastagePercent) : 10,
+      blockpaving: settings.blockPavingWastagePercent!=null ? Number(settings.blockPavingWastagePercent) : 10,
+      artificialturf: settings.atWastagePercent!=null ? Number(settings.atWastagePercent) : 20} : {};
+    settings._wastageMigrated = true;
+  }
   if(settings.wasteGrabM3PerLoad==null) settings.wasteGrabM3PerLoad = 5;
   if(!Array.isArray(settings.pavingJointingCompounds)) settings.pavingJointingCompounds = [];
   if(!Array.isArray(settings.pavingEdgingStyles)) settings.pavingEdgingStyles = [];
@@ -4738,12 +4821,17 @@ function ensureSectionState(key){
         // EDGING_PRODUCTIVITY_SETTINGS_KEY. Before October 2026 Paving's saved edging rate was
         // never actually read back here, so new quotes always started at a hardcoded 12.
         opts[o.key] = S.settings.productivity[EDGING_PRODUCTIVITY_SETTINGS_KEY[key]];
+      } else if(o.key==="wastagePct"){
+        opts[o.key] = quoteWastagePct(key, {});   // the business's last-used figure (0 to start)
       } else {
         opts[o.key] = o.default;
       }
     });
     S.draft.sectionsRaw[key] = {rows: ensureRows(def, key), options: opts, notes: []};
   }
+  // An older quote opened for editing: show the wastage it was priced with.
+  if(def.options.some(o=>o.key==="wastagePct") && S.draft.sectionsRaw[key].options && S.draft.sectionsRaw[key].options.wastagePct===undefined)
+    S.draft.sectionsRaw[key].options.wastagePct = quoteWastagePct(key, {});
   if(!S.draft.sectionsRaw[key].notes) S.draft.sectionsRaw[key].notes = [];
   return S.draft.sectionsRaw[key];
 }
@@ -6870,6 +6958,7 @@ function serviceBuilderHtml(b){
     <div class="row">
       <div class="field" style="flex:2 1 220px;"><label>Post material</label><input id="svcPostMaterial" type="text" list="existingMaterialsList" value="${esc(b.postMaterial)}" placeholder="e.g. 100x100 treated timber fence post"></div>
       <div class="field"><label>Post price £ (if new)</label><input id="svcPostPrice" type="text" inputmode="decimal" value="${esc(b.postPrice)}" placeholder="0.00"></div>
+      <div class="field"><label>Post supplier (if new)</label><input id="svcPostSupplier" type="text" value="${esc(b.postSupplier||'')}" placeholder="e.g. Travis Perkins"></div>
     </div>
     <label style="margin:10px 0 6px;display:block;">Post type</label>
     <div class="row" style="gap:8px;">
@@ -6928,7 +7017,7 @@ function serviceBuilderHtml(b){
           <div class="row" style="margin-top:4px;flex-wrap:wrap;">
             <div class="field" style="flex:1 1 160px;"><label>Unit (if new)</label><input type="text" data-svcmat-unit="${i}" value="${esc(m.unit)}" placeholder="e.g. bag, each, m²"></div>
             <div class="field" style="flex:1 1 160px;"><label>Starting price £ (if new)</label><input type="text" inputmode="decimal" data-svcmat-price="${i}" value="${esc(m.price)}" placeholder="0.00"></div>
-            <div class="field" style="flex:1 1 160px;"><label>Supplier (if new, optional)</label><input type="text" data-svcmat-supplier="${i}" value="${esc(m.supplier)}" placeholder="e.g. Travis Perkins"></div>
+            <div class="field" style="flex:1 1 160px;"><label>Supplier (if new)</label><input type="text" data-svcmat-supplier="${i}" value="${esc(m.supplier)}" placeholder="e.g. Travis Perkins"></div>
           </div>
           <div class="hint">${exists? `Using the existing price for "${esc(nm)}" — the unit/price/supplier above are ignored.` : (nm? `"${esc(nm)}" will be added to your materials list with the unit/price/supplier above, editable afterwards from Materials &amp; settings › Materials.` : '')}</div>
         </div>`;
@@ -7036,7 +7125,7 @@ function readSvcBuilderStep(b){
     b.name = val('svcName');
     if(b.mode==="fence"){
       b.heightMm = val('svcFenceHeight'); b.postSpacingMm = val('svcPostSpacing'); b.stockLengthMm = val('svcStockLength');
-      b.postMaterial = val('svcPostMaterial'); b.postPrice = val('svcPostPrice');
+      b.postMaterial = val('svcPostMaterial'); b.postPrice = val('svcPostPrice'); b.postSupplier = val('svcPostSupplier');
     }
     const opts = [];
     App.querySelectorAll('[data-svcoptrow]').forEach(rowEl=>{
@@ -7098,11 +7187,22 @@ function bldValidateStep(b, step){
       if(!(Number(b.postSpacingMm)>0)) return "Enter the post spacing (mm).";
       if(!(Number(b.stockLengthMm)>0)) return "Enter the stock post length (mm).";
       if(!(b.postMaterial||'').trim()) return "Pick or name the post material.";
+      if(!S.settings.materials[(b.postMaterial||'').trim()]){
+        if(!(Number(b.postPrice)>0)) return `Enter what "${b.postMaterial.trim()}" costs you — it's a new material.`;
+        if(!(b.postSupplier||'').trim()) return `Enter the supplier for "${b.postMaterial.trim()}" — it's a new material.`;
+      }
     }
   } else if(step===2){
     const valid = b.materials.filter(m=>m.name && (Number(m.amount)||0)>0);
     if(!isFence && valid.length===0) return "Add at least one material with an amount.";
     if(b.materials.some(m=>m.name && (Number(m.amount)||0)>0 && m.basis==="option" && !m.optionKey)) return 'Pick the number option for every "× a number option" material.';
+    // A brand-new material needs its unit cost and supplier (it's added to the Materials list).
+    for(const m of b.materials){
+      const nm = (m.name||'').trim();
+      if(!nm || !((Number(m.amount)||0)>0) || S.settings.materials[nm]) continue;
+      if(!(Number(m.price)>0)) return `Enter what "${nm}" costs you — it's a new material.`;
+      if(!(m.supplier||'').trim()) return `Enter the supplier for "${nm}" — it's a new material.`;
+    }
   } else if(step===3){
     if(!isFence && b.waste && !(b.wasteItem && b.wasteItem.name && b.wasteItem.name.trim() && (Number(b.wasteItem.amount)||0)>0))
       return "Add the waste item and an amount, or switch waste removal to No.";
@@ -7114,7 +7214,7 @@ function bldBlankMaterial(){ return {name:"",amount:"",per:"1",unit:"",price:"",
 function openServiceBuilder(mode, editKey, extra){
   S.err = "";
   const b = {mode, editKey: editKey||null, step:1, name:"", measureType: mode==="fence" ? "length" : "area_wl",
-    heightMm:"1800", postSpacingMm:"1800", stockLengthMm:"2400", postMaterial:"", postPrice:"", postKind:"timber",
+    heightMm:"1800", postSpacingMm:"1800", stockLengthMm:"2400", postMaterial:"", postPrice:"", postSupplier:"", postKind:"timber",
     options:[], materials:[bldBlankMaterial()], waste:false, wasteItem:{name:"",amount:"",per:"1",unit:"",price:"",supplier:""},
     productivity:"", plant:[], letter:[], returnToQuote:false};
   Object.assign(b, extra||{});
@@ -7346,7 +7446,6 @@ function renderSettings(){
       <div class="field"><label>Topsoil baseline depth (mm)</label><input id="st_turfBaselineDepth" type="text" inputmode="decimal" value="${s.turfTopsoilBaselineDepth}"></div>
     </div>
     <div class="row">
-      <div class="field"><label>Turf wastage (%)</label><input id="st_turfWastage" type="text" inputmode="decimal" value="${s.turfWastagePercent}"></div>
       <div class="field"><label>Consumables allowance (per job)</label><input id="st_turfConsumables" type="text" inputmode="decimal" value="${s.turfConsumablesQty}"></div>
     </div>
     <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Gravel</div>
@@ -7456,14 +7555,13 @@ function renderSettings(){
     </div>
     ${pavingProductLibraryHtml("fbEdgingStyles","Edging styles","edging style",["piecesPerMetre","price"])}
     <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Artificial turf</div>
-    <div class="hint" style="margin-bottom:10px;">Type 1 MOT = ROUNDUP(Σ row area × baseline rate × ((dig-out − surface build-up) ÷ baseline depth)). Turf = ROUNDUP(area × (1 + wastage %)). Infill bags = ROUNDUP(area ÷ coverage). Seam tape rolls = ROUNDUP(edging length ÷ roll length). Edge restraint concrete (sand/ballast/cement) and the cement mixer only apply with a non-steel edging length. The default dig-out depth per row is in the Waste &amp; spoil table above. A quote can't be finalised while any material in use has a £0 price.</div>
+    <div class="hint" style="margin-bottom:10px;">Type 1 MOT = ROUNDUP(Σ row area × baseline rate × ((dig-out − surface build-up) ÷ baseline depth)). Turf = ROUNDUP(area), plus the "Wastage for cuts" % asked on the quote. Infill bags = ROUNDUP(area ÷ coverage). Seam tape rolls = ROUNDUP(edging length ÷ roll length). Edge restraint concrete (sand/ballast/cement) and the cement mixer only apply with a non-steel edging length. The default dig-out depth per row is in the Waste &amp; spoil table above. A quote can't be finalised while any material in use has a £0 price.</div>
     <div class="row">
       <div class="field"><label>Surface build-up (mm)</label><input id="st_atBuildUp" type="text" inputmode="decimal" value="${s.atSurfaceBuildUp!=null?s.atSurfaceBuildUp:25}"></div>
       <div class="field"><label>MOT baseline (t per m²)</label><input id="st_atMotRate" type="text" inputmode="decimal" value="${s.atMotRate!=null?s.atMotRate:0.3}"></div>
       <div class="field"><label>MOT baseline depth (mm)</label><input id="st_atMotDepth" type="text" inputmode="decimal" value="${s.atMotBaselineDepth!=null?s.atMotBaselineDepth:150}"></div>
     </div>
     <div class="row">
-      <div class="field"><label>Turf wastage (%)</label><input id="st_atWastage" type="text" inputmode="decimal" value="${s.atWastagePercent!=null?s.atWastagePercent:20}"></div>
       <div class="field"><label>Seam tape roll length (m)</label><input id="st_atRoll" type="text" inputmode="decimal" value="${s.atSeamTapeRollLength!=null?s.atSeamTapeRollLength:20}"></div>
       <div class="field"><label>Infill coverage (m² per bag)</label><input id="st_atInfill" type="text" inputmode="decimal" value="${s.atInfillCoverage!=null?s.atInfillCoverage:5}"></div>
     </div>
@@ -7523,9 +7621,8 @@ function renderSettings(){
     ${pavingProductLibraryHtml("cbShuttering","Shuttering (price per board)","shuttering board",["price","lengthMm"])}
     ${pavingProductLibraryHtml("cbScrews","Screws (price per box)","screws (price per box)",["price"])}
     <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Paving</div>
-    <div class="hint" style="margin-bottom:10px;">Slab wastage, paving primer coverage and edging productivity. Slab wastage is added to the slab quantity only (rounded up — 100 m² at 10% = 110 m²); sub-base, sand, cement, primer, jointing and edging use the measured area. Slab types are added straight from the Slab type dropdown on a Paving quote ("+ Add new…") — the list below just lets you delete one. Jointing compounds and edging styles can be added from their own dropdowns on a quote too, or from here.</div>
+    <div class="hint" style="margin-bottom:10px;">Paving primer coverage and edging productivity. Wastage for cut slabs is asked on each Paving quote ("Wastage for cuts"). Slab types are added straight from the Slab type dropdown on a Paving quote ("+ Add new…") — the list below just lets you delete one. Jointing compounds and edging styles can be added from their own dropdowns on a quote too, or from here.</div>
     <div class="row">
-      <div class="field"><label>Slab wastage (%)</label><input id="st_pavingWastage" type="text" inputmode="decimal" value="${s.pavingWastagePercent!=null?s.pavingWastagePercent:10}"><div class="hint">Extra slabs for cuts and breakages — slabs only.</div></div>
       <div class="field"><label>Paving primer coverage (m²/unit)</label><input id="st_pavingPrimerCoverage" type="text" inputmode="decimal" value="${s.pavingPrimerCoverage!=null?s.pavingPrimerCoverage:20}"></div>
       <div class="field"><label>Edging productivity (m/day/person)</label><input id="st_pavingEdgingProd" type="text" inputmode="decimal" value="${s.productivity && s.productivity.pavingEdging!=null ? s.productivity.pavingEdging : 12}"></div>
     </div>
@@ -7533,10 +7630,9 @@ function renderSettings(){
     ${pavingProductLibraryHtml("pavingJointingCompounds","Jointing compounds","jointing compound",["price","coverage"])}
     ${pavingProductLibraryHtml("pavingEdgingStyles","Edging styles","edging style",["piecesPerMetre","price"])}
     <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Block paving</div>
-    <div class="hint" style="margin-bottom:10px;">Type 1 MOT depth = dig-out depth − surface build-up (the laying course plus the block). MOT quantity = area × baseline rate × (MOT depth ÷ baseline depth), rounded up to whole tonnes — the defaults give 12 tonnes for 40m². Wastage applies to the block purchase only. Blocks are added straight from the Block style dropdown on a Block paving quote ("+ Add new…") — the list below just lets you delete one. Jointing compounds and edging styles can be added from their own dropdowns on a quote too, or from here.</div>
+    <div class="hint" style="margin-bottom:10px;">Type 1 MOT depth = dig-out depth − surface build-up (the laying course plus the block). MOT quantity = area × baseline rate × (MOT depth ÷ baseline depth), rounded up to whole tonnes — the defaults give 12 tonnes for 40m². Wastage for cut blocks is asked on each Block paving quote ("Wastage for cuts"). Blocks are added straight from the Block style dropdown on a Block paving quote ("+ Add new…") — the list below just lets you delete one. Jointing compounds and edging styles can be added from their own dropdowns on a quote too, or from here.</div>
     <div class="row">
       <div class="field"><label>Surface build-up (mm)</label><input id="st_blockSurfaceBuildUp" type="text" inputmode="decimal" value="${s.blockPavingSurfaceBuildUp!=null?s.blockPavingSurfaceBuildUp:100}"></div>
-      <div class="field"><label>Block wastage (%)</label><input id="st_blockWastage" type="text" inputmode="decimal" value="${s.blockPavingWastagePercent!=null?s.blockPavingWastagePercent:10}"></div>
     </div>
     <div class="row">
       <div class="field"><label>MOT baseline coverage (tonnes/m²)</label><input id="st_blockMotRate" type="text" inputmode="decimal" value="${s.blockPavingMotBaselineRate!=null?s.blockPavingMotBaselineRate:0.3}"></div>
@@ -7991,7 +8087,7 @@ function modalHtml(){
         <div class="hint" style="margin-bottom:14px;">Saved to your materials list and this dropdown, ready to pick again on future jobs.</div>
         <div class="field"><label>Description</label><input id="modalMatName" type="text" placeholder="e.g. Bradstone Blue Slate 600x600" value="${esc(m.name||'')}"></div>
         <div class="field"><label>Price per ${esc(CUSTOM_STYLE_UNITS[m.groupKey]||'m²')} (£)</label><input id="modalMatPrice" type="text" inputmode="decimal" placeholder="0.00" value="${esc(m.price||'')}"></div>
-        <div class="field"><label>Supplier (optional)</label><input id="modalMatSupplier" type="text" placeholder="e.g. Minster Paving" value="${esc(m.supplier||'')}"></div>
+        <div class="field"><label>Supplier</label><input id="modalMatSupplier" type="text" placeholder="e.g. Minster Paving" value="${esc(m.supplier||'')}"></div>
         ${m.error?`<div class="msg msg-err" style="margin-bottom:10px;">${esc(m.error)}</div>`:''}
         <div class="row" style="gap:8px;">
           <button class="btn btn-ghost" data-action="modalCancel">Cancel</button>
@@ -8052,10 +8148,12 @@ function showAddMaterialOption(groupKey, onSave){ S._modal = {type:"addMaterialO
 function openPavingProductModal(libKey, singular, fieldKeys, onSaved, fieldDefaults, existing, errorMsg){
   // `existing` (a library entry) opens the same dialog pre-filled to EDIT that product in place —
   // its id is kept, and a rename is carried onto the quote being built (renameLibraryRefs).
+  fieldKeys = fieldKeys.filter(fk=>fk!=="supplier");   // always asked below, and required
   const fields = [{key:"name", label:"Name", type:"text", required:true, value: existing ? existing.name : undefined}]
     .concat(fieldKeys.map(fk=>{ const meta = PAVING_LIB_FIELD_META[fk];
-      return {key:fk, label:meta.label, type:meta.type||"number", options:meta.options, required:meta.required!==false,
+      return {key:fk, label:meta.label, type:meta.type||"number", options:meta.options, required:meta.required!==false, positive: fk==="price"||fk==="priceM",
         value: existing ? existing[fk] : (fieldDefaults && fieldDefaults[fk]!=null ? fieldDefaults[fk] : (meta.options ? meta.options[0].value : undefined))}; }))
+    .concat([{key:"supplier", label:"Supplier", type:"text", required:true, value: existing ? (existing.supplier||'') : undefined}])
     .concat((fieldKeys.includes("price") || fieldKeys.includes("priceM")) ? [{key:"vatIncluded", label:"Price already includes VAT", type:"checkbox", value: existing ? existing.vatIncluded!==false : true}] : []);
   if(existing){
     showForm(`Edit ${singular}`, "Changes are saved to your settings and used on this and every future quote. Quotes already sent keep the price they were sent at.", fields, async (values)=>{
@@ -8068,9 +8166,10 @@ function openPavingProductModal(libKey, singular, fieldKeys, onSaved, fieldDefau
         S._modal.existingId = entry.id; return;
       }
       const oldName = entry.name;
-      entry.name = values.name; entry.vatIncluded = values.vatIncluded!==false;
+      entry.name = values.name; entry.vatIncluded = values.vatIncluded!==false; entry.supplier = values.supplier||'';
       fieldKeys.forEach(fk=>{ entry[fk] = values[fk]; });
-      await saveSettings({[libKey]: S.settings[libKey]});
+      mirrorProductToMaterials(libKey, entry, oldName);
+      await saveSettings({[libKey]: S.settings[libKey], materials: S.settings.materials});
       if(oldName!==entry.name) renameLibraryRefs(oldName, entry.name);
       S._savedMsg = "";
       if(onSaved) onSaved(entry);
@@ -8079,20 +8178,76 @@ function openPavingProductModal(libKey, singular, fieldKeys, onSaved, fieldDefau
   }
   showForm(`Add a ${singular}`, "Saved to your settings and selectable on every future quote.", fields, async (values)=>{
     if(!S.settings[libKey]) S.settings[libKey] = [];
-    const entry = {id:uid(), name:values.name, vatIncluded: values.vatIncluded!==false};
+    const entry = {id:uid(), name:values.name, vatIncluded: values.vatIncluded!==false, supplier: values.supplier||''};
     fieldKeys.forEach(fk=>{ entry[fk] = values[fk]; });
     S.settings[libKey].push(entry);
-    await saveSettings({[libKey]: S.settings[libKey]});
+    mirrorProductToMaterials(libKey, entry);
+    await saveSettings({[libKey]: S.settings[libKey], materials: S.settings.materials});
     S._savedMsg = "";
     if(onSaved) onSaved(entry);
   });
+}
+/* Every product added from a quote (or Settings → Pricing) is also listed in the business's
+   Materials list, under the service it's for, with its unit, cost and supplier. The product
+   library stays the source of truth for the quote maths; the two are kept in step both ways
+   (editing either one updates the other — see saveMaterialsForm). */
+const PRODUCT_UNITS = {atTurf:'m²', atGrano:'tonne', atInfill:'bag', atSeamTape:'roll', pavingJointingCompounds:'unit', blockJointingCompounds:'unit',
+  steelEdgingProducts:'m', steelRebar:'bar', brickwallRebar:'bar', compositeDeckScrews:'box', sleeperScrews:'box', cbScrews:'box', pgScrews:'box',
+  cbShuttering:'board', cbMesh:'sheet', cbReadyMix:'m³', pgJoists:'piece', pgDpm:'tin', pgOsb:'board', pgCoverings:'unit', wfPebbles:'bag', wasteSkips:'skip'};
+function productLibraryKeys(){
+  const keys = new Set(['wasteSkips']);
+  Object.values(SERVICES).forEach(def=>{
+    (def.options||[]).forEach(o=>{ if(o.source) keys.add(o.source); });
+    (def.rowSelects||[]).forEach(r=>{ if(r.source) keys.add(r.source); });
+  });
+  Object.keys(S.settings||{}).forEach(k=>{ if(/^(wf|pond|cb|pg|at|steel|brickwall|sleeper|composite|timber|paving|block|gravel|fb)[A-Z]/.test(k) && Array.isArray(S.settings[k]) && S.settings[k].some(x=>x && x.name && x.id)) keys.add(k); });
+  return [...keys];
+}
+function productSection(libKey){
+  for(const [k, def] of Object.entries(SERVICES)){
+    if((def.options||[]).some(o=>o.source===libKey) || (def.rowSelects||[]).some(r=>r.source===libKey)) return def.label;
+  }
+  return libKey==="wasteSkips" ? "Waste removal" : "Other products";
+}
+function productUnit(libKey, e){
+  if(libKey==="brickwallFaceProducts") return e.facePricedPer==="m2" ? 'm²' : 'each';
+  if(libKey==="brickwallCopings") return e.copingPricedPer==="m2" ? 'm²' : 'm';
+  if(e.priceM!=null && e.price==null) return 'm';
+  return PRODUCT_UNITS[libKey] || 'each';
+}
+function mirrorProductToMaterials(libKey, e, oldName){
+  if(!S.settings.materials) S.settings.materials = {};
+  const mats = S.settings.materials;
+  if(oldName && oldName!==e.name && mats[oldName] && mats[oldName].lib===libKey) delete mats[oldName];
+  const cur = mats[e.name];
+  if(cur && cur.lib!==libKey) return;   // a separate Materials-list item already has this name
+  const price = e.price!=null ? Number(e.price)||0 : Number(e.priceM)||0;
+  mats[e.name] = {unit: productUnit(libKey, e), section: productSection(libKey), price, supplier: e.supplier||'', vatIncluded: e.vatIncluded!==false, lib: libKey};
+}
+function unmirrorProduct(libKey, name){
+  const m = S.settings.materials && S.settings.materials[name];
+  if(m && m.lib===libKey && !(S.settings[libKey]||[]).some(x=>x.name===name)) delete S.settings.materials[name];
+}
+// Materials list edits flow back into the product the quote maths uses.
+function syncMaterialsToProducts(){
+  const touched = new Set();
+  Object.entries(S.settings.materials||{}).forEach(([name, m])=>{
+    if(!m || !m.lib || !Array.isArray(S.settings[m.lib])) return;
+    S.settings[m.lib].forEach(e=>{
+      if(e.name!==name) return;
+      if(e.priceM!=null && e.price==null) e.priceM = m.price; else e.price = m.price;
+      e.supplier = m.supplier||''; e.vatIncluded = m.vatIncluded!==false;
+      touched.add(m.lib);
+    });
+  });
+  return [...touched];
 }
 /* Edit one Materials-list entry's price, supplier and VAT setting from a quote's dropdown. */
 function editMaterialPrice(name, onSaved){
   const m = S.settings.materials[name]; if(!m) return;
   const vatOn = S.settings.vatRegistered!==false;
-  const fields = [{key:"price", label:`Price (£ per ${m.unit||'unit'})`, type:"number", required:true, value:m.price},
-    {key:"supplier", label:"Supplier (optional)", type:"text", required:false, value:m.supplier||""}]
+  const fields = [{key:"price", label:`Price (£ per ${m.unit||'unit'})`, type:"number", required:true, positive:true, value:m.price},
+    {key:"supplier", label:"Supplier", type:"text", required:true, value:m.supplier||""}]
     .concat(vatOn ? [{key:"vatIncluded", label:"Price already includes VAT", type:"checkbox", value:m.vatIncluded!==false}] : []);
   showForm(`Edit ${name}`, "Saved to your Materials list and used on this and every future quote. Quotes already sent keep the price they were sent at.", fields, async (values)=>{
     m.price = values.price; m.supplier = values.supplier||"";
@@ -8369,16 +8524,19 @@ App.addEventListener("click", async (e)=>{
         const name = nameInp ? nameInp.value.trim() : '';
         const price = priceInp ? parseFloat(priceInp.value) : NaN;
         const supplier = supplierInp ? supplierInp.value.trim() : '';
+        // keep what's been typed when the dialog redraws with an error
+        m.name = nameInp ? nameInp.value : m.name; m.price = priceInp ? priceInp.value : m.price; m.supplier = supplierInp ? supplierInp.value : m.supplier;
         if(!name){ m.error = "Give the material a description."; render(); break; }
-        if(isNaN(price) || price<0){ m.error = "Enter a price of 0 or more."; render(); break; }
+        if(isNaN(price) || !(price>0)){ m.error = "Enter what it costs you (more than £0)."; render(); break; }
+        if(!supplier){ m.error = "Enter the supplier."; render(); break; }
         m.error = "";
         const groupKey = m.groupKey;
         // A material with this name may already exist (picked from a different job with the
-        // same custom name) — update its price (and supplier, if one was entered this time)
-        // rather than clobbering its saved VAT setting, or a supplier left blank here.
+        // same custom name) — update its price and supplier rather than clobbering its saved
+        // VAT setting.
         if(S.settings.materials[name]){
           S.settings.materials[name].price = price;
-          if(supplier) S.settings.materials[name].supplier = supplier;
+          S.settings.materials[name].supplier = supplier;
         } else {
           S.settings.materials[name] = {unit: CUSTOM_STYLE_UNITS[groupKey]||'m²', section: CUSTOM_STYLE_SECTIONS[groupKey]||'Custom', price, supplier, vatIncluded:true};
         }
@@ -8402,13 +8560,18 @@ App.addEventListener("click", async (e)=>{
               if(f.required){ err = `Enter a value for "${f.label}".`; break; }
               val = null;
             } else val = n;
+            if(f.positive && !(val>0)){ err = `Enter what it costs you (more than £0) for "${f.label}".`; break; }
           } else if(typeof val === 'string'){
             val = val.trim();
             if(f.required && !val){ err = `"${f.label}" is required.`; break; }
           }
           values[f.key] = val;
         }
-        if(err){ m.error = err; render(); break; }
+        if(err){
+          // keep everything typed so far when the dialog redraws with the error
+          m.fields.forEach(f=>{ const el = document.getElementById(`mf_${f.key}`); if(el) f.value = f.type==="checkbox" ? el.checked : el.value; });
+          m.error = err; render(); break;
+        }
         m.error = "";
         const cb = m._onSave; S._modal = null;
         if(cb) await cb(values);
@@ -8676,7 +8839,7 @@ App.addEventListener("click", async (e)=>{
       const letter = (b.letter||[]).filter(l=>(l.text||'').trim()).map(l=>({text:l.text.trim(), onlyIf:l.onlyIf||'', appendIf:l.appendIf||'', append:l.append||''}));
       const productivity = Number(b.productivity)||1;
       if(isFence){
-        addMaterial(b.postMaterial, 'each', b.postPrice, '', 'Fencing');
+        addMaterial(b.postMaterial, 'each', b.postPrice, b.postSupplier||'', 'Fencing');
         const prev = b.editKey ? fenceTypeById(b.editKey) : null;
         const entry = {id: b.editKey || ('ft_'+uid()), builtin: !!(prev && prev.builtin), name:b.name.trim(),
           heightMm:Number(b.heightMm), postSpacingMm:Number(b.postSpacingMm), stockLengthMm:Number(b.stockLengthMm),
@@ -8749,7 +8912,6 @@ App.addEventListener("click", async (e)=>{
       });
       S.settings.turfTopsoilBaselineCoverage = numval('st_turfBaselineCoverage') || S.settings.turfTopsoilBaselineCoverage;
       S.settings.turfTopsoilBaselineDepth = numval('st_turfBaselineDepth') || S.settings.turfTopsoilBaselineDepth;
-      S.settings.turfWastagePercent = numval('st_turfWastage');
       S.settings.turfConsumablesQty = numval('st_turfConsumables');
       const grabM3 = numval('st_wasteGrabM3PerLoad');
       if(grabM3>0) S.settings.wasteGrabM3PerLoad = grabM3;
@@ -8761,8 +8923,6 @@ App.addEventListener("click", async (e)=>{
         const v = parseFloat(inp.value);
         if(!isNaN(v) && v>=0) S.settings.digOutDepthDefaults[key] = v;
       });
-      const pavingWastage = numval('st_pavingWastage');
-      if(pavingWastage>=0) S.settings.pavingWastagePercent = pavingWastage;
       const primerCov = numval('st_pavingPrimerCoverage');
       if(primerCov>0) S.settings.pavingPrimerCoverage = primerCov;
       const edgingProd = numval('st_pavingEdgingProd');
@@ -8771,8 +8931,6 @@ App.addEventListener("click", async (e)=>{
       // build-up and consumables may legitimately be 0; the baselines and productivity must be > 0.
       const blockBuildUp = numval('st_blockSurfaceBuildUp');
       if(blockBuildUp>=0) S.settings.blockPavingSurfaceBuildUp = blockBuildUp;
-      const blockWastage = numval('st_blockWastage');
-      if(blockWastage>=0) S.settings.blockPavingWastagePercent = blockWastage;
       const blockMotRate = numval('st_blockMotRate');
       if(blockMotRate>0) S.settings.blockPavingMotBaselineRate = blockMotRate;
       const blockMotDepth = numval('st_blockMotDepth');
@@ -8814,7 +8972,7 @@ App.addEventListener("click", async (e)=>{
       compSet('st_pgOsbCov','pgOsbCoverage');
       compSet('st_pgConsumables','pgConsumablesQty',true);
       compSet('st_atBuildUp','atSurfaceBuildUp',true); compSet('st_atMotRate','atMotRate'); compSet('st_atMotDepth','atMotBaselineDepth');
-      compSet('st_atWastage','atWastagePercent',true); compSet('st_atRoll','atSeamTapeRollLength'); compSet('st_atInfill','atInfillCoverage'); compSet('st_atConsumables','atConsumablesQty',true);
+      compSet('st_atRoll','atSeamTapeRollLength'); compSet('st_atInfill','atInfillCoverage'); compSet('st_atConsumables','atConsumablesQty',true);
       { const aep = numval('st_atEdgingProd'); if(aep>0) S.settings.productivity.artificialturfEdging = aep; }
       compSet('st_fbBagVol','fbBagVolume'); compSet('st_fbMulchDepth','fbMulchDepth',true); compSet('st_fbConsumables','fbConsumablesQty',true);
       { const fep = numval('st_fbEdgingProd'); if(fep>0) S.settings.productivity.flowerbedsEdging = fep; }
@@ -8937,8 +9095,10 @@ App.addEventListener("click", async (e)=>{
     case "removePavingProduct": {
       const libKey = t.getAttribute("data-libkey");
       const id = t.getAttribute("data-id");
+      const gone = (S.settings[libKey]||[]).find(x=>x.id===id);
       S.settings[libKey] = (S.settings[libKey]||[]).filter(x=>x.id!==id);
-      await saveSettings({[libKey]: S.settings[libKey]});
+      if(gone) unmirrorProduct(libKey, gone.name);
+      await saveSettings({[libKey]: S.settings[libKey], materials: S.settings.materials});
       render(); break;
     }
     case "removeCustomStyleOption": {
@@ -9039,7 +9199,8 @@ App.addEventListener("click", async (e)=>{
         const name = inp.getAttribute('data-matsup');
         if(S.settings.materials[name]) S.settings.materials[name].supplier = inp.value.trim();
       });
-      await saveSettings({materials: S.settings.materials}); S._stDirty=null; S._savedMsg="Materials saved."; render(); break;
+      const libs = syncMaterialsToProducts();
+      await saveSettings(Object.assign({materials: S.settings.materials}, Object.fromEntries(libs.map(k=>[k, S.settings[k]])))); S._stDirty=null; S._savedMsg="Materials saved."; render(); break;
     }
     case "saveCompanyForm": {
       const c = S.settings.company;
@@ -9699,6 +9860,7 @@ App.addEventListener("input", (e)=>{
   } else if(t.matches('[data-opt]')){
     const key = currentMeasureKey(d); const st = ensureSectionState(key);
     const optKey = t.getAttribute('data-opt');
+    if(optKey==="wastagePct") rememberWastage(key, t.value);
     const customGroup = t.getAttribute('data-customizable');
     const sourceAddKey = t.getAttribute('data-source-add');
     const addAction = t.getAttribute('data-add-action');

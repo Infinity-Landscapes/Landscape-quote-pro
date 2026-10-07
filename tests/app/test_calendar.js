@@ -147,7 +147,7 @@ const fs = require('fs');
   await page.fill('#mf_title', 'Site visit — new enquiry');
   await page.fill('#mf_date', '2026-11-11');
   await (await page.$('#mf_blocksDay')).click(); // tick "block this day off"
-  await (await page.$('button[data-action="modalOk"]')).click();
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click();
   await page.waitForTimeout(250);
 
   await (await page.$('button[data-nav="menu"]')).click(); await page.waitForTimeout(150);
@@ -163,7 +163,7 @@ const fs = require('fs');
   await page.fill('#mf_title', 'Evening appointment — Mrs Jones');
   await page.fill('#mf_date', '2026-11-16');
   // leave "block this day off" unticked — the default
-  await (await page.$('button[data-action="modalOk"]')).click();
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click();
   await page.waitForTimeout(250);
 
   await (await page.$('button[data-nav="menu"]')).click(); await page.waitForTimeout(150);
@@ -217,7 +217,7 @@ const fs = require('fs');
     const titleVal = await page.$eval('#mf_title', el => el.value).catch(()=>'');
     check('[edit entry] form pre-fills the existing title', /Site visit/.test(titleVal));
     await page.fill('#mf_title', 'Site visit — RESCHEDULED');
-    await (await page.$('button[data-action="modalOk"]')).click();
+    { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click();
     await page.waitForTimeout(250);
     bodyText = await page.$eval('#App', el => el.textContent);
     check('[edit entry] updated title now shown on the calendar', /Site visit — RESCHEDULED/.test(bodyText));
@@ -258,7 +258,7 @@ const fs = require('fs');
     const startVal = await page.$eval('#mf_startDate', el => el.value).catch(()=>'');
     check('[edit schedule] form pre-fills the current start date', startVal === '2026-11-02');
     await page.fill('#mf_startDate', '2026-12-07'); // a Monday, clear of every other entry above
-    await (await page.$('button[data-action="modalOk"]')).click();
+    { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click();
     await page.waitForTimeout(300);
     bodyText = await page.$eval('#App', el => el.textContent);
     sched = parseScheduleLine(bodyText);

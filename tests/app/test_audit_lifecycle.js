@@ -51,11 +51,11 @@ const fs = require('fs');
     await click('button[data-action="wizNext"]'); // preview
   }
   // ---- numbering: preview doesn't use up numbers; titles skipped ----
-  await newQuote('Mr & Mrs Fielding', 4, 5, {d:'Bird bath', q:1, p:100});
+  await newQuote('Mr & Mrs Rayner', 4, 5, {d:'Bird bath', q:1, p:100});
   await page.evaluate(()=>{}); await click('button[data-action="wizBack"]').catch(()=>{}); await click('button[data-action="wizNext"]').catch(()=>{});
   await click('button[data-action="saveSentQuote"]');
   let t = await txt();
-  check('first quote numbered FIE001 (title skipped, previews don\'t use numbers)', /FIE001/.test(t));
+  check('first quote numbered RAY001 (title skipped, previews don\'t use numbers)', /RAY001/.test(t));
   check('quote counter saved', bizIn(await store()).quoteCounter===1);
   // letter extra at sell price: 100 × 1.10 × 1.20 = 132.00 inc VAT
   check('letter shows the extra at sell price inc VAT (£132.00)', /Bird bath – £132\.00 inc VAT/.test(t));
@@ -63,7 +63,7 @@ const fs = require('fs');
   await click('button[data-action="showAccept"]');
   await page.fill('#acceptStart','2026-11-02');
   await click('button[data-action="confirmAccept"]');
-  let q = quotesIn(await store()).find(x=>x.customer.name==='Mr & Mrs Fielding');
+  let q = quotesIn(await store()).find(x=>x.customer.name==='Mr & Mrs Rayner');
   // 20m² / 6.7 / 3 people = 0.995 → ruq 1 day → 1 booked
   check('accepted job stored ongoing with schedule and team', q.status==='ongoing' && q.scheduledDays.length>=1 && q.teamId===teamId1);
   const planTotal = Math.round(q.paymentSchedule.reduce((a,p)=>a+p.amount,0)*100)/100;
@@ -72,12 +72,12 @@ const fs = require('fs');
   check('new job not shown as a loss (profit so far = quoted margin)', /Profit so far\s*£[1-9]/.test(t) && !/Profit so far\s*-£/.test(t));
   // VAT set aside 1/6
   await click('button[data-action="addPayment"]');
-  await page.fill('#mf_amount','1200'); await click('button[data-action="modalOk"]');
-  q = quotesIn(await store()).find(x=>x.customer.name==='Mr & Mrs Fielding');
+  await page.fill('#mf_amount','1200'); { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]');
+  q = quotesIn(await store()).find(x=>x.customer.name==='Mr & Mrs Rayner');
   check('VAT set aside on £1,200 = £200 (1/6)', q.finance.payments[0].vatSetAside===200);
   // ---- edit the ongoing job: double the area ----
   await click('button[data-action="editQuote"]');
-  await click('button[data-action="modalOk"]'); // "Edit job"
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]'); // "Edit job"
   // jump to the measurement step via the step pill for the service
   const pill = await page.$('[data-action="wizGoto"][data-step="measure"]') || await page.$('[data-action="wizStep"]');
   await page.evaluate(()=>{});
@@ -88,8 +88,8 @@ const fs = require('fs');
   for (let i=0;i<4 && !(await page.$('button[data-action="saveSentQuote"],button[data-action="saveQuoteChanges"],button[data-action="saveDraftQuote"]')); i++) await click('button[data-action="wizNext"]');
   const saveBtn = await page.$('button[data-action="saveSentQuote"]') || await page.$('button[data-action="saveQuoteChanges"]') || await page.$('button[data-action="saveDraftQuote"]');
   await saveBtn.click(); await settle();
-  q = quotesIn(await store()).find(x=>x.customer.name==='Mr & Mrs Fielding');
-  check('edited job still ongoing, same number, same team', q.status==='ongoing' && q.quoteNumber==='FIE001' && q.teamId===teamId1);
+  q = quotesIn(await store()).find(x=>x.customer.name==='Mr & Mrs Rayner');
+  check('edited job still ongoing, same number, same team', q.status==='ongoing' && q.quoteNumber==='RAY001' && q.teamId===teamId1);
   check('edited job still on the calendar (re-booked: 40m² → 2 days)', q.scheduledDays && q.scheduledDays.length===2);
   const plan2 = Math.round(q.paymentSchedule.reduce((a,p)=>a+p.amount,0)*100)/100;
   check('payment plan rebuilt to the new total', Math.abs(plan2 - q.totals.total) < 0.01);
@@ -103,14 +103,14 @@ const fs = require('fs');
   t = await txt();
   check('after lock/unlock the unfinished quote is still offered', /Unfinished Person/.test(t));
   await click('button[data-nav="quotes"]'); await click('[data-action="openQuote"]');
-  await click('button[data-action="editQuote"]'); await click('button[data-action="modalOk"]');
+  await click('button[data-action="editQuote"]'); { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]');
   t = await txt();
   check('editing another quote warns before discarding the unfinished one', /unfinished quote for Unfinished Person/.test(t));
   await click('button[data-action="modalCancel"]');
   // ---- finished jobs can be reopened ----
-  await click('button[data-action="markFinished"]'); await click('button[data-action="modalOk"]');
-  await click('button[data-action="reopenJob"]'); await click('button[data-action="modalOk"]');
-  q = quotesIn(await store()).find(x=>x.customer.name==='Mr & Mrs Fielding');
+  await click('button[data-action="markFinished"]'); { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]');
+  await click('button[data-action="reopenJob"]'); { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]');
+  q = quotesIn(await store()).find(x=>x.customer.name==='Mr & Mrs Rayner');
   check('finished job reopened to ongoing', q.status==='ongoing');
   // ---- deleted custom service: editing doesn't crash ----
   await page.evaluate(()=>{ const st = JSON.parse(localStorage.getItem('__mockdb__')); for (const k of Object.keys(st)){ const d = st[k]; if(d && d.materials){ d.customServices = []; d.servicesEnabled = d.servicesEnabled.filter(x=>x!=='custom_testbed'); } } localStorage.setItem('__mockdb__', JSON.stringify(st)); });
@@ -119,7 +119,7 @@ const fs = require('fs');
   await click('button[data-action="editQuote"]'); const ok = await page.$('button[data-action="modalOk"]'); if (ok) { await ok.click(); await settle(); }
   const ok2 = await page.$('button[data-action="modalOk"]'); if (ok2) { await ok2.click(); await settle(); }
   t = await txt();
-  check('editing a quote whose custom service was deleted opens without crashing and keeps its price', errors.length===0 && /FIE001|Review changes/.test(t));
+  check('editing a quote whose custom service was deleted opens without crashing and keeps its price', errors.length===0 && /RAY001|Review changes/.test(t));
   console.log('ERRORS:', errors.length?errors:'none');
   console.log(pass && !errors.length ? 'ALL CHECKS PASSED' : 'SOME CHECKS FAILED');
   await browser.close(); process.exit(pass && !errors.length ? 0 : 1);

@@ -1,8 +1,8 @@
 // Verifies the turf-specific rework (direct user request): "Blended loam topsoil" renamed to
 // "Quality topsoil" (unit changed to tonnes), with its quantity now area ÷ baseline coverage ×
 // (dig-out depth ÷ baseline depth) instead of a flat area/10 — both baselines editable settings
-// defaulting to 10 m²/tonne and 50mm. The turf wastage multiplier (was a fixed 1.1) is now an
-// editable "wastage %" setting, default 10%. The flat "1" consumables allowance is now an
+// defaulting to 10 m²/tonne and 50mm. The turf wastage multiplier (was a fixed 1.1) is now the
+// "Wastage for cuts (%)" question on the turf step of the quote wizard (default 0, remembered). The flat "1" consumables allowance is now an
 // editable "quantity per job" setting, default 1, still only applied when area>0.
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -63,7 +63,7 @@ const fs = require('fs');
   const consumables = await page.$eval('#st_turfConsumables', el => el.value).catch(()=>null);
   check('topsoil baseline coverage field present, defaults to 10', baselineCoverage === '10');
   check('topsoil baseline depth field present, defaults to 50', baselineDepth === '50');
-  check('turf wastage % field present, defaults to 10', wastage === '10');
+  check('no turf wastage field in Settings (asked in the quote wizard instead)', wastage === null);
   check('turf consumables qty field present, defaults to 1', consumables === '1');
 
   // --- Default-depth turf job: 100 m² -> topsoil = ru((100/10)*(50/50)) = 10 tonnes;
@@ -72,12 +72,14 @@ const fs = require('fs');
   await startTurfQuote('Turf default depth', 10, 10);
   const digDepthVal = await page.$eval('[data-opt="digOutDepth"]', el => el.value).catch(()=>null);
   check('"Dig-out depth (mm)" option present, defaults to 50', digDepthVal === '50');
+  check('turf step asks wastage for cuts, starting at 0', await page.$eval('[data-opt="wastagePct"]', el => el.value).catch(()=>null) === '0');
+  await page.fill('[data-opt="wastagePct"]', '10'); await page.dispatchEvent('[data-opt="wastagePct"]','change'); await page.waitForTimeout(200);
   // Turf is waste-eligible, so the wizard inserts an extra "Waste removal" step: measure -> waste
   // -> people -> extras -> preview, i.e. 4 "Next" clicks from here.
   for(let i=0;i<4;i++){ await (await page.$('button[data-action="wizNext"]')).click(); await page.waitForTimeout(250); }
   bodyText = await page.$eval('#App', el => el.textContent);
   check('[default depth] 10 tonnes of Quality topsoil allowed for', /Quality topsoil \(10 tonnes\)/.test(await materialsAllowedText()));
-  check('[default depth] 110 m² of Turf allowed for (10% wastage)', /Turf \(110 /.test(await materialsAllowedText()));
+  check('[default depth] 110 m² of Turf allowed for (10% wastage set in the wizard)', /Turf \(110 /.test(await materialsAllowedText()));
 
   // --- Double the dig-out depth to 100mm -> topsoil scales to ru((100/10)*(100/50)) = 20 tonnes,
   //     turf (unaffected by depth) stays at 110 m² ---
@@ -85,6 +87,7 @@ const fs = require('fs');
   await page.waitForTimeout(250);
   await (await page.$('button[data-nav="menu"]')).click(); await page.waitForTimeout(150);
   await startTurfQuote('Turf doubled depth', 10, 10);
+  check('turf wastage remembered from the last turf quote (10)', await page.$eval('[data-opt="wastagePct"]', el => el.value).catch(()=>null) === '10');
   await (await page.$('[data-opt="digOutDepth"]')).fill('100');
   await page.waitForTimeout(200);
   for(let i=0;i<4;i++){ await (await page.$('button[data-action="wizNext"]')).click(); await page.waitForTimeout(250); }

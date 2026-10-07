@@ -1,4 +1,5 @@
-// Custom services now block at £0 like Fencing, and removing a builder option that materials or
+// Custom services: a new material needs a price above £0 and a supplier; a material whose price
+// later drops to £0 still blocks the quote like Fencing, and removing a builder option that materials or
 // letter lines depend on shows a warning listing them (and resets them to "Always" on confirm).
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -31,6 +32,12 @@ const fs = require('fs');
   await page.fill('[data-svcmat-name="1"]','Extra moss killer'); await page.fill('[data-svcmat-amount="1"]','1'); await page.fill('[data-svcmat-per="1"]','50');
   await page.selectOption('[data-svcmat-onlyif="1"]', {label:'"Second coat?" ticked'}); await page.fill('[data-svcmat-price="1"]','12');
   await click('button[data-action="svcBuilderNext"]');
+  check('builder refuses a new material at £0', !(await page.$('#svcProductivity')) && /Enter what "Moss killer" costs you/.test(await txt()));
+  await page.fill('[data-svcmat-price="0"]','5');
+  await click('button[data-action="svcBuilderNext"]');
+  check('builder refuses a new material with no supplier', !(await page.$('#svcProductivity')) && /Enter the supplier for "Moss killer"/.test(await txt()));
+  await page.fill('[data-svcmat-supplier="0"]','Agri supplies'); await page.fill('[data-svcmat-supplier="1"]','Agri supplies');
+  await click('button[data-action="svcBuilderNext"]');
   await page.fill('#svcProductivity','100');
   await click('button[data-action="addSvcLetterRow"]');
   await page.fill('[data-svcltr-text="0"]','Second coat applied');
@@ -51,6 +58,11 @@ const fs = require('fs');
   await click('button[data-action="svcBuilderNext"]'); await click('button[data-action="svcBuilderNext"]');
   await click('button[data-action="saveServiceBuilder"]');
   const key = await page.$eval('.service-tile:has-text("Moss treatment")', el=>el.getAttribute('data-key'));
+  // the price later drops to £0 on the Materials list (e.g. a typo) — the quote must still block
+  await click('button[data-action="settingsTab"][data-tab="materials"]');
+  await page.fill('input[data-mat="Moss killer"]','0');
+  check('builder materials landed in the Materials list with their supplier', await page.$eval('input[data-matsup="Moss killer"]', e=>e.value) === 'Agri supplies');
+  await click('button[data-action="saveMaterialsForm"]');
 
   await click('button[data-nav="newquote"]');
   await page.fill('#q_creator','Matt'); await page.fill('#q_cname','Moss');

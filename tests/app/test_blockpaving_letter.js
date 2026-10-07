@@ -24,7 +24,7 @@ const fs = require('fs');
   await page.fill('[data-row="0"] input[data-mf="width"]','5'); await page.fill('[data-row="0"] input[data-mf="length"]','8');
   await page.selectOption('[data-row="0"] select[data-mf="blockType"]','__add_other__'); await page.waitForTimeout(200);
   await page.fill('#modalMatName','Test Block'); await page.fill('#modalMatPrice','50');
-  await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
   const go = async () => { for (let i=0;i<6;i++){ const b = await page.$('button[data-action="wizNext"]'); if(!b) break; await b.click(); await page.waitForTimeout(300); if(/Area excavated/.test(await txt())) return true; } return /Area excavated/.test(await txt()); };
   // Uniform 250mm -> "250mm" dig-out and 150mm MOT (250 - 100 build-up)
   check('reached letter preview', await go());

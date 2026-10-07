@@ -60,8 +60,8 @@ const fs = require('fs');
   const supplierInput = await page.$('input[data-matsup="Cotswold Gold Gravel"]');
   check('supplier entered in the dialog was saved against the new material', supplierInput ? (await supplierInput.inputValue()) === 'Jewson' : false);
 
-  // Re-add the SAME material from a fresh quote, this time leaving supplier blank — the existing
-  // supplier should be left alone (not clobbered to blank), while the price still updates.
+  // Re-add the SAME material from a fresh quote: supplier is required (blank is refused), and the
+  // new price and supplier replace the old ones.
   await (await page.$('button[data-nav="menu"]')).click(); await page.waitForTimeout(150);
   const discardBtn1 = await page.$('button[data-action="discardDraft"]');
   if (discardBtn1) { await discardBtn1.click(); await page.waitForTimeout(150); const c=await page.$('button[data-action="modalOk"]'); if(c){await c.click(); await page.waitForTimeout(200);} }
@@ -81,6 +81,10 @@ const fs = require('fs');
   await (await page.$('#modalMatPrice')).fill('42');
   await (await page.$('button[data-action="modalOk"]')).click();
   await page.waitForTimeout(250);
+  check('saving with a blank supplier is refused — dialog stays open and says why', !!(await page.$('#modalMatName')) && /Enter the supplier/.test(await page.$eval('#app', e=>e.innerText).catch(()=>'') + await page.evaluate(()=>document.body.innerText)));
+  await (await page.$('#modalMatSupplier')).fill('Travis Perkins');
+  await (await page.$('button[data-action="modalOk"]')).click();
+  await page.waitForTimeout(250);
 
   await (await page.$('button[data-nav="settings"]')).click(); await page.waitForTimeout(200);
   await (await page.$('button[data-action="settingsTab"][data-tab="materials"]')).click(); await page.waitForTimeout(200);
@@ -88,7 +92,7 @@ const fs = require('fs');
   const priceInput2 = await page.$('input[data-mat="Cotswold Gold Gravel"]');
   const supplierInput2 = await page.$('input[data-matsup="Cotswold Gold Gravel"]');
   check('re-adding the same material updates its price (£42)', priceInput2 ? (await priceInput2.inputValue()) === '42' : false);
-  check('re-adding with a blank supplier does NOT clobber the previously-saved supplier', supplierInput2 ? (await supplierInput2.inputValue()) === 'Jewson' : false);
+  check('re-adding with a new supplier updates the saved supplier', supplierInput2 ? (await supplierInput2.inputValue()) === 'Travis Perkins' : false);
 
   // --- (2) Custom Service Builder: new-material row and new-waste-item row ---
   await (await page.$('button[data-nav="menu"]')).click(); await page.waitForTimeout(150);

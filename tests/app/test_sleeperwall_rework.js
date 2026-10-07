@@ -14,7 +14,7 @@ const fs = require('fs');
   const v = id => page.$eval(id, e=>e.value).catch(()=>null);
   const settle = () => page.waitForTimeout(220);
   async function fillModal(f){ for (const [k,x] of Object.entries(f)){ const el = await page.$('#mf_'+k); if(el) await el.fill(String(x)); }
-    await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250); }
+    { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250); }
   async function addVia(sel, f){ await page.selectOption(sel,'__add_other__'); await settle(); await fillModal(f); }
   async function login(){ const pin = await page.$('#loginPin'); if(pin){ await pin.fill('1234'); await (await page.$('button[data-action="login"]')).click(); await page.waitForTimeout(400); } }
 

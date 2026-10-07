@@ -102,7 +102,7 @@ const fs = require('fs');
   await page.fill('#mf_title', 'Plain single-day entry');
   await page.fill('#mf_date', '2026-11-02'); // Monday
   // leave "This is a job" unticked
-  await (await page.$('button[data-action="modalOk"]')).click();
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click();
   await page.waitForTimeout(250);
   let found = await navigateCalendarToMonth('November 2026', 14);
   check('could navigate to November 2026', found);
@@ -117,7 +117,7 @@ const fs = require('fs');
   await (await page.$('#mf_isJob')).click();
   await page.fill('#mf_days', '3');
   await (await page.$('#mf_blocksDay')).click(); // tick blocking, so we can test it pushes a real job off later
-  await (await page.$('button[data-action="modalOk"]')).click();
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click();
   await page.waitForTimeout(250);
   bodyText = await page.$eval('#App', el => el.textContent);
   check('[manual job entry] shown with its 🧰 job marker', /🧰 Subcontracted fencing job/.test(bodyText));
@@ -149,7 +149,7 @@ const fs = require('fs');
     const daysVal = await page.$eval('#mf_days', el => el.value).catch(()=>null);
     check('[edit] days field pre-fills 3', daysVal === '3');
     await (await page.$('#mf_isJob')).click(); // untick "this is a job"
-    await (await page.$('button[data-action="modalOk"]')).click();
+    { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click();
     await page.waitForTimeout(250);
   }
   // Now a job requested for 2026-11-10 (the entry's old 2nd day) should NOT be pushed off,

@@ -16,7 +16,7 @@ const fs = require('fs');
   const v = id => page.$eval(id, e=>e.value).catch(()=>null);
   const settle = () => page.waitForTimeout(220);
   async function fillModal(f){ for (const [k,x] of Object.entries(f)){ const el = await page.$('#mf_'+k); if(el) await el.fill(String(x)); }
-    await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250); }
+    { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250); }
   async function login(){ const pin = await page.$('#loginPin'); if(pin){ await pin.fill('1234'); await (await page.$('button[data-action="login"]')).click(); await page.waitForTimeout(400); } }
 
   await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
@@ -48,7 +48,7 @@ const fs = require('fs');
   await page.selectOption('[data-row="0"] select[data-mf="gravelType"]','__add_other__'); await settle();
   check('add-gravel dialog asks for price per tonne', /Price per tonne/.test(await txt()));
   await page.fill('#modalMatName','Test gravel'); await page.fill('#modalMatPrice','60');
-  await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
   let t = await txt();
   check('gravel = ROUNDUP(30/10) = 3 tonnes', t.includes('Test gravel3'));
   check('MOT = 20/5×1 + 10/5×1.5 = 7', t.includes('Type 1 MOT7'));

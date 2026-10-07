@@ -39,7 +39,7 @@ const fs = require('fs');
   await page.selectOption('select[data-opt="skipProduct"]','__add_other__'); await settle();
   check('add-skip form asks name, price, supplier (no capacity)', !!(await page.$('#mf_price')) && !(await page.$('#mf_capacityM3')));
   await page.fill('#mf_name','8 yard skip'); await page.fill('#mf_price','240');
-  await click('button[data-action="modalOk"]');
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]');
   t = await txt();
   check('1 skip at £200 net, plus grab hire', /Skip hire — 8 yard skip\s*1\s*£200\.00/.test(t) && /Grab hire\s*1/.test(t));
   await page.fill('[data-opt="skipQty"]','2'); await settle();

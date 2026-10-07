@@ -27,7 +27,7 @@ const fs = require('fs');
       const el = await page.$(`#mf_${key}`);
       if (el) await el.fill(String(val));
     }
-    await (await page.$('button[data-action="modalOk"]')).click();
+    { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click();
     await page.waitForTimeout(250);
   }
   async function startQuote(name){
@@ -57,7 +57,7 @@ const fs = require('fs');
   await (await page.$('button[data-action="settingsTab"][data-tab="pricing"]')).click(); await page.waitForTimeout(200);
   const val = id => page.$eval(id, el => el.value).catch(()=>null);
   check('surface build-up defaults to 100', await val('#st_blockSurfaceBuildUp') === '100');
-  check('block wastage defaults to 10', await val('#st_blockWastage') === '10');
+  check('no block wastage field in Settings (it is asked in the quote wizard)', !(await page.$('#st_blockWastage')));
   check('MOT baseline rate defaults to 0.3', await val('#st_blockMotRate') === '0.3');
   check('MOT baseline depth defaults to 150', await val('#st_blockMotDepth') === '150');
   check('consumables quantity defaults to 1', await val('#st_blockConsumables') === '1');
@@ -81,11 +81,13 @@ const fs = require('fs');
   await page.waitForTimeout(200);
   let t = await txt();
   check('40m² at defaults needs 12 tonnes Type 1 MOT', t.includes('Type 1 MOT12 tonne'));
+  check('block paving step asks wastage for cuts, starting at 0', await page.$eval('[data-opt="wastagePct"]', el => el.value) === '0');
+  await page.fill('[data-opt="wastagePct"]', '10'); await page.dispatchEvent('[data-opt="wastagePct"]','change'); await page.waitForTimeout(200);
 
   // Add a block mid-quote
   await page.selectOption('[data-row="0"] select[data-mf="blockType"]', '__add_other__'); await page.waitForTimeout(200);
   await page.fill('#modalMatName', 'Test Block'); await page.fill('#modalMatPrice', '50');
-  await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
   t = await txt();
   check('block quantity = area × 1.10 wastage = 44 m²', t.includes('Test Block44'));
   check('block cost = 44 × £41.67 net = £1,833.33', /1,?833\.33/.test(t));
@@ -130,7 +132,6 @@ const fs = require('fs');
   await (await page.$('button[data-nav="settings"]')).click(); await page.waitForTimeout(200);
   await (await page.$('button[data-action="settingsTab"][data-tab="pricing"]')).click(); await page.waitForTimeout(200);
   await page.fill('#st_blockSurfaceBuildUp', '50');
-  await page.fill('#st_blockWastage', '20');
   await page.fill('#st_blockConsumables', '2');
   await page.fill('#st_blockEdgingProd', '10');
   await (await page.$('button[data-action="saveSettingsForm"]')).click(); await page.waitForTimeout(250);
@@ -139,6 +140,8 @@ const fs = require('fs');
   await page.fill('[data-row="0"] input[data-mf="length"]', '8');
   await page.waitForTimeout(200);
   check('edging productivity option seeded from settings (10)', await page.$eval('[data-opt="edgingProductivity"]', el => el.value) === '10');
+  check('wastage remembered from the last block paving quote (10)', await page.$eval('[data-opt="wastagePct"]', el => el.value) === '10');
+  await page.fill('[data-opt="wastagePct"]', '20'); await page.dispatchEvent('[data-opt="wastagePct"]','change'); await page.waitForTimeout(200);
   await page.selectOption('[data-row="0"] select[data-mf="blockType"]', 'Test Block'); await page.waitForTimeout(200);
   t = await txt();
   // MOT depth = 250 − 50 = 200 -> ROUNDUP(40×0.3×200/150) = 16

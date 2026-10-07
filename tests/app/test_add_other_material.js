@@ -58,7 +58,7 @@ const fs = require('fs');
 
   // Try saving with no description — should show an inline error and stay open.
   await (await page.$('#modalMatPrice')).fill('35');
-  await (await page.$('button[data-action="modalOk"]')).click();
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click();
   await page.waitForTimeout(150);
   check('validation error shown for missing description', /description/i.test(await page.$eval('#App', el => el.textContent)));
   check('modal still open after failed validation', (await page.$('#modalMatName')) !== null);
@@ -66,7 +66,7 @@ const fs = require('fs');
   // Now fill in a real description and save.
   await (await page.$('#modalMatName')).fill('Bradstone Blue Slate 600x600');
   await (await page.$('#modalMatPrice')).fill('45');
-  await (await page.$('button[data-action="modalOk"]')).click();
+  { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click();
   await page.waitForTimeout(250);
 
   check('modal closes after a valid save', (await page.$('#modalMatName')) === null);

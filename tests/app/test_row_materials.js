@@ -12,7 +12,7 @@ const fs = require('fs');
   await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
   let html = fs.readFileSync(require('path').resolve(__dirname,'../../app/app.html'),'utf8');
   const k = html.lastIndexOf('\n})();');
-  html = html.slice(0,k) + '\nwindow.__T={SERVICES,ctxFor,calcWithRowChoices,priceSection,sectionCopy,S:()=>S};' + html.slice(k);
+  html = html.slice(0,k) + '\nwindow.__T={SERVICES,ctxFor,calcWithRowChoices,applyCutWastage,priceSection,sectionCopy,S:()=>S};' + html.slice(k);
   fs.writeFileSync(__dirname+'/_rowmat_exposed.html', html);
   let pass = true; const check = (l,c)=>{ console.log((c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
   const wait = ms => page.waitForTimeout(ms);
@@ -36,14 +36,14 @@ const fs = require('fs');
   const run = (key, rows, opt) => page.evaluate(([key, rows, opt])=>{
     const T = window.__T, s = T.S().settings, ctx = T.ctxFor(s, 2), def = T.SERVICES[key];
     const options = {}; (def.options||[]).forEach(o=>{ if(o.default!==undefined) options[o.key] = o.default; }); Object.assign(options, opt||{});
-    const r = T.calcWithRowChoices(def, rows, options, ctx);
+    const r = T.applyCutWastage(key, def, rows, options, T.calcWithRowChoices(def, rows, options, ctx));
     const sec = T.priceSection(key, rows, options, ctx, []);
     return { mats: Object.fromEntries(r.materials.filter(m=>m[0]).map(m=>[m[0], m[1]])), blockers: r.blockers||[], area: r.area, personDays: r.personDays, letter: T.sectionCopy(sec).join(' | ') };
   }, [key, rows, opt]);
 
   // ---- Paving: slab per area ----
-  const pavA = await run('paving', [{desc:'Patio',width:10,length:5,slabType:'Porcelain grey'},{desc:'Path',width:2,length:10,slabType:'Indian sandstone'}], {});
-  const pavOne = await run('paving', [{desc:'Patio',width:10,length:5},{desc:'Path',width:2,length:10}], {style:'Porcelain grey'});
+  const pavA = await run('paving', [{desc:'Patio',width:10,length:5,slabType:'Porcelain grey'},{desc:'Path',width:2,length:10,slabType:'Indian sandstone'}], {wastagePct:10});
+  const pavOne = await run('paving', [{desc:'Patio',width:10,length:5},{desc:'Path',width:2,length:10}], {style:'Porcelain grey', wastagePct:10});
   check('paving: two slab lines, each with its own 10% wastage (50→55, 20→22)', pavA.mats['Porcelain grey']===55 && pavA.mats['Indian sandstone']===22);
   check('paving: everything else matches the single-type job (MOT, sand, cement, membrane)', ['Type 1 MOT','Sharp sand','Cement','Geotextile membrane','Paving primer'].every(n=>pavA.mats[n]===pavOne.mats[n]));
   check('paving: same labour as one type', Math.abs(pavA.personDays-pavOne.personDays)<1e-9);
@@ -52,7 +52,7 @@ const fs = require('fs');
   const pavMissing = await run('paving', [{desc:'Patio',width:10,length:5,slabType:'Porcelain grey'},{desc:'Path',width:2,length:10}], {});
   check('paving: an area with no slab chosen blocks the quote', pavMissing.blockers.some(b=>/slab type for every line \(Path\)/.test(b)));
   // ---- Block paving ----
-  const blk = await run('blockpaving', [{desc:'Drive',width:10,length:6,digOutDepth:250,blockType:'Charcoal block'},{desc:'Edge',width:1,length:10,digOutDepth:250,blockType:'Brindle block'}], {});
+  const blk = await run('blockpaving', [{desc:'Drive',width:10,length:6,digOutDepth:250,blockType:'Charcoal block'},{desc:'Edge',width:1,length:10,digOutDepth:250,blockType:'Brindle block'}], {wastagePct:10});
   check('block paving: a line per block style', blk.mats['Charcoal block']>0 && blk.mats['Brindle block']>0 && Math.abs(blk.mats['Charcoal block']-60*1.1)<0.01 && Math.abs(blk.mats['Brindle block']-11)<0.01);
   // ---- Gravel (own calc) ----
   const gr = await run('gravel', [{desc:'Drive',width:10,length:10,digOutDepth:150,gravelType:'Golden gravel'},{desc:'Border',width:2,length:5,digOutDepth:150,gravelType:'Slate chips'}], {gravelDepth:50});
@@ -86,6 +86,7 @@ const fs = require('fs');
   check('column heading "Slab type" shown', /Slab type/.test(await page.$eval('.meas-head', e=>e.innerText).catch(()=> '')));
   await page.fill('[data-row="0"] input[data-mf="width"]','10'); await page.fill('[data-row="0"] input[data-mf="length"]','5');
   await page.selectOption('[data-row="0"] select[data-mf="slabType"]','Indian sandstone'); await wait(250);
+  await page.fill('[data-opt="wastagePct"]','10'); await page.dispatchEvent('[data-opt="wastagePct"]','change'); await wait(250);
   await page.click('[data-action="addMeasRow"]'); await wait(250);
   check('a new line starts with the slab of the line above', await page.$eval('[data-row="1"] select[data-mf="slabType"]', e=>e.value) === 'Indian sandstone');
   await page.selectOption('[data-row="1"] select[data-mf="slabType"]','Porcelain grey'); await wait(250);

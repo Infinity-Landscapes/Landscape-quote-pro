@@ -38,7 +38,7 @@ const fs = require('fs');
   await click('button[data-action="confirmAccept"]');
   check('ongoing in this session', /ongoing/.test(await txt()));
   await click('button[data-action="addPayment"]');
-  const amt = await page.$('#mf_amount'); if (amt) { await amt.fill('500'); const dt = await page.$('#mf_date'); if (dt) await dt.fill('2026-11-01'); await click('button[data-action="modalOk"]'); }
+  const amt = await page.$('#mf_amount'); if (amt) { await amt.fill('500'); const dt = await page.$('#mf_date'); if (dt) await dt.fill('2026-11-01'); { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]'); }
   const stored = await page.evaluate(()=>{ const st = JSON.parse(localStorage.getItem('__mockdb__')); const k = Object.keys(st).find(k=>/\/quotes\//.test(k) && st[k].customer && st[k].customer.name==='Persist Test'); return st[k]; });
   check('stored as ongoing', stored && stored.status==='ongoing');
   check('payment plan dates stored as plain YYYY-MM-DD', stored && Array.isArray(stored.paymentSchedule) && stored.paymentSchedule.length>0 && stored.paymentSchedule.every(p=>/^\d{4}-\d{2}-\d{2}$/.test(p.date)));
@@ -54,7 +54,7 @@ const fs = require('fs');
   // A failed save is reported, not swallowed
   await page.evaluate(()=>{ window.__failWrites = true; });
   await click('button[data-action="addPayment"]');
-  const amt2 = await page.$('#mf_amount'); if (amt2) { await amt2.fill('100'); const dt = await page.$('#mf_date'); if (dt) await dt.fill('2026-11-03'); await click('button[data-action="modalOk"]'); }
+  const amt2 = await page.$('#mf_amount'); if (amt2) { await amt2.fill('100'); const dt = await page.$('#mf_date'); if (dt) await dt.fill('2026-11-03'); { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]'); }
   check('a failed save shows a warning', /couldn't be saved/i.test(await txt()));
   console.log('ERRORS:', errors.length?errors:'none');
   console.log(pass && !errors.length ? 'ALL CHECKS PASSED' : 'SOME CHECKS FAILED');
