@@ -151,9 +151,9 @@ const fs = require('fs');
   // Type 1 MOT at the 150mm default dig-out: MOT depth = 150-50 = 100mm, quantity =
   // ROUNDUP((50/5) * (100/100)) = 10 tonnes — matches the long-standing area/5 baseline exactly.
   check('[150mm dig-out, default] Type 1 MOT = 10 tonnes (matches the old area÷5 baseline)', hasMaterialQty(bodyText, 'Type 1 MOT', 10));
-  // Slab: 50 m² at £60/m² Inc VAT -> net £50/m² -> £2,500.00, via the normal shared-materials
-  // price lookup (ctx.price), exactly like gravel's style — no special-cased pricing any more.
-  check('slab type priced via the normal materials lookup (50 m² × £50 net = £2,500.00)', /2,?500\.00/.test(bodyText));
+  // Slab: 50 m² + the default 10% slab wastage = 55 m², at £60/m² Inc VAT -> net £50/m² ->
+  // £2,750.00, via the normal shared-materials price lookup (ctx.price), exactly like gravel's style.
+  check('slab type priced via the normal materials lookup (55 m² incl. 10% wastage × £50 net = £2,750.00)', /2,?750\.00/.test(bodyText));
   // Jointing compound: ROUNDUP(50/8) = 7 units at £30/unit Inc VAT -> net £25 -> £175.00.
   check('jointing compound quantity = ROUNDUP(area ÷ coverage) = 7 units', hasMaterialQty(bodyText, 'Everbuild Jointing Grout', 7));
   check('jointing compound cost = 7 × £25 net = £175.00', /175\.00/.test(bodyText));

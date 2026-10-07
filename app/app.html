@@ -739,13 +739,18 @@ paving: { label:"Paving", group:"Hard landscaping", unitLabel:"Area", cols:["des
     const esQty = es ? edgingLen*(Number(es.piecesPerMetre)||0) : 0;
     const esPrice = es ? ctx.netPrice(es.price, es.vatIncluded) : 0;
     const primerCoverage = ctx.pavingPrimerCoverage||20;
+    // Slab wastage (tenant setting, default 10%) for cuts and breakages: applied ONLY to the slab
+    // quantity, rounded up — 100 m² at 10% → 110. Sub-base, sand, cement, primer, jointing
+    // compound and edging are all worked out from the measured area alone.
+    const wastagePct = ctx.pavingWastagePercent!=null && Number(ctx.pavingWastagePercent)>=0 ? Number(ctx.pavingWastagePercent) : 10;
+    const slabQty = area>0 ? ru(area*(1 + wastagePct/100)) : 0;
     const mats = [
       ["Geotextile membrane", area],
       ["Type 1 MOT", motQty],
       ["Sharp sand", ru(area/10)],
       ["Cement", ru(area*6/10)],
       ["Paving primer", ru(area/primerCoverage)],
-      [opt.style||'', opt.style? area:0],
+      [opt.style||'', opt.style? slabQty:0],
       [opt.jointingCompound||'', jcQty, opt.jointingCompound? jcPrice:0, '', 'unit'],
       [es? opt.edgingStyle:'', esQty, es? esPrice:0, '', 'each'],
       ["Patio cleaner", ru(area/20)],
@@ -3663,6 +3668,7 @@ function defaultSettings(){
     pavingJointingCompounds: [],  // [{id, name, price, coverage, vatIncluded}] — price per unit, coverage in m²/unit
     pavingEdgingStyles: [],       // [{id, name, piecesPerMetre, price, vatIncluded}] — price per piece
     pavingPrimerCoverage: 20,     // m² of patio one unit of paving primer covers
+    pavingWastagePercent: 10,     // extra slabs for cuts and breakages, as a % — applies ONLY to the slab quantity
     // Block paving's tenant-built product libraries — same shape/mechanism as Paving's above, but
     // kept under their own keys since the two services' ranges are independent. See
     // SERVICES.blockpaving.calc and the "Block paving" card in Settings → Pricing.
@@ -3905,6 +3911,7 @@ function ctxFor(settings, peopleOnSite){
     pavingJointingCompounds: settings.pavingJointingCompounds || [],
     pavingEdgingStyles: settings.pavingEdgingStyles || [],
     pavingPrimerCoverage: settings.pavingPrimerCoverage!=null ? settings.pavingPrimerCoverage : 20,
+    pavingWastagePercent: settings.pavingWastagePercent!=null ? settings.pavingWastagePercent : 10,
     // Block paving's own tenant-built product libraries (Settings → Pricing → Block paving) and
     // editable sub-base/wastage/consumables settings — see SERVICES.blockpaving.calc.
     blockJointingCompounds: settings.blockJointingCompounds || [],
@@ -4134,6 +4141,7 @@ async function loadAll(){
   // anyone with settings saved before Paving's primer coverage/grab-hire capacity became
   // editable, or before its tenant-built product libraries existed
   if(settings.pavingPrimerCoverage==null) settings.pavingPrimerCoverage = 20;
+  if(settings.pavingWastagePercent==null) settings.pavingWastagePercent = 10;
   if(settings.wasteGrabM3PerLoad==null) settings.wasteGrabM3PerLoad = 5;
   if(!Array.isArray(settings.pavingJointingCompounds)) settings.pavingJointingCompounds = [];
   if(!Array.isArray(settings.pavingEdgingStyles)) settings.pavingEdgingStyles = [];
@@ -7213,8 +7221,9 @@ function renderSettings(){
     ${pavingProductLibraryHtml("cbShuttering","Shuttering (price per board)","shuttering board",["price","lengthMm"])}
     ${pavingProductLibraryHtml("cbScrews","Screws (price per box)","screws (price per box)",["price"])}
     <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Paving</div>
-    <div class="hint" style="margin-bottom:10px;">Paving primer coverage and edging productivity. Slab types are added straight from the Slab type dropdown on a Paving quote ("+ Add new…") — the list below just lets you delete one. Jointing compounds and edging styles can be added from their own dropdowns on a quote too, or from here.</div>
+    <div class="hint" style="margin-bottom:10px;">Slab wastage, paving primer coverage and edging productivity. Slab wastage is added to the slab quantity only (rounded up — 100 m² at 10% = 110 m²); sub-base, sand, cement, primer, jointing and edging use the measured area. Slab types are added straight from the Slab type dropdown on a Paving quote ("+ Add new…") — the list below just lets you delete one. Jointing compounds and edging styles can be added from their own dropdowns on a quote too, or from here.</div>
     <div class="row">
+      <div class="field"><label>Slab wastage (%)</label><input id="st_pavingWastage" type="text" inputmode="decimal" value="${s.pavingWastagePercent!=null?s.pavingWastagePercent:10}"><div class="hint">Extra slabs for cuts and breakages — slabs only.</div></div>
       <div class="field"><label>Paving primer coverage (m²/unit)</label><input id="st_pavingPrimerCoverage" type="text" inputmode="decimal" value="${s.pavingPrimerCoverage!=null?s.pavingPrimerCoverage:20}"></div>
       <div class="field"><label>Edging productivity (m/day/person)</label><input id="st_pavingEdgingProd" type="text" inputmode="decimal" value="${s.productivity && s.productivity.pavingEdging!=null ? s.productivity.pavingEdging : 12}"></div>
     </div>
@@ -8450,6 +8459,8 @@ App.addEventListener("click", async (e)=>{
         const v = parseFloat(inp.value);
         if(!isNaN(v) && v>=0) S.settings.digOutDepthDefaults[key] = v;
       });
+      const pavingWastage = numval('st_pavingWastage');
+      if(pavingWastage>=0) S.settings.pavingWastagePercent = pavingWastage;
       const primerCov = numval('st_pavingPrimerCoverage');
       if(primerCov>0) S.settings.pavingPrimerCoverage = primerCov;
       const edgingProd = numval('st_pavingEdgingProd');
@@ -8535,6 +8546,7 @@ App.addEventListener("click", async (e)=>{
         turfTopsoilBaselineCoverage: S.settings.turfTopsoilBaselineCoverage, turfTopsoilBaselineDepth: S.settings.turfTopsoilBaselineDepth,
         turfWastagePercent: S.settings.turfWastagePercent, turfConsumablesQty: S.settings.turfConsumablesQty,
         wasteGrabM3PerLoad: S.settings.wasteGrabM3PerLoad, pavingPrimerCoverage: S.settings.pavingPrimerCoverage,
+        pavingWastagePercent: S.settings.pavingWastagePercent,
         diggerBlockDays: S.settings.diggerBlockDays, digOutDepthDefaults: S.settings.digOutDepthDefaults,
         blockPavingSurfaceBuildUp: S.settings.blockPavingSurfaceBuildUp, blockPavingWastagePercent: S.settings.blockPavingWastagePercent,
         blockPavingMotBaselineRate: S.settings.blockPavingMotBaselineRate, blockPavingMotBaselineDepth: S.settings.blockPavingMotBaselineDepth,
