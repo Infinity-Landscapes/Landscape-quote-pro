@@ -93,6 +93,7 @@
   .topbar-actions{display:flex;gap:8px;flex:none;}
   /* ---- First-time tour + Help/FAQ ---- */
   #tourLayer{position:fixed;inset:0;z-index:99990;}
+  body.tour-active{padding-bottom:70vh;} /* room to scroll a tall highlight to the top, clear of the card */
   #tourLayer .tour-block{position:absolute;inset:0;}
   #tourLayer.no-spot .tour-block{background:rgba(10,16,6,.55);}
   #tourLayer .tour-spot{position:fixed;border-radius:12px;box-shadow:0 0 0 9999px rgba(10,16,6,.55);outline:3px solid var(--green-300);pointer-events:none;transition:all .18s ease;}
@@ -5207,13 +5208,13 @@ function renderOverview(){
     <div class="card">
       <h2 style="margin:0 0 4px;font-size:18px;">📊 Business overview</h2>
       <div class="hint" style="margin-bottom:14px;">Live totals across every ongoing or finished job's finance tracker.</div>
-      <div class="row" style="gap:10px;flex-wrap:wrap;">
+      <div class="row" style="gap:10px;flex-wrap:wrap;" data-tour="ov-figures">
         <div class="kfig"><div class="l">Total profit</div><div class="v" style="${totalProfit<0?'color:var(--danger);':''}">${gbp(totalProfit)}</div></div>
         <div class="kfig"><div class="l">Owed by customers</div><div class="v">${gbp(totalOwed)}</div></div>
         <div class="kfig"><div class="l">Paid so far</div><div class="v">${gbp(totalPaid)}</div></div>
         <div class="kfig"><div class="l">Overdue</div><div class="v" style="${totalOverdue>0.004?'color:var(--danger);':''}">${gbp(totalOverdue)}</div></div>
       </div>
-      <div class="hint" style="margin-top:14px;">
+      <div class="hint" style="margin-top:14px;" data-tour="ov-insight">
         ${jobs.length===0 ? 'No jobs with a finance tracker yet — this fills in once a quote is accepted.' : (worstCategory ? `${FINANCE_CATEGORY_LABEL[worstCategory][0].toUpperCase()}${FINANCE_CATEGORY_LABEL[worstCategory].slice(1)} overruns most often — at 80%+ of quoted on ${worstCount} of ${jobs.length} job${jobs.length===1?'':'s'}.` : 'No cost category is currently overrunning on 80%+ of its quoted spend.')}
       </div>
     </div>
@@ -5221,7 +5222,7 @@ function renderOverview(){
       <h3 style="margin:0 0 10px;font-size:15px;">Overdue payments</h3>
       ${overdueJobs.map(q=>quoteListItemHtml(q)).join('')}
     </div>` : ''}
-    <div class="card">
+    <div class="card" data-tour="ov-jobs">
       <h3 style="margin:0 0 10px;font-size:15px;">Jobs</h3>
       ${jobs.length===0?`<div class="empty"><div class="em-ic">📊</div>Nothing to show yet.</div>`:jobs.map(q=>quoteListItemHtml(q)).join('')}
     </div>
@@ -5271,11 +5272,11 @@ function renderCalendar(){
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
         <h2 style="margin:0;font-size:18px;">📅 Calendar</h2>
-        <div class="row" style="gap:6px;">
+        <div class="row" style="gap:6px;" data-tour="cal-nav">
           <button class="btn btn-ghost btn-sm" data-action="calPrevMonth">‹</button>
           <button class="btn btn-ghost btn-sm" data-action="calToday">Today</button>
           <button class="btn btn-ghost btn-sm" data-action="calNextMonth">›</button>
-          <button class="btn btn-primary btn-sm" data-action="addCalendarEntry">+ Add entry</button>
+          <button class="btn btn-primary btn-sm" data-action="addCalendarEntry" data-tour="cal-add">+ Add entry</button>
         </div>
       </div>
       <div class="hint" id="calMonthLabel" style="margin-bottom:10px;">${monthLabel} — job bookings and calendar entries. Shaded days aren't part of your working week.</div>
@@ -5283,7 +5284,7 @@ function renderCalendar(){
         <button type="button" class="btn btn-sm ${!teamFilter?'btn-primary':'btn-ghost'}" data-action="calTeamFilter" data-team="">All teams</button>
         ${teams.map(tm=>`<button type="button" class="btn btn-sm ${teamFilter===tm.id?'btn-primary':'btn-ghost'}" data-action="calTeamFilter" data-team="${tm.id}"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${teamColor(tm.id)};margin-right:6px;vertical-align:middle;"></span>${esc(tm.name)}</button>`).join('')}
       </div>` : ''}
-      <div class="cal-grid">
+      <div class="cal-grid" data-tour="cal-grid">
         ${DOW.map(([label])=>`<div class="cal-dow">${label}</div>`).join('')}
         ${cells.map(d=>{
           const dateStr = isoDate(d);
@@ -5308,7 +5309,7 @@ function renderCalendar(){
           </div>`;
         }).join('')}
       </div>
-      <div class="hint" style="margin-top:14px;">Each entry's left edge is coloured by its team. 📋 = a scheduled job, 🧰 = a manual entry marked as a job, 🔒 = blocks that day from other scheduling for that team.</div>
+      <div class="hint" style="margin-top:14px;" data-tour="cal-legend">Each entry's left edge is coloured by its team. 📋 = a scheduled job, 🧰 = a manual entry marked as a job, 🔒 = blocks that day from other scheduling for that team.</div>
     </div>
   `, "calendar");
 }
@@ -7411,8 +7412,8 @@ function render(){
   else if(S.screen==="newquote"){ renderNewQuote(); }
   else if(S.screen==="quotes"){ renderQuotes(); }
   else if(S.screen==="quotedetail"){ renderQuoteDetail(); }
-  else if(S.screen==="calendar"){ renderCalendar(); }
-  else if(S.screen==="overview"){ renderOverview(); }
+  else if(S.screen==="calendar"){ renderCalendar(); maybeSectionTour("calendar"); }
+  else if(S.screen==="overview"){ renderOverview(); maybeSectionTour("overview"); }
   else if(S.screen==="settings"){ renderSettings(); reapplySettingsEdits(); }
   else if(S.screen==="help"){ renderHelp(); }
   else { renderMenu(); }
@@ -7967,7 +7968,7 @@ App.addEventListener("click", async (e)=>{
   switch(action){
     case "account": { if(window.__platform) window.__platform.openAccount(); break; }
     case "help": { e.preventDefault(); leaveSettingsThen(()=>{ S._stDirty = null; goto("help"); }); break; }
-    case "startTour": { startTour(); break; }
+    case "startTour": { startTour(t.getAttribute("data-tour-kind")||"main"); break; }
     case "nav": {
       const n = t.getAttribute("data-nav");
       if(n==="settings" && S.screen==="settings"){ render(); break; }
@@ -9447,13 +9448,13 @@ function tourSteps(){
         <ol><li>Setting up your business</li><li>Building a quote</li><li>How materials and prices are worked out</li><li>Your PDF quote</li><li>Billing and cancelling</li></ol>
         <p>Nothing you see in the tour is saved.</p>`},
     {id:"nav", go:{screen:"menu"}, target:'[data-tour="nav"]', title:"Getting around",
-      body:`<p>These tabs take you to your <b>Menu</b>, a <b>New quote</b>, your <b>Jobs</b>, the <b>Calendar</b>, the <b>Business overview</b> and <b>Materials &amp; settings</b>.</p>`},
+      body:`<p>These tabs take you to your <b>Menu</b>, a <b>New quote</b>, your <b>Jobs</b>, the <b>Calendar</b>, the <b>Business overview</b> and <b>Materials &amp; settings</b>.</p><p>The <b>Calendar</b> and <b>Business overview</b> each have their own short tour the first time you open them.</p>`},
     {id:"company", section:"Account setup", go:{screen:"settings", tab:"company"}, target:'[data-tour="settings-body"]', title:"Your business details",
       body:`<p>Your company name, contact details, logo and the bank details printed on invoices live in <b>Materials &amp; settings → Company details</b>.</p><p>Set them once and they appear on every quote, payment plan and invoice.</p>`},
     {id:"rates", section:"Account setup", go:{screen:"settings", tab:"pricing"}, target:'[data-tour="settings-body"]', title:"Your rates",
       body:`<p><b>Pricing</b> holds your day rate per person, daily running costs, markup, VAT and how much each person gets through in a day for each service.</p><p>Every quote is priced from these, so it's worth checking them before your first real quote.</p>`},
     {id:"materials", section:"Account setup", go:{screen:"settings", tab:"materials"}, target:'[data-tour="settings-body"]', title:"Your materials list",
-      body:`<p>Every material has <b>your</b> price, unit and supplier. Tick "inc VAT" if the price you typed includes VAT — the app takes it off so your markup and VAT are added correctly.</p><p>You can also add or edit materials from inside a quote.</p>`},
+      body:`<p><b>Before your first quote, set up your materials list:</b> enter the price you pay, the unit and the supplier for each material you use. The list starts with common materials but no prices, and a quote can't be finished while a material it needs has no price.</p><p>Tick "inc VAT" if the price you enter includes VAT — the app takes it off so your markup and VAT are added correctly.</p><p>You can also add or edit materials from inside a quote.</p>`},
   ];
   if(plat) steps.push({id:"account", section:"Account setup", go:{screen:"menu"}, target:'[data-action="account"]', title:"Your account",
       body:`<p>The person button opens your <b>account</b>: your plan, the devices signed in, downloading your data and signing out.</p>`});
@@ -9499,10 +9500,47 @@ function tourSteps(){
 
 // Automatic start (first login). Test harnesses that drive the app set window.__NO_AUTO_TOUR__.
 function autoStartTour(){ if(!window.__NO_AUTO_TOUR__) startTour(); }
-function startTour(){
+/* Short tours for the Calendar and Business overview, started the first time each is opened
+   (settings.toursSeen[kind]) and replayable from Help. */
+const SECTION_TOURS = {
+  calendar: {screen:"calendar", name:"Calendar tour", steps:()=>[
+    {id:"cal-intro", go:{screen:"calendar"}, target:'[data-tour="cal-grid"]', title:"Your calendar",
+      body:`<p>Every job you've accepted appears here on the days it's booked in, so you can see the weeks ahead at a glance.</p>
+        <p>When a customer says yes, you set the <b>agreed start date</b> (and team) on the quote. The app then books the job across the working days it needs, skipping days you don't work and days already taken.</p>`},
+    {id:"cal-nav", go:{screen:"calendar"}, target:'[data-tour="cal-nav"]', title:"Moving around",
+      body:`<p>Use <b>‹</b> and <b>›</b> to change month, and <b>Today</b> to jump back to now.</p>`},
+    {id:"cal-add", go:{screen:"calendar"}, target:'[data-tour="cal-add"]', title:"Adding your own entries",
+      body:`<p><b>+ Add entry</b> (or the small <b>+</b> on any day) adds a site visit, a holiday, or a job you didn't quote in the app.</p>
+        <ul><li>Tick <b>This is a job</b> to spread it over several working days.</li><li>Tick <b>Block this day off</b> so no other job gets booked on top of it.</li></ul>`},
+    {id:"cal-legend", go:{screen:"calendar"}, target:'[data-tour="cal-legend"]', title:"Reading the calendar",
+      body:`<ul><li>📋 a job booked from a quote — tap it to open the job</li><li>🧰 an entry you added as a job</li><li>🔒 that day is blocked for other bookings</li></ul>
+        <p>If you run more than one team, each has its own colour and you can show one team at a time. Shaded days aren't in your working week (set in <b>Materials &amp; settings</b>).</p>`},
+  ]},
+  overview: {screen:"overview", name:"Business overview tour", steps:()=>[
+    {id:"ov-figures", go:{screen:"overview"}, target:'[data-tour="ov-figures"]', title:"Your business at a glance",
+      body:`<p>Live totals across every job you've won:</p>
+        <ul><li><b>Total profit</b> — what you've made once actual costs are taken off</li><li><b>Owed by customers</b> — still to be paid on your payment plans</li><li><b>Paid so far</b> — payments you've logged</li><li><b>Overdue</b> — payments past their due date</li></ul>`},
+    {id:"ov-source", go:{screen:"overview"}, target:'[data-tour="ov-figures"]', title:"Where the numbers come from",
+      body:`<p>When a customer accepts a quote, tap <b>Quote accepted — set up payment plan</b> on it. That job then gets its own <b>finance tracker</b>, where you:</p>
+        <ul><li>tick materials off as you order them, with the price you actually paid</li><li>log who was on site each day</li><li>add running costs and hire as the bills come in</li><li>log each payment the customer makes</li></ul>
+        <p>Everything here adds up from those trackers, so it's only as up to date as what you log.</p>`},
+    {id:"ov-insight", go:{screen:"overview"}, target:'[data-tour="ov-insight"]', title:"Spotting overspending",
+      body:`<p>This line tells you which cost — materials, labour or running costs — most often reaches 80% or more of what you quoted, so you can see where your prices might need nudging up.</p>`},
+    {id:"ov-jobs", go:{screen:"overview"}, target:'[data-tour="ov-jobs"]', title:"Your jobs",
+      body:`<p>Every job with a finance tracker is listed here, with overdue payments shown in their own box at the top. Tap a job to open it and its tracker.</p>`},
+  ]},
+};
+function maybeSectionTour(kind){
+  if(S._tour || window.__NO_AUTO_TOUR__ || !S.authed || !S.settings) return;
+  if((S.settings.toursSeen||{})[kind]) return;
+  setTimeout(()=>{ if(!S._tour && S.screen===SECTION_TOURS[kind].screen) startTour(kind); }, 0);
+}
+function startTour(kind){
   if(S._tour) return;
   if(S._modal){ S._modal = null; }
-  S._tour = {i:0, steps: tourSteps(), stash:{draft:S.draft, savedDraft:S._savedDraft, editingQuoteId:S.editingQuoteId, settingsTab:S._settingsTab, openQuoteId:S.openQuoteId}, confirmSkip:false};
+  kind = SECTION_TOURS[kind] ? kind : "main";
+  document.body.classList.add("tour-active");
+  S._tour = {kind, i:0, steps: kind==="main" ? tourSteps() : SECTION_TOURS[kind].steps(), stash:{draft:S.draft, savedDraft:S._savedDraft, editingQuoteId:S.editingQuoteId, settingsTab:S._settingsTab, openQuoteId:S.openQuoteId}, confirmSkip:false};
   tourShow();
 }
 function tourEnsureSampleDraft(){
@@ -9600,7 +9638,7 @@ function tourDrawTip(){
   if(t.confirmSkip){
     tip.innerHTML = `<div class="tour-head"><span class="tour-count">Skip the tour?</span></div>
       <h3 id="tourTitle">Are you sure you want to skip?</h3>
-      <div class="tour-body"><p>You can replay it any time: tap <b>?</b> (Help) at the top of the screen, then <b>Replay the tutorial</b>. Help also has answers to common questions.</p></div>
+      <div class="tour-body"><p>You can replay it any time: tap <b>?</b> (Help) at the top of the screen, then <b>${t.kind==="main" ? 'Replay the tutorial' : esc(SECTION_TOURS[t.kind].name)}</b>. Help also has answers to common questions.</p></div>
       <div class="tour-btns"><button class="btn btn-ghost" data-tour-act="keep">Keep going</button><button class="btn btn-primary" data-tour-act="confirmSkip">Yes, skip</button></div>`;
   } else {
     tip.innerHTML = `<div class="tour-head"><span class="tour-count">${step.section?esc(step.section)+' · ':''}${t.i+1} of ${t.steps.length}</span>
@@ -9609,7 +9647,7 @@ function tourDrawTip(){
       <div class="tour-body">${step.body}</div>
       <div class="tour-dots">${t.steps.map((_,i)=>`<span class="${i===t.i?'on':''}"></span>`).join('')}</div>
       <div class="tour-btns">${t.i>0?'<button class="btn btn-ghost" data-tour-act="back">Back</button>':'<span></span>'}
-        <button class="btn btn-primary" data-tour-act="next">${t.i===0?'Start the tour':last?'Finish':'Next'}</button></div>`;
+        <button class="btn btn-primary" data-tour-act="next">${t.i===0&&t.kind==="main"?'Start the tour':last?'Finish':'Next'}</button></div>`;
   }
   const primary = tip.querySelector(".btn-primary"); if(primary) primary.focus({preventScroll:true});
   tourPlace();
@@ -9658,10 +9696,19 @@ async function endTour(finished){
   const t = S._tour; if(!t) return;
   clearInterval(t.timer);
   const layer = document.getElementById("tourLayer"); if(layer) layer.remove();
+  document.body.classList.remove("tour-active");
   S.quotes = (S.quotes||[]).filter(x=>x.id!=="__tour__");
   S.draft = t.stash.draft; S._savedDraft = t.stash.savedDraft; S.editingQuoteId = t.stash.editingQuoteId;
   S._settingsTab = t.stash.settingsTab; S.openQuoteId = t.stash.openQuoteId;
   S._tour = null;
+  if(t.kind!=="main"){
+    // A section tour leaves you on its screen; seen once (finished or skipped) it won't start again.
+    const seen = Object.assign({}, S.settings.toursSeen||{}, {[t.kind]: finished ? "finished" : "skipped"});
+    S.settings.toursSeen = seen;
+    S.screen = SECTION_TOURS[t.kind].screen; render(); window.scrollTo(0,0);
+    try{ await saveSettings({toursSeen: seen}); }catch(e){}
+    return;
+  }
   S.screen = "menu"; render(); window.scrollTo(0,0);
   if(S.settings.tutorialPending || S.settings.tutorialDone!==true){
     S.settings.tutorialPending = false; S.settings.tutorialDone = true;
@@ -9697,6 +9744,13 @@ function helpFaq(){
       ["Where's my PDF?", "Open the quote from <b>Jobs</b> and tap <b>Download PDF</b>, <b>Print / save as PDF</b>, or <b>Email quote to customer</b>."],
       ["How do I follow up a quote?", "Quotes that need chasing are flagged on the menu and in Jobs, with buttons to call, text or email the customer."],
     ]],
+    ["Jobs, calendar and money", [
+      ["A customer said yes — what now?", "Open the quote and tap <b>Quote accepted — set up payment plan</b>. Pick the agreed start date (and team), and the app makes the payment plan, books the job into your <b>Calendar</b> and starts the job's finance tracker."],
+      ["How do I add a holiday, site visit or other booking?", "<b>Calendar → + Add entry</b>, or the small <b>+</b> on any day. Tick <b>Block this day off</b> so no job gets booked on top of it."],
+      ["How do I move a job to different dates?", "Open the job and use <b>Edit schedule</b>. It re-books from the new start date using only your working days, skipping days that are already blocked."],
+      ["What does the Business overview show?", "Profit, money owed, money paid and anything overdue, added up from every job's finance tracker. Log materials, labour, running costs and payments on each job to keep it accurate."],
+      ["How do I record a payment from a customer?", "Open the job and, in its finance tracker, tap <b>+ Log payment received</b>."],
+    ]],
     ["Billing and plans", [
       ["Is there a free trial?", "Yes — 7 days with everything unlocked."],
       ["What do the plans cost?", "Solo £35.99, Team £54.99 and Business £83.99 a month in the App Store and Google Play (yearly saves two months). Every plan has every feature; they differ in how many devices can be signed in."],
@@ -9717,6 +9771,10 @@ function renderHelp(){
       <h2 style="margin:0 0 6px;font-size:19px;">Help</h2>
       <div class="hint" style="margin-bottom:14px;">New here, or want a refresher? The tutorial walks you through the app on the real screens in about 2 minutes.</div>
       <button class="btn btn-primary" data-action="startTour">▶ Replay the tutorial</button>
+      <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <button class="btn btn-ghost btn-sm" data-action="startTour" data-tour-kind="calendar">📅 Calendar tour</button>
+        <button class="btn btn-ghost btn-sm" data-action="startTour" data-tour-kind="overview">📊 Business overview tour</button>
+      </div>
     </div>
     ${helpFaq().map(([title, items])=>`
     <div class="card">
