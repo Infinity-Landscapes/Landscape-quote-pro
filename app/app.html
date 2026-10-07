@@ -5895,6 +5895,77 @@ function shortQuoteEmailBody(q){
    composed email in our own dialog with copy buttons and a best-effort
    mailto: link, so there's always a path that works even in the worst case
    (the viewer selects the text by hand). */
+/* Own website (outside Claude): the page can hand the PDF itself to the device's share menu
+   (Mail, Gmail, Outlook…), so a new email opens with the PDF already attached. Browsers that
+   can't share files (most desktops) download the PDF and open a new email with the customer,
+   subject and message filled in, ready for the PDF to be attached. Nothing is ever sent. */
+function liveSite(){ return !!window.__platform; }
+function canShareFiles(){
+  try{ return !!(navigator.share && navigator.canShare && navigator.canShare({files:[new File([new Blob(['%PDF'])], 'quote.pdf', {type:'application/pdf'})]})); }
+  catch(e){ return false; }
+}
+function pdfFileNameFor(q, suffix){ return `${(q.quoteNumber||'quote').replace(/[^\w-]+/g,'_')}${suffix||''}.pdf`; }
+function mailtoFor(to, subject, body){ return `mailto:${String(to||'').trim()}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; }
+function webmailUrl(via, m){
+  const to = encodeURIComponent(String(m.to||'').trim()), su = encodeURIComponent(m.subject||''), bd = encodeURIComponent(m.body||'');
+  if(via==="gmail") return `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${su}&body=${bd}`;
+  if(via==="outlook") return `https://outlook.live.com/mail/0/deeplink/compose?to=${to}&subject=${su}&body=${bd}`;
+  return m.mailto;
+}
+// Both run straight from the tap (no waiting first), so the browser lets them through.
+function saveFileNow(file){
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a'); a.href = url; a.download = file.name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+function openUrlNow(url){
+  const a = document.createElement('a'); a.href = url;
+  if(!/^mailto:/i.test(url)){ a.target = '_blank'; a.rel = 'noopener'; }
+  document.body.appendChild(a); a.click(); a.remove();
+}
+async function openLiveEmail(m){
+  S._modal = m;
+  if(!m.pdfEl){ render(); return; }
+  m.pdfState = "building"; m.pdfFile = null; render();
+  try{
+    const blob = await buildEmailPdfBlob(m.pdfEl, 10*1024*1024);
+    m.pdfFile = new File([blob], m.pdfName, {type:'application/pdf'});
+    m.pdfState = "ready";
+  }catch(e){ m.pdfState = "error"; m.pdfErr = (e && e.message) || ''; }
+  if(S._modal===m) render();
+}
+async function logEmailCreated(m){
+  const q = m.qid && (S.quotes||[]).find(x=>x.id===m.qid);
+  if(!q) return;
+  if(!q.activityLog) q.activityLog = [];
+  q.activityLog.unshift({id:uid(), text:`Email created${m.pdfName?` with ${m.pdfName} attached`:''}`, at:new Date().toISOString()});
+  await saveQuote(q);
+}
+function liveEmailBlock(m){
+  const links = `<div class="row" style="gap:6px;margin-top:6px;">
+      <button class="btn btn-ghost btn-sm" data-action="emailDownloadOpen" data-via="gmail" style="flex:1;" ${m.pdfEl && m.pdfState!=="ready"?'disabled':''}>Use Gmail</button>
+      <button class="btn btn-ghost btn-sm" data-action="emailDownloadOpen" data-via="outlook" style="flex:1;" ${m.pdfEl && m.pdfState!=="ready"?'disabled':''}>Use Outlook</button>
+    </div>`;
+  if(!m.pdfEl) return `<div class="hint" style="margin-bottom:12px;">Check the details, then open a new email with them filled in. Nothing is sent until you press Send.</div>
+    <button class="btn btn-primary btn-block" data-action="emailDownloadOpen" data-via="mail">✉ Open email app</button>
+    ${links}<div style="height:12px;"></div>`;
+  const ready = m.pdfState==="ready";
+  const share = canShareFiles() && !m.shareFailed;
+  const status = m.pdfState==="building" ? `<div class="hint" style="margin-bottom:10px;">Preparing ${esc(m.pdfName)}…</div>`
+    : m.pdfState==="error" ? `<div class="msg msg-err">Couldn't make the PDF (${esc(m.pdfErr||'unknown error')}). Use 'Print / save as PDF' on the quote, then attach it to an email.</div>` : '';
+  return `<div class="hint" style="margin-bottom:10px;">Creates a new email with <b>${esc(m.pdfName)}</b> attached. Nothing is sent until you press Send in your email app.</div>
+    ${status}
+    ${m.shared ? `<div class="msg msg-ok">Email created — check it in your email app and press Send.</div>` : ''}
+    ${m.opened ? `<div class="msg msg-ok">${esc(m.pdfName)} downloaded and a new email opened — attach the PDF from your Downloads folder, then press Send.</div>` : ''}
+    ${m.shareError ? `<div class="msg msg-err">${esc(m.shareError)}</div>` : ''}
+    ${share ? `<button class="btn btn-primary btn-block" data-action="emailShare" ${ready?'':'disabled'}>📎 Create email with PDF attached</button>
+        <div class="hint" style="margin:6px 0 8px;">Choose Mail, Gmail or Outlook. The customer's address is copied — paste it into "To" if it's empty.</div>
+        <button class="btn btn-ghost btn-sm btn-block" data-action="emailDownloadOpen" data-via="mail" ${ready?'':'disabled'}>Or download the PDF and open your email app</button>`
+      : `<button class="btn btn-primary btn-block" data-action="emailDownloadOpen" data-via="mail" ${ready?'':'disabled'}>📎 Download PDF &amp; open email</button>
+        <div class="hint" style="margin:6px 0 2px;">The new email has the customer, subject and message filled in — attach ${esc(m.pdfName)} from your Downloads folder, then press Send. Use webmail instead:</div>
+        ${links}`}
+    <div style="height:12px;"></div>`;
+}
 async function sendQuoteEmail(q){
   const email = q.customer.email;
   const subject = `Your quote from ${S.settings.company.name} — ${q.quoteNumber}`;
@@ -5908,6 +5979,11 @@ async function sendQuoteEmail(q){
     // Opening the email doesn't mark the quote as sent — the dialog asks once it has really gone.
     S._modal = {type:"email", to:email, subject, body:b, mailto:mt, pdfNote:"", gmail:true, qid:q.id};
     render();
+    return;
+  }
+  if(liveSite()){
+    const b = shortQuoteEmailBody(q);
+    await openLiveEmail({type:"email", live:true, to:email, subject, body:b, mailto:mailtoFor(email, subject, b), pdfEl:'letterCapture', pdfName:pdfFileNameFor(q), qid:q.id});
     return;
   }
   if(short){
@@ -6210,6 +6286,7 @@ async function sendPaymentPlanEmail(q){
   const subject = `Payment plan for your quote ${q.quoteNumber} — ${S.settings.company.name}`;
   const body = paymentPlanPlainText(q);
   const mailto = `mailto:${email.trim()}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  if(liveSite()){ await openLiveEmail({type:"email", live:true, to:email, subject, body, mailto, pdfEl:'paymentCapture', pdfName:pdfFileNameFor(q,'_payment_plan'), qid:q.id}); return; }
   S._modal = {type:"email", to:email, subject, body, mailto, pdfNote:""};
   render();
 }
@@ -8041,14 +8118,15 @@ function modalHtml(){
   if(m.type==="email"){
     return `<div class="modal-overlay" data-action="modalCancel">
       <div class="modal-box" data-action="modalStop" style="max-width:480px;">
-        <div style="font-weight:800;font-size:15px;margin-bottom:4px;">Email ready to send</div>
-        ${m.gmail ? `<div class="hint" style="margin-bottom:10px;">Puts this email in your Gmail <b>Drafts</b> with the quote letter attached as a PDF. Nothing is sent — open Gmail, check it and press Send yourself.</div>
+        <div style="font-weight:800;font-size:15px;margin-bottom:4px;">${m.live?'Email the customer':'Email ready to send'}</div>
+        ${m.live ? liveEmailBlock(m) : m.gmail ? `<div class="hint" style="margin-bottom:10px;">Puts this email in your Gmail <b>Drafts</b> with the quote letter attached as a PDF. Nothing is sent — open Gmail, check it and press Send yourself.</div>
           ${m.gmailDone ? `<div class="msg msg-ok">Draft saved in your Gmail with ${esc(m.gmailFile||'the PDF')} attached.${m.gmailUrl?` <a href="${esc(m.gmailUrl)}" target="_blank" rel="noopener">Open it in Gmail</a>`:' Open Gmail → Drafts to check and send it.'}</div>`
             : m.gmailError ? `<div class="msg msg-err">${esc(m.gmailError)}</div>` : ''}
           ${m.gmailDone ? '' : `<button class="btn btn-primary btn-block" data-action="gmailDraft" ${m.gmailBusy?'disabled':''} style="margin-bottom:14px;">${m.gmailBusy?'Creating draft…':'📎 Create Gmail draft with PDF attached'}</button>`}
           <div class="hint" style="margin:4px 0 10px;">Or copy the details into any email app and attach the PDF yourself (Download PDF on the quote):</div>`
         : `<div class="hint" style="margin-bottom:14px;">This page can't open your email app directly — copy the details below into a new email, or try the link at the bottom.</div>`}
         ${m.pdfNote?`<div class="msg msg-ok">${esc(m.pdfNote)}</div>`:''}
+        ${m.live?`<div class="hint" style="margin-bottom:6px;"><b>The email</b> — copy any part if you need it:</div>`:''}
         <div class="field">
           <label>To</label>
           <div class="row" style="gap:6px;">
@@ -8068,7 +8146,7 @@ function modalHtml(){
           <textarea readonly rows="6" onfocus="this.select()" style="width:100%;">${esc(m.body)}</textarea>
           <button class="btn btn-ghost btn-sm" data-action="modalCopy" data-copy="body" style="margin-top:6px;">Copy message</button>
         </div>
-        <a href="${esc(m.mailto)}" class="btn ${m.gmail?'btn-ghost':'btn-primary'} btn-block" style="margin-top:6px;text-decoration:none;">✉ Try opening your email app</a>
+        ${m.live ? '' : `<a href="${esc(m.mailto)}" class="btn ${m.gmail?'btn-ghost':'btn-primary'} btn-block" style="margin-top:6px;text-decoration:none;">✉ Try opening your email app</a>`}
         ${(()=>{ const eq = (S.quotes||[]).find(x=>x.id===m.qid);
           if(m.markedSent) return `<div class="msg msg-ok" style="margin-top:12px;">Marked as sent to the customer.</div>`;
           if(!eq || eq.status!=="draft") return '';
@@ -8677,6 +8755,35 @@ App.addEventListener("click", async (e)=>{
         m.gmailError = e && e.code==="pdf" ? "Couldn't make the PDF (" + (e.message||"unknown error") + "). Try 'Print / save as PDF' on the quote instead." : gmailErrorText(e);
       }
       m.gmailBusy = false;
+      if(S._modal===m) render();
+      break;
+    }
+    case "emailShare": {
+      const m = S._modal;
+      if(!m || m.type!=="email" || !m.pdfFile) break;
+      // copy the address first (the share menu can't fill in "To"), then open the menu straight away
+      try{ if(navigator.clipboard && m.to) navigator.clipboard.writeText(String(m.to).trim()).catch(()=>{}); }catch(e){}
+      try{
+        await navigator.share({files:[m.pdfFile], title:m.subject, text:m.body});
+        m.shared = true; m.shareError = "";
+        await logEmailCreated(m);
+      }catch(e){
+        if(!(e && e.name==="AbortError")){
+          m.shareFailed = true;
+          m.shareError = "This browser couldn't open the share menu — download the PDF and attach it to the email instead.";
+        }
+      }
+      if(S._modal===m) render();
+      break;
+    }
+    case "emailDownloadOpen": {
+      const m = S._modal;
+      if(!m || m.type!=="email") break;
+      if(m.pdfEl && !m.pdfFile) break;
+      const via = t.getAttribute("data-via") || "mail";
+      if(m.pdfFile) saveFileNow(m.pdfFile);
+      openUrlNow(via==="mail" ? m.mailto : webmailUrl(via, m));
+      if(m.pdfFile){ m.opened = true; m.shareError = ""; await logEmailCreated(m); }
       if(S._modal===m) render();
       break;
     }
@@ -9363,7 +9470,7 @@ App.addEventListener("click", async (e)=>{
         const subject = `Following up: your quote ${q.quoteNumber} from ${S.settings.company.name}`;
         const body = chaseMessageText(q);
         const mailto = `mailto:${q.customer.email.trim()}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-        S._modal = {type:"email", to:q.customer.email, subject, body, mailto, pdfNote:""};
+        S._modal = {type:"email", to:q.customer.email, subject, body, mailto, pdfNote:"", live:liveSite()};
       }
       // Call/Text: this page runs inside claude.ai, which can block it from opening the phone or
       // Messages app directly — so show the number (and message) to copy, plus a link to try.
