@@ -52,7 +52,7 @@ const fs = require('fs');
   check('blocker: select a deck board', /Select a deck board for Composite Decking/.test(t));
   check('blocker: select a decking screw', /Select a decking screw product/.test(t));
 
-  await addVia('select[data-opt="board"]', {name:'Test board', price:20, lengthMm:3600, widthMm:140});
+  await addVia('[data-row="0"] select[data-mf="boardType"]', {name:'Test board', price:20, lengthMm:3600, widthMm:140});
   check('screw add dialog prefills 100 screws per box', (await (async()=>{ await page.selectOption('select[data-opt="screws"]','__add_other__'); await page.waitForTimeout(200); return v('#mf_screwsPerBox'); })())==='100');
   await fillModal({name:'Screws', price:6.99});
   t = await txt();
@@ -109,7 +109,7 @@ const fs = require('fs');
   check('consumables quantity 3', t.includes('Consumables3'));
 
   // £0 board blocks finalising
-  await page.selectOption('select[data-opt="board"]','__add_other__'); await page.waitForTimeout(200);
+  await page.selectOption('[data-row="0"] select[data-mf="boardType"]','__add_other__'); await page.waitForTimeout(200);
   await fillModal({name:'Free board', price:0, lengthMm:3600, widthMm:140});
   check('blocker: £0 board price', /deck board price can't be £0/.test(await txt()));
   for (let i=0;i<6 && !(await page.$('#quoteBlockers')); i++){ const b = await page.$('button[data-action="wizNext"]'); if(!b) break; await b.click(); await page.waitForTimeout(300); }

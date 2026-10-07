@@ -38,7 +38,7 @@ const fs = require('fs');
   await page.fill('[data-row="1"] input[data-mf="digOutDepth"]','100'); await settle();
   let t = await txt();
   check('blockers: turf, grano, infill', /Select an artificial turf/.test(t) && /Select a grano dust/.test(t) && /Select an infill sand/.test(t));
-  await addVia('select[data-opt="turfProduct"]', {name:'AT 35mm', price:18});
+  await addVia('[data-row="0"] select[data-mf="turfType"]', {name:'AT 35mm', price:18});
   await addVia('select[data-opt="grano"]', {name:'Grano', price:50});
   await addVia('select[data-opt="infill"]', {name:'Kiln sand', price:5});
   t = await txt();

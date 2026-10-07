@@ -226,6 +226,10 @@
   .meas-row.four{grid-template-columns:1.3fr 0.8fr 0.8fr 0.9fr auto;}
   .meas-row.four.chk{grid-template-columns:1.3fr 0.8fr 0.8fr 0.9fr 86px auto;}
   .meas-row.four.chk2{grid-template-columns:1.2fr 0.75fr 0.75fr 0.75fr 80px 104px auto;}
+  .meas-row.sel{grid-template-columns:1.3fr 0.75fr 0.75fr 1.4fr auto;}
+  .meas-row.two.sel{grid-template-columns:1.4fr 0.8fr 1.4fr auto;}
+  .meas-row.four.sel{grid-template-columns:1.1fr 0.65fr 0.65fr 0.75fr 1.35fr auto;}
+  .meas-row.six.sel{grid-template-columns:1fr repeat(5,minmax(0,0.7fr)) 1.3fr auto;}
   .meas-row .row-check{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;height:42px;cursor:pointer;white-space:nowrap;}
   .meas-row .row-check input{width:18px;height:18px;margin:0;flex:none;accent-color:var(--primary);}
   .meas-row.six{grid-template-columns:1.1fr repeat(5,minmax(0,0.8fr)) auto;gap:6px;}
@@ -268,7 +272,9 @@
   .letter-head.lh-inf img.lh-tag{height:auto;width:76%;max-width:471px;margin-top:6px;}
   .letter-rule{height:4px;background:linear-gradient(90deg,var(--brand-500),var(--brand-700));}
   .letter-name{font-family:'Poppins';font-weight:800;font-size:24px;color:var(--brand-700);line-height:1.2;}
-  .letter-foot-band{margin-top:20px;padding:14px 34px;background:var(--brand-700);color:#fff;font-size:12px;line-height:1.6;}
+  .letter-foot-band{margin-top:20px;padding:16px 34px;min-height:22px;background:var(--brand-700);color:#fff;font-size:15px;font-weight:700;line-height:1.4;display:flex;flex-wrap:wrap;gap:8px 36px;justify-content:center;align-items:center;}
+  .letter-foot-band .lf-item{display:inline-flex;align-items:center;gap:8px;}
+  .letter-foot-band svg{flex:none;}
   .letter-foot-band b{font-size:13px;}
   .letter-body{padding:30px 34px 10px;font-size:14.5px;line-height:1.45;color:#1f1f1f;font-family:Calibri,Carlito,'Manrope',sans-serif;}
   .letter-body p{margin:0 0 11px;}
@@ -329,10 +335,9 @@
   .lpage .lph-inf img.lh-tag{left:237px;top:39px;width:471px;height:102px;}
   .lpage .lpage-head:not(.lph-inf) img.lh-own{left:96px;top:40px;max-width:360px;max-height:96px;width:auto;height:auto;}
   .lpage .lpage-head:not(.lph-inf) .letter-name{position:absolute;left:96px;top:60px;}
-  .lpage .lpage-head:not(.lph-inf)::after{content:'';position:absolute;left:96px;right:96px;top:156px;height:3px;background:var(--lt-accent);}
   .lpage .lpage-foot{position:absolute;left:0;right:0;bottom:0;}
   .lpage .lpage-foot .letter-foot-img{width:794px;height:128px;display:block;}
-  .lpage .lpage-foot .letter-foot-band{margin:0;padding:14px 96px;}
+  .lpage .lpage-foot .letter-foot-band{margin:0;padding:22px 96px;font-size:16px;}
   /* The PDF copy (see captureForPdf): a plain A4 page, never the phone layout. */
   .pdf-capture{width:760px !important;max-width:none !important;margin:0 !important;border:0 !important;border-radius:0 !important;box-shadow:none !important;}
   .pdf-capture .letter-head{padding:26px 34px 18px !important;}
@@ -355,7 +360,7 @@
 
   .two-col{display:grid;grid-template-columns:1.3fr .8fr;gap:16px;align-items:start;}
   .two-col > *{min-width:0;}
-  @media (max-width:760px){ .two-col{grid-template-columns:1fr;} .meas-row{grid-template-columns:1fr;} .meas-row.two{grid-template-columns:1fr;} .meas-row.four{grid-template-columns:1fr;} .meas-row.four.chk,.meas-row.four.chk2{grid-template-columns:1fr;} .meas-row .row-check{height:auto;} .meas-row.six{grid-template-columns:1fr;} .meas-head{display:none;} }
+  @media (max-width:760px){ .two-col{grid-template-columns:1fr;} .meas-row{grid-template-columns:1fr;} .meas-row.two{grid-template-columns:1fr;} .meas-row.four{grid-template-columns:1fr;} .meas-row.four.chk,.meas-row.four.chk2,.meas-row.sel,.meas-row.two.sel,.meas-row.four.sel,.meas-row.six.sel{grid-template-columns:1fr;} .meas-row .row-check{height:auto;} .meas-row.six{grid-template-columns:1fr;} .meas-head{display:none;} }
 
   /* ---------- mobile ---------- */
   @media (max-width:640px){
@@ -728,6 +733,7 @@ function rowColsFor(def, options){
 const SERVICES = {
 
 paving: { label:"Paving", group:"Hard landscaping", unitLabel:"Area", cols:["desc","width","length"],
+  rowSelects:[{field:"slabType", label:"Slab type", optKey:"style", group:"paving", placeholder:"Select a slab…"}],
   colLabels:["Description","Width (m)","Length (m)"],
   options:[
     // October 2026: slab type is a normal `customizable` materials-list pick (like gravel/
@@ -819,11 +825,15 @@ paving: { label:"Paving", group:"Hard landscaping", unitLabel:"Area", cols:["des
 
 gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Area", cols:["desc","width","length","digOutDepth"],
   colLabels:["Description","Width (m)","Length (m)","Dig-out depth (mm)"],
+  // Each area picks its own gravel type (materials-list pick, priced per tonne). A new line starts
+  // with the type of the line above. Quotes saved before this used one type for the whole job
+  // (options.style) — any area without its own type still uses that.
+  rowSelects:[{field:"gravelType", label:"Gravel type", group:"gravel", placeholder:"Select a gravel…", optKey:"style", native:true}],
   options:[
     // October 2026 rework: gravel type is a tenant-added materials-list pick priced per tonne (no
     // built-in styles or default); dig-out depth is per row; edging is either a tenant-built edging
     // style or "Steel edging", which adds the separate Steel Edging service for that run.
-    {key:"style",label:"Gravel type",type:"select",options:[],default:"",customizable:"gravel",
+    {key:"style",label:"Gravel type",type:"select",options:[],default:"",customizable:"gravel",showIf:()=>false,
       hint:"Pick a gravel you've already added, or add a new one (price per tonne) — it's saved to your materials for future quotes too."},
     {key:"gravelDepth",label:"Gravel depth (mm)",type:"number",default:50,
       hint:"Depth of the finished gravel layer. The Type 1 MOT depth on each row is that row's dig-out depth minus this."},
@@ -847,22 +857,23 @@ gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Are
     // A row saved before the rework has no digOutDepth of its own — fall back to that job's old
     // single dig-out option (or 150).
     const legacyDepth = Number(opt.digOutDepth)>0 ? Number(opt.digOutDepth) : 150;
-    let area=0, gravelT=0, motT=0, volumeM3=0; const depths=[];
-    rows.forEach(r=>{
+    let area=0, motT=0, volumeM3=0; const depths=[];
+    // Gravel tonnes per type (each area has its own type), each total rounded up once.
+    const gravelByType = {}; const typeOrder = [];
+    rows.forEach((r,ri)=>{
       const wm = Number(r.width)||0, lm = Number(r.length)||0;
       if(!(wm*lm>0)) return;
       const a = r6(wm*lm);
       const d = r.digOutDepth===undefined ? legacyDepth : (Number(r.digOutDepth)||0);
       area += a; depths.push(d); volumeM3 += a*(d/1000);
-      gravelT += (a/cov)*(gravelDepth/base);
+      const type = r.gravelType || opt.style || '';
+      if(!type) blockers.push(`Select a gravel type for line ${ri+1}${(r.desc||'').trim()?` (${r.desc.trim()})`:''}`);
+      else { if(!(type in gravelByType)){ gravelByType[type] = 0; typeOrder.push(type); } gravelByType[type] += (a/cov)*(gravelDepth/base); }
       motT += (a/motCov)*(Math.max(0, d-gravelDepth)/motBase);
     });
     const hasArea = area>0;
     if(depths.some(d=>gravelDepth>=d)) blockers.push(`Gravel depth (${gravelDepth}mm) must be less than every row's dig-out depth — there's no room left for the Type 1 MOT`);
-    if(hasArea){
-      if(!opt.style) blockers.push("Select a gravel type");
-      else if(!(ctx.price(opt.style)>0)) blockers.push("The gravel price can't be £0");
-    }
+    if(hasArea) typeOrder.forEach(t=>{ if(!(ctx.price(t)>0)) blockers.push(`The price of "${t}" can't be £0`); });
     // Edging: a tenant-built style is priced here; Steel edging is priced by its own section.
     const steel = !!opt.edging && opt.edgingStyle===GRAVEL_STEEL_EDGING;
     const legacyEdging = !!opt.edging && opt.edgingStyle===undefined && opt.edgingType!==undefined;
@@ -883,7 +894,7 @@ gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Are
     const mats = [
       ["Geotextile membrane", 2*area],
       ["Type 1 MOT", ru(motT)],
-      [opt.style||'', opt.style ? ru(gravelT) : 0],
+      ...typeOrder.map(t=>[t, ru(gravelByType[t])]),
       edgingLine,
       ["Consumables", hasArea ? (ctx.gravelConsumablesQty!=null ? Number(ctx.gravelConsumablesQty) : 1) : 0],
     ];
@@ -1008,6 +1019,7 @@ turf: { label:"Turf", group:"Planting & beds", unitLabel:"Area", cols:["desc","w
   }},
 
 blockpaving: { label:"Block paving", group:"Hard landscaping", unitLabel:"Area", cols:["desc","width","length","digOutDepth"],
+  rowSelects:[{field:"blockType", label:"Block style", optKey:"style", group:"block", placeholder:"Select a block…"}],
   colLabels:["Description","Width (m)","Length (m)","Dig-out depth (mm)"],
   options:[
     // October 2026: style is a normal `customizable` materials-list pick now, like Paving's slab
@@ -1152,6 +1164,7 @@ resinbound: { label:"Resin bound", group:"Hard landscaping", unitLabel:"Area", c
   }},
 
 artificialturf: { label:"Artificial turf", group:"Planting & beds", unitLabel:"Area", cols:["desc","width","length","digOutDepth"],
+  rowSelects:[{field:"turfType", label:"Artificial turf (£ per m²)", optKey:"turfProduct", source:"atTurf", placeholder:"Select a turf…"}],
   colLabels:["Description","Width (m)","Length (m)","Dig-out depth (mm)"],
   options:[
     // October 2026 rework: per-row dig-out depth (default 75mm); tenant-built turf (per m²),
@@ -1341,6 +1354,7 @@ concretebase: { label:"Concrete base", group:"Hard landscaping", unitLabel:"Area
   }},
 
 brickwall: { label:"Block Retaining Wall", group:"Walls", unitLabel:"Area", cols:["desc","length","height","footingLength","footingWidth","footingDepth"],
+  rowSelects:[{field:"faceType", label:"Face skin product", optKey:"faceProduct", source:"brickwallFaceProducts", placeholder:"Select a face product…", showIf:o=>!!o.faceSkin}],
   colLabels:["Description","Length (m)","Height (m)","Footing length (m)","Footing width (mm)","Footing depth (mm)"],
   // Footing length follows the row's wall length until overwritten (see the data-mf listener).
   rowDefaults:{footingWidth:450, footingDepth:300},
@@ -1461,6 +1475,7 @@ brickwall: { label:"Block Retaining Wall", group:"Walls", unitLabel:"Area", cols
   }},
 
 sleeperwall: { label:"Sleeper retaining wall", group:"Walls", unitLabel:"Area", cols:["desc","length","height"],
+  rowSelects:[{field:"sleeperType", label:"Sleeper", optKey:"sleeper", source:"sleeperProducts", placeholder:"Select a sleeper…"}],
   colLabels:["Description","Length (m)","Height (m)"],
   options:[
     // October 2026: sleepers and screws are tenant-built products with no default. The post is the
@@ -1742,6 +1757,7 @@ decking: { label:"Decking", group:"Hard landscaping", unitLabel:"Area", cols:["d
    ========================================================================= */
 
 compositedecking: { label:"Composite Decking", group:"Hard landscaping", unitLabel:"Area", cols:["desc","width","length"],
+  rowSelects:[{field:"boardType", label:"Deck board", optKey:"board", source:"compositeDeckBoards", placeholder:"Select a board…"}],
   colLabels:["Description","Width (m)","Length (m)"],
   // When "Dig out necessary?" is ticked every measurement row gains its own "Dig-out depth (mm)"
   // column (see rowColsFor/measRowHtml) — it's a per-row field, not a job-level option.
@@ -1867,6 +1883,7 @@ compositedecking: { label:"Composite Decking", group:"Hard landscaping", unitLab
   }},
 
 timberdecking: { label:"Timber Decking", group:"Hard landscaping", unitLabel:"Area", cols:["desc","width","length"],
+  rowSelects:[{field:"boardType", label:"Deck board", optKey:"board", source:"timberDeckBoards", placeholder:"Select a board…"}],
   colLabels:["Description","Width (m)","Length (m)"],
   // Per-row "Dig-out depth (mm)" column appears while "Dig out necessary?" is ticked — see rowColsFor.
   depthCol:"digOut",
@@ -2210,6 +2227,7 @@ waterfeatures: { label:"Water Features", group:"Features", unitLabel:"Count", co
   }},
 
 steeledging: { label:"Steel Edging", group:"Hard landscaping", unitLabel:"Length", cols:["desc","length"],
+  rowSelects:[{field:"steelType", label:"Steel edging (£ per metre)", optKey:"steelProduct", source:"steelEdgingProducts", placeholder:"Select steel edging…"}],
   colLabels:["Description","Length (m)"],
   options:[
     // October 2026 rework: the steel is a tenant-built product priced per METRE (thickness,
@@ -2363,7 +2381,13 @@ const SERVICE_COPY = {
     const dig = mn===mx ? `to a depth of ${mn}mm` : `to depths of ${mn}–${mx}mm`;
     const m1 = Math.max(0, mn-gd), m2 = Math.max(0, mx-gd);
     const mot = m1===m2 ? `${m1}mm` : `${m1}–${m2}mm`;
-    return [`Area excavated ${dig} and the subsoil compacted.`, o.edging ? `Edge restraints installed around the perimeter.` : ``, `Geotextile membrane laid to the excavation.`, `A ${mot} compacted Type 1 MOT sub-base installed.`, `A second geotextile membrane laid over the sub-base to prevent migration.`, `Finished with ${gd}mm of ${esc(o.style)}.`].filter(Boolean);
+    // Finish: one gravel for every area, or each area's own gravel by name.
+    const areas = (s.rows||[]).filter(r=>(Number(r.width)||0)*(Number(r.length)||0)>0);
+    const typeOf = r => r.gravelType || o.style || '';
+    const types = [...new Set(areas.map(typeOf).filter(Boolean))];
+    const finish = types.length<=1 ? `Finished with ${gd}mm of ${esc(types[0]||o.style||'')}.`
+      : `Finished with ${gd}mm of gravel: ${areas.map((r,i)=>`${esc((r.desc||'').trim()||('area '+(i+1)))} in ${esc(typeOf(r))}`).join(', ')}.`;
+    return [`Area excavated ${dig} and the subsoil compacted.`, o.edging ? `Edge restraints installed around the perimeter.` : ``, `Geotextile membrane laid to the excavation.`, `A ${mot} compacted Type 1 MOT sub-base installed.`, `A second geotextile membrane laid over the sub-base to prevent migration.`, finish].filter(Boolean);
   },
   // Dig-out and Type 1 MOT depths come from the priced section itself (s.digOutDepth is the
   // area-weighted average of the per-row depths, s.motDepth is that minus the surface build-up —
@@ -2577,8 +2601,62 @@ function quoteMaterialsList(q){
 /* Scope-of-work bullets for a priced section — built-ins use their SERVICE_COPY narrative;
    a custom (subscriber-added) service has no set narrative, so its own line-item
    descriptions stand in instead, since that's the only description of the work there is. */
+/* Per-area material choice (def.rowSelects, e.g. each paving area's own slab type). A row without
+   its own pick uses the job-level option (how quotes were saved before). When the areas use more
+   than one type, everything is priced across all areas as normal, and the chosen material's own
+   line is replaced by one line per type, each worked out from just its own areas — so each type
+   gets its own wastage and rounding, as it's bought separately. Gravel does this inside its calc. */
+function rowHasSize(def, r){ return def.cols.some(c=>c!=="desc" && (Number(r[c])||0)>0); }
+function rowChoiceSel(def, options){ return (def.rowSelects||[]).find(x=>!x.native && (!x.showIf || x.showIf(options||{}))) || null; }
+function rowChoiceGroups(def, rows, options){
+  const sel = rowChoiceSel(def, options); if(!sel) return null;
+  const groups = [], by = {};
+  (rows||[]).filter(r=>rowHasSize(def, r)).forEach(r=>{ const v = r[sel.field] || options[sel.optKey] || ''; if(!(v in by)){ by[v] = []; groups.push(v); } by[v].push(r); });
+  return {sel, groups, by};
+}
+function calcWithRowChoices(def, rows, options, ctx){
+  const g = rowChoiceGroups(def, rows, options);
+  if(!g || g.groups.length<=1){
+    if(!g) return def.calc(rows, options, ctx);
+    const v = g.groups[0]!==undefined ? g.groups[0] : (options[g.sel.optKey]||'');
+    return def.calc(rows, Object.assign({}, options, {[g.sel.optKey]: v}), ctx);
+  }
+  const {sel, groups, by} = g;
+  const named = groups.filter(Boolean);
+  const first = named[0];
+  const full = def.calc(rows, Object.assign({}, options, {[sel.optKey]: first}), ctx);
+  full.blockers = (full.blockers||[]).slice();
+  const at = full.materials.findIndex(m=>m[0]===first);
+  const lines = [];
+  named.forEach(v=>{
+    const part = def.calc(by[v], Object.assign({}, options, {[sel.optKey]: v}), ctx);
+    (part.materials||[]).filter(m=>m[0]===v).forEach(m=>lines.push(m));
+    (part.blockers||[]).filter(b=>b.includes(v) && !full.blockers.includes(b)).forEach(b=>full.blockers.push(b));
+  });
+  const rest = full.materials.filter(m=>m[0]!==first);
+  rest.splice(at<0 ? rest.length : at, 0, ...lines);
+  full.materials = rest;
+  if(by['']){
+    const names = by[''].map(r=>(r.desc||'').trim()).filter(Boolean);
+    full.blockers.push(`Choose a ${sel.label.toLowerCase()} for every line${names.length?` (${names.join(', ')})`:''}`);
+  }
+  return full;
+}
+// For the letter: with several types, the option the wording uses becomes "Type A (Front patio)
+// and Type B (Path)".
+function rowChoiceLetterOptions(s){
+  const def = SERVICES[s.key]; if(!def) return s.options;
+  const g = rowChoiceGroups(def, s.rows, s.options||{});
+  if(!g || g.groups.filter(Boolean).length<=1){
+    if(g && g.groups[0]) return Object.assign({}, s.options, {[g.sel.optKey]: g.groups[0]});
+    return s.options;
+  }
+  const live = (s.rows||[]).filter(r=>rowHasSize(def, r));
+  const label = g.groups.filter(Boolean).map(v=>`${v} (${g.by[v].map(r=>(r.desc||'').trim()||('area '+(live.indexOf(r)+1))).join(', ')})`).join(' and ');
+  return Object.assign({}, s.options, {[g.sel.optKey]: label});
+}
 function sectionCopy(s){
-  if(SERVICE_COPY[s.key]) return SERVICE_COPY[s.key](s.options, s);
+  if(SERVICE_COPY[s.key]) return SERVICE_COPY[s.key](rowChoiceLetterOptions(s), s);
   if(s.custom){
     const cs = (S.settings.customServices||[]).find(x=>x.key===s.key);
     if(cs && Array.isArray(cs.letter) && cs.letter.some(l=>l && (l.text||'').trim()))
@@ -2595,7 +2673,7 @@ function sectionCopy(s){
    prices/VAT/productivity for them are edited in the same places as any other service. */
 function priceSection(key, rows, options, ctx, notes){
   const def = SERVICES[key];
-  const raw = def.calc(rows, options, ctx);
+  const raw = calcWithRowChoices(def, rows, options, ctx);
   const materials = raw.materials
     .filter(([name,qty]) => name && qty && Math.abs(qty)>1e-9)
     // A material tuple is normally [name, qty] and its price comes from the shared materials
@@ -5583,10 +5661,14 @@ function letterHeadInner(){
   if(letterBrandInfinity()) return `<img class="lh-logo" src="${LOGO_DATA_URI}" alt="${esc(c.name)}"><img class="lh-tag" src="${TAGLINE_DATA_URI}" alt="">`;
   return brandLogoSrc() ? `<img class="lh-own" src="${brandLogoSrc()}" alt="${esc(c.name)}">` : `<div class="letter-name">${esc(c.name)}</div>`;
 }
+const LETTER_ICON_PHONE = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1z"/></svg>`;
+const LETTER_ICON_MAIL = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3 5h18c.6 0 1 .4 1 1v12c0 .6-.4 1-1 1H3c-.6 0-1-.4-1-1V6c0-.6.4-1 1-1zm9 7.2L4.4 7H4v.6l8 5.6 8-5.6V7h-.4z"/></svg>`;
 function letterFootInner(){
   const c = S.settings.company;
   if(letterBrandInfinity()) return `<img class="letter-foot-img" src="${FOOTER_DATA_URI}" alt="">`;
-  return `<div class="letter-foot-band"><b>${esc(c.name||'')}</b>${[c.phone, c.email, c.address].filter(Boolean).map(x=>' · '+esc(x)).join('')}${c.number?`<br>Company no. ${esc(c.number)}`:''}${c.vatNo?`${c.number?' · ':'<br>'}VAT no. ${esc(c.vatNo)}`:''}</div>`;
+  // Every other business: just its phone number and email address.
+  const bits = [c.phone ? `<span class="lf-item">${LETTER_ICON_PHONE}${esc(c.phone)}</span>` : '', c.email ? `<span class="lf-item">${LETTER_ICON_MAIL}${esc(c.email)}</span>` : ''].filter(Boolean);
+  return `<div class="letter-foot-band">${bits.join('')}</div>`;
 }
 // Price paragraph: the total, its VAT and the number of working days in bold (as on the Word letter).
 function letterPriceHtml(q){
@@ -5612,7 +5694,7 @@ function quoteLetterHtml(q, opts){
   return `
   <div class="letter${infBrand?' letter-inf':''}" id="letterCapture" style="--lt-accent:${letterAccent()};">
     <div class="letter-head${infBrand?' lh-inf':''}">${letterHeadInner()}</div>
-    ${infBrand ? '' : '<div class="letter-rule"></div>'}
+  
     <div class="letter-body">
       <p>${esc(q.customer.name)}<br>${esc(q.customer.address||'')}</p>
       <p>Dear ${esc(q.customer.knownAs||q.customer.name)},</p>
@@ -6305,7 +6387,7 @@ function wizMeasure(d){
       ${def.rowsHint ? `<div class="hint" style="margin:2px 0 6px;">${esc(def.rowsHint)}</div>` : ''}
       <button class="btn btn-ghost btn-sm" data-action="addMeasRow" style="margin-top:4px;">+ Add line</button>
 
-      ${def.options.length? `<div style="margin-top:20px;"><label style="margin-bottom:8px;">Options</label>${serviceOptionsFor(def, st.options).map(o=>optionFieldHtml(o,st.options)).join('')}</div>` : ''}
+      ${def.options.length? `<div style="margin-top:20px;"><label style="margin-bottom:8px;">Options</label>${serviceOptionsFor(def, st.options).filter(o=>!(def.rowSelects||[]).some(x=>x.optKey===o.key && (!x.showIf || x.showIf(st.options)))).map(o=>optionFieldHtml(o,st.options)).join('')}</div>` : ''}
       ${sectionNotesHtml(key, st.notes)}
     </div>
     <div class="stack" style="gap:10px;" data-tour="meas-cost">
@@ -6401,6 +6483,39 @@ function serviceOptionsFor(def, opts){
 // Water Features' measurement rows: each row is a small card with its own feature product, count
 // and the dig-out / pebbles / electrics ticks. Selects use the normal data-mf row listener; a
 // "+ Add new…" choice opens the product dialog and saves straight back onto this row.
+// A per-row pick from the Materials list (e.g. each gravel area's own gravel type): the business's
+// added types for that group, "+ Add new…" (same dialog as before) and "✎ Edit" for the chosen one.
+// Choosing a type on one area also fills any other area that has none yet — pick once for a
+// one-type job, then change just the areas that differ.
+function fillUnpickedRows(key, st, field, value){
+  const sel = ((SERVICES[key]||{}).rowSelects||[]).find(x=>x.field===field);
+  if(!sel || !value) return;
+  if(sel.optKey && st.options && st.options[sel.optKey]) return; // an older quote's job-wide type still applies to unpicked areas
+  st.rows.forEach(o=>{ if(!o[field]) o[field] = value; });
+}
+function rowSelectsFor(def, options){ return (def.rowSelects||[]).filter(x=>!x.showIf || x.showIf(options||{})); }
+// A per-row pick from one of the business's product libraries (e.g. each artificial turf area's
+// own turf), with the same "+ Add new…" / "✎ Edit" as the job-level dropdown it replaces.
+function rowSourceSelectHtml(def, sel, i, value){
+  const o = (def.options||[]).find(x=>x.key===sel.optKey) || {};
+  const entries = S.settings[sel.source] || [];
+  const has = entries.some(e=>e.name===value);
+  const lbl = e => o.sourceLabel ? o.sourceLabel(e) : e.name;
+  const addFields = o.addFields || ['price'];
+  return `<select data-mf="${sel.field}" data-row-add="${sel.source}" data-add-label="${esc(o.addLabel || sel.label.toLowerCase())}" data-add-fields="${esc(addFields.join(','))}"${o.addFieldDefaults?` data-add-field-defaults="${esc(JSON.stringify(o.addFieldDefaults))}"`:''}>
+    ${has ? '' : `<option value="" disabled selected>${esc(sel.placeholder||'Select…')}</option>`}
+    ${entries.map(e=>`<option value="${esc(e.name)}" ${e.name===value?'selected':''}>${esc(lbl(e))}</option>`).join('')}
+    <option value="__add_other__">+ Add new…</option>${has?`<option value="__edit_current__">✎ Edit "${esc(value)}"…</option>`:''}</select>`;
+}
+function rowMaterialSelectHtml(sel, value){
+  const list = ((S.settings.customStyleOptions||{})[sel.group]) || [];
+  const opts = value && !list.includes(value) ? list.concat([value]) : list;
+  const has = !!value;
+  return `<select data-mf="${sel.field}" data-row-material="${esc(sel.group)}">
+    ${has ? '' : `<option value="" disabled selected>${esc(sel.placeholder||'Select…')}</option>`}
+    ${opts.map(v=>`<option value="${esc(v)}" ${v===value?'selected':''}>${esc(v)}</option>`).join('')}
+    <option value="__add_other__">+ Add new…</option>${has && S.settings.materials && S.settings.materials[value]?`<option value="__edit_current__">✎ Edit "${esc(value)}"…</option>`:''}</select>`;
+}
 function wfRowSelect(field, i, value, libKey, singular, addFields, placeholder, defaults){
   const entries = S.settings[libKey] || [];
   const has = entries.some(e=>e.name===value);
@@ -6496,17 +6611,19 @@ function measRowClass(n){ return n===2 ? "meas-row two" : n===4 ? "meas-row four
 // field stacks and keeps its placeholder).
 function measHeadHtml(def, options){
   const rc = rowColsFor(def, options);
-  if(rc.cols.length<4) return '';
-  const checks = def.rowChecks||[];
-  return `<div class="${measRowClass(rc.cols.length)}${checks.length?' chk chk'+checks.length:''} meas-head">${rc.labels.map(l=>`<div>${esc(l)}</div>`).join('')}${checks.map(ch=>`<div>${esc(ch.label)}</div>`).join('')}<div class="icon-btn-spacer"></div></div>`;
+  if(rc.cols.length<4 && !rowSelectsFor(def, options).length) return '';
+  const checks = def.rowChecks||[], sels = rowSelectsFor(def, options);
+  return `<div class="${measRowClass(rc.cols.length)}${checks.length?' chk chk'+checks.length:''}${sels.length?' sel':''} meas-head">${rc.labels.map(l=>`<div>${esc(l)}</div>`).join('')}${sels.map(x=>`<div>${esc(x.label)}</div>`).join('')}${checks.map(ch=>`<div>${esc(ch.label)}</div>`).join('')}<div class="icon-btn-spacer"></div></div>`;
 }
 function measRowHtml(def, r, i, options){
   const rc = rowColsFor(def, options);
-  const cls = measRowClass(rc.cols.length) + ((def.rowChecks||[]).length ? ' chk chk'+def.rowChecks.length : '');
+  const cls = measRowClass(rc.cols.length) + ((def.rowChecks||[]).length ? ' chk chk'+def.rowChecks.length : '') + (rowSelectsFor(def, options).length ? ' sel' : '');
   const numCols = rc.cols.slice(1);
   return `<div class="${cls}" data-row="${i}">
     <div><label class="mf-lbl">${rc.labels[0]}</label><input type="text" placeholder="${rc.labels[0]}" data-mf="desc" value="${esc(r.desc)}"></div>
     ${numCols.map((c,ci)=>`<div><label class="mf-lbl">${rc.labels[ci+1]}</label><input type="text" inputmode="decimal" placeholder="${rc.labels[ci+1]}" data-mf="${c}" value="${esc(r[c]!==undefined ? r[c] : (c==='digOutDepth' && options && options.digOutDepth!=null ? options.digOutDepth : (def.rowDefaults && def.rowDefaults[c]!=null ? def.rowDefaults[c] : '')))}"></div>`).join('')}
+    ${rowSelectsFor(def, options).map(sel=>{ const v = r[sel.field] || (sel.optKey && options ? options[sel.optKey] : '') || '';
+      return `<div><label class="mf-lbl">${esc(sel.label)}</label>${sel.source ? rowSourceSelectHtml(def, sel, i, v) : rowMaterialSelectHtml(sel, v)}</div>`; }).join('')}
     ${(def.rowChecks||[]).map(ch=>`<label class="row-check"><input type="checkbox" data-row-check="${ch.field}" ${r[ch.field]!==false?'checked':''}> ${esc(ch.label)}</label>`).join('')}
     <button class="icon-btn" data-action="delMeasRow" data-row="${i}" title="Remove">✕</button>
   </div>`;
@@ -8966,7 +9083,11 @@ App.addEventListener("click", async (e)=>{
     }
     case "addMeasRow": {
       const key = currentMeasureKey(d); const st = ensureSectionState(key);
-      st.rows.push(mkRow(SERVICES[key].cols, key)); render();
+      const nr0 = mkRow(SERVICES[key].cols, key);
+      // A new area starts with the same per-row picks (e.g. gravel type) as the one above it.
+      const prevRow = st.rows[st.rows.length-1];
+      (SERVICES[key].rowSelects||[]).forEach(sel=>{ const v = prevRow && (prevRow[sel.field] || (sel.optKey ? st.options[sel.optKey] : '')); if(v) nr0[sel.field] = v; });
+      st.rows.push(nr0); render();
       { const nr = App.querySelector(`div[data-row="${st.rows.length-1}"] input[type="text"]`); if(nr) nr.focus(); }
       break;
     }
@@ -9537,12 +9658,27 @@ App.addEventListener("input", (e)=>{
     const key = currentMeasureKey(d); const st = ensureSectionState(key);
     const mf = t.getAttribute('data-mf'); const r = st.rows[row];
     const rowAdd = t.getAttribute('data-row-add');
+    const rowMat = t.getAttribute('data-row-material');
+    if(rowMat && t.value==="__add_other__"){
+      // "+ Add new…" on a row's materials-list pick (a gravel area's type): add it to Materials,
+      // then put it on this row. Never store the sentinel.
+      t.value = r[mf]||'';
+      showAddMaterialOption(rowMat, (name)=>{ r[mf] = name; fillUnpickedRows(key, st, mf, name); reflow(); scheduleDraftSave(); });
+      return;
+    }
+    if(rowMat && t.value==="__edit_current__"){
+      const def = SERVICES[key]; const sel = (def.rowSelects||[]).find(x=>x.field===mf);
+      const name = r[mf] || (sel && sel.optKey ? st.options[sel.optKey] : '');
+      t.value = name||'';
+      if(name && S.settings.materials[name]) editMaterialPrice(name, ()=>reflow());
+      return;
+    }
     if(rowAdd && t.value==="__add_other__"){
       // A row-level product dropdown's "+ Add new…" (Water Features) — open the product dialog and
       // put the new product straight onto this row once it's saved; never store the sentinel.
       const fieldKeys = (t.getAttribute('data-add-fields')||'').split(',').filter(Boolean);
       let fieldDefaults; const dr = t.getAttribute('data-add-field-defaults'); if(dr){ try{ fieldDefaults = JSON.parse(dr); }catch(e){} }
-      openPavingProductModal(rowAdd, t.getAttribute('data-add-label')||'item', fieldKeys, (entry)=>{ r[mf] = entry.name; reflow(); }, fieldDefaults);
+      openPavingProductModal(rowAdd, t.getAttribute('data-add-label')||'item', fieldKeys, (entry)=>{ r[mf] = entry.name; fillUnpickedRows(key, st, mf, entry.name); reflow(); }, fieldDefaults);
       return;
     }
     if(rowAdd && t.value==="__edit_current__"){
@@ -9558,6 +9694,7 @@ App.addEventListener("input", (e)=>{
     if(mf==="footingLength") r._footingLengthSet = t.value!=='';
     if(mf==="length" && "footingLength" in r && !r._footingLengthSet) r.footingLength = t.value;
     r[mf] = t.value;
+    fillUnpickedRows(key, st, mf, t.value);
     reflow();
   } else if(t.matches('[data-opt]')){
     const key = currentMeasureKey(d); const st = ensureSectionState(key);

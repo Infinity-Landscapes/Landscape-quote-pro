@@ -27,6 +27,7 @@ const fs = require('fs');
   // ---- a new business ----
   let page = await newBiz();
   await page.fill('#f_name', 'Green Thumb Gardens');
+  await page.fill('#f_email', 'hello@greenthumb.test'); await page.fill('#f_phone', '01234 567890');
   await page.setInputFiles('#f_logoFile', __dirname+'/_logo_red.png'); await page.waitForTimeout(600);
   check('logo preview shown in setup', !!(await page.$('img[src^="data:image"]')));
   const primary = await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--primary').trim());
@@ -65,7 +66,9 @@ const fs = require('fs');
   for (let i=0;i<4 && !(await page.$('button[data-action="saveSentQuote"]')); i++) await click(page, 'button[data-action="wizNext"]');
   let t = await page.$eval('.letter', e=>e.textContent);
   check('letter: neutral opening, not Infinity\'s', /Thank you for asking Green Thumb Gardens to quote/.test(t) && !/perfectionist/.test(t));
-  check('letter: their logo, no Infinity footer image, footer band with their name', !!(await page.$('.letter-head img[src^="data:image/png"]')) && !(await page.$('.letter-foot-img')) && /Green Thumb Gardens/.test(await page.$eval('.letter-foot-band', e=>e.textContent)));
+  check('letter: their logo only in the header (no Infinity strapline)', !!(await page.$('.letter-head img[src^="data:image/png"]')) && !(await page.$('.letter-head .lh-tag')));
+  const band = await page.$eval('.letter-foot-band', e=>e.textContent);
+  check('letter footer: just their phone and email (no Infinity footer image, no name/address)', !(await page.$('.letter-foot-img')) && /01234 567890/.test(band) && /hello@greenthumb\.test/.test(band) && !/Green Thumb Gardens/.test(band));
   check('letter: signed by the person who created the quote, hours Mon–Sat 8am', /Sam Green/.test(t) && /Monday to Saturday 8am/.test(t));
   await click(page, 'button[data-action="saveSentQuote"]');
   // per-quote edit

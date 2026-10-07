@@ -72,6 +72,35 @@ const { execSync } = require('child_process');
     await page.context().close();
   }
   check('phone and desktop give the same pages', out.phone.n === out.desktop.n);
+  // ---- another business: their logo only in the header; footer = phone and email only ----
+  {
+    const page = await (await browser.newContext({ viewport:{width:1280,height:1000} })).newPage();
+    await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+    const wait = ms => page.waitForTimeout(ms);
+    await page.goto('file://'+__dirname+'/_pages_exposed.html'); await wait(400);
+    await page.fill('#f_name','Green Thumb Gardens'); await page.fill('#f_email','hello@greenthumb.test'); await page.fill('#f_phone','01234 567890');
+    await page.setInputFiles('#f_logoFile', __dirname+'/_logo_red.png'); await wait(600);
+    for (let i=0;i<3;i++){ if (await page.$('#f_dayrate')) { await page.fill('#f_dayrate','180'); await page.fill('#f_expenses','90'); } await page.click('button[data-action="setupNext"]'); await wait(200); }
+    await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');
+    await page.click('button[data-action="setupNext"]'); await wait(400);
+    await page.click('button[data-nav="newquote"]'); await wait(200);
+    await page.fill('#q_creator','Sam'); await page.fill('#q_cname','Test Customer');
+    await page.click('button[data-action="wizNext"]'); await wait(150);
+    await page.click('[data-action="toggleQuoteService"][data-key="turf"]'); await wait(120);
+    await page.click('button[data-action="wizNext"]'); await wait(200);
+    await page.fill('[data-row="0"] input[data-mf="width"]','6'); await page.fill('[data-row="0"] input[data-mf="length"]','6'); await wait(150);
+    for (let i=0;i<8 && !(await page.$('#letterCapture')); i++){ await page.click('button[data-action="wizNext"]'); await wait(250); }
+    const t = await page.evaluate(async ()=>{
+      const T = window.__T; await T.ensurePdfLibs(); const seen = []; const o = window.html2canvas;
+      window.html2canvas = async (pg, opts)=>{ seen.push({own:!!pg.querySelector('.lpage-head img.lh-own'), tag:!!pg.querySelector('.lh-tag'), foot:(pg.querySelector('.lpage-foot')||{}).innerText||''}); return o(pg, opts); };
+      const cs = await T.captureLetterPages(document.getElementById('letterCapture'), 1); window.html2canvas = o;
+      return {seen, png: cs[0].toDataURL('image/png')};
+    });
+    fs.writeFileSync(__dirname+'/letter_page_tenant_1.png', Buffer.from(t.png.split(',')[1],'base64'));
+    check('other business: their logo on every page, no Infinity strapline', t.seen.every(p=>p.own && !p.tag));
+    check('other business: footer is just phone and email', t.seen.every(p=>/01234 567890/.test(p.foot) && /hello@greenthumb\.test/.test(p.foot) && !/Green Thumb/.test(p.foot)));
+    await page.context().close();
+  }
   execSync('pdfinfo '+__dirname+'/letter_pages_desktop.pdf | grep -E "Pages|Page size"', {stdio:'inherit'});
   await browser.close();
   console.log(pass?'ALL CHECKS PASSED':'SOME CHECKS FAILED'); process.exit(pass?0:1);

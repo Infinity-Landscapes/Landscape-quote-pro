@@ -46,7 +46,7 @@ const fs = require('fs');
   check('blocker: select a decking screw', /Select a decking screw product/.test(t));
   check('old hardcoded board product is gone', !/3\.6m x 120mm/.test(t));
 
-  await addVia('select[data-opt="board"]', {name:'Test board', price:20, lengthMm:3600, widthMm:140});
+  await addVia('[data-row="0"] select[data-mf="boardType"]', {name:'Test board', price:20, lengthMm:3600, widthMm:140});
   await addVia('select[data-opt="joist"]', {name:'Test joist', price:10, lengthMm:3000});
   await page.selectOption('select[data-opt="screws"]','__add_other__'); await page.waitForTimeout(200);
   check('screw dialog prefills 100 per box', await v('#mf_screwsPerBox')==='100');

@@ -39,7 +39,7 @@ const fs = require('fs');
   await page.fill('[data-row="1"] input[data-mf="length"]','3.5'); await page.fill('[data-row="1"] input[data-mf="height"]','1'); await settle();
   let t = await txt();
   check('blockers: select sleeper + screw', /Select a sleeper/.test(t) && /Select a screw product/.test(t));
-  await addVia('select[data-opt="sleeper"]', {name:'Oak sleeper', price:9, lengthMm:2400, heightMm:200});
+  await addVia('[data-row="0"] select[data-mf="sleeperType"]', {name:'Oak sleeper', price:9, lengthMm:2400, heightMm:200});
   await addVia('select[data-opt="screws"]', {name:'Hex screws', price:24.84, screwsPerBox:25});
   t = await txt();
   check('sleepers per row summed = 3×3 + 2×5 = 19', t.includes('Oak sleeper19'));

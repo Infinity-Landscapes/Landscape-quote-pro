@@ -22,7 +22,7 @@ const fs = require('fs');
   await (await page.$('[data-action="toggleQuoteService"][data-key="blockpaving"]')).click(); await page.waitForTimeout(80);
   await (await page.$('button[data-action="wizNext"]')).click(); await page.waitForTimeout(300);
   await page.fill('[data-row="0"] input[data-mf="width"]','5'); await page.fill('[data-row="0"] input[data-mf="length"]','8');
-  await page.selectOption('select[data-opt="style"]','__add_other__'); await page.waitForTimeout(200);
+  await page.selectOption('[data-row="0"] select[data-mf="blockType"]','__add_other__'); await page.waitForTimeout(200);
   await page.fill('#modalMatName','Test Block'); await page.fill('#modalMatPrice','50');
   await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
   const go = async () => { for (let i=0;i<6;i++){ const b = await page.$('button[data-action="wizNext"]'); if(!b) break; await b.click(); await page.waitForTimeout(300); if(/Area excavated/.test(await txt())) return true; } return /Area excavated/.test(await txt()); };

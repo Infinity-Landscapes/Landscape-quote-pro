@@ -72,7 +72,7 @@ const fs = require('fs');
   check('dig-out depth prefilled with 250', await page.$eval('[data-row="0"] input[data-mf="digOutDepth"]', el => el.value) === '250');
   check('no job-level dig-out depth option any more', !(await page.$('[data-opt="digOutDepth"]')));
   check('edging length input present and blank by default', await page.$eval('[data-opt="edgingLength"]', el => el.value) === '');
-  const opts = await page.$$eval('select[data-opt="style"] option', els => els.map(e => e.textContent));
+  const opts = await page.$$eval('[data-row="0"] select[data-mf="blockType"] option', els => els.map(e => e.textContent));
   check('block style has no built-in blocks, only "+ Add new…"', opts.filter(o=>!/Select|Add new/.test(o)).length === 0);
   check('"Standard block paving" is gone', !/Standard block paving/.test(await txt()));
 
@@ -83,7 +83,7 @@ const fs = require('fs');
   check('40m² at defaults needs 12 tonnes Type 1 MOT', t.includes('Type 1 MOT12 tonne'));
 
   // Add a block mid-quote
-  await page.selectOption('select[data-opt="style"]', '__add_other__'); await page.waitForTimeout(200);
+  await page.selectOption('[data-row="0"] select[data-mf="blockType"]', '__add_other__'); await page.waitForTimeout(200);
   await page.fill('#modalMatName', 'Test Block'); await page.fill('#modalMatPrice', '50');
   await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
   t = await txt();
@@ -139,7 +139,7 @@ const fs = require('fs');
   await page.fill('[data-row="0"] input[data-mf="length"]', '8');
   await page.waitForTimeout(200);
   check('edging productivity option seeded from settings (10)', await page.$eval('[data-opt="edgingProductivity"]', el => el.value) === '10');
-  await page.selectOption('select[data-opt="style"]', 'Test Block'); await page.waitForTimeout(200);
+  await page.selectOption('[data-row="0"] select[data-mf="blockType"]', 'Test Block'); await page.waitForTimeout(200);
   t = await txt();
   // MOT depth = 250 − 50 = 200 -> ROUNDUP(40×0.3×200/150) = 16
   check('surface build-up 50 -> MOT 16 tonnes', t.includes('Type 1 MOT16 tonne'));

@@ -44,9 +44,9 @@ const fs = require('fs');
   await page.fill('[data-row="0"] input[data-mf="length"]', '5');
   await page.waitForTimeout(200);
 
-  const styleSelect = await page.$('select[data-opt="style"]');
+  const styleSelect = await page.$('[data-row="0"] select[data-mf="gravelType"]');
   check('gravel style select present', !!styleSelect);
-  check('gravel style select is marked customizable', (await styleSelect.getAttribute('data-customizable')) === 'gravel');
+  check('gravel style select is marked customizable', (await styleSelect.getAttribute('data-row-material')) === 'gravel');
   const optionTexts = await styleSelect.$$eval('option', els => els.map(e => e.textContent));
   check('"+ Add new…" option is present', optionTexts.includes('+ Add new…'));
 
@@ -54,7 +54,7 @@ const fs = require('fs');
   await styleSelect.selectOption('__add_other__');
   await page.waitForTimeout(200);
   check('add-material modal appears', (await page.$('#modalMatName')) !== null);
-  check('style select reverts to its real value while modal is open (sentinel not saved)', await page.$eval('select[data-opt="style"]', el => el.value) !== '__add_other__');
+  check('style select reverts to its real value while modal is open (sentinel not saved)', await page.$eval('[data-row="0"] select[data-mf="gravelType"]', el => el.value) !== '__add_other__');
 
   // Try saving with no description — should show an inline error and stay open.
   await (await page.$('#modalMatPrice')).fill('35');
@@ -71,7 +71,7 @@ const fs = require('fs');
 
   check('modal closes after a valid save', (await page.$('#modalMatName')) === null);
   const bodyText1 = await page.$eval('#App', el => el.textContent);
-  check('style select now shows the new material selected', await page.$eval('select[data-opt="style"]', el => el.value) === 'Bradstone Blue Slate 600x600');
+  check('style select now shows the new material selected', await page.$eval('[data-row="0"] select[data-mf="gravelType"]', el => el.value) === 'Bradstone Blue Slate 600x600');
   // 20m² × a £45 gross / VAT-included price (vatRate 0.2) nets to £37.50 → £750.00 — matches
   // the same "vatIncluded defaults to true" convention used for materials created via the
   // service builder (see saveServiceBuilder).
@@ -114,7 +114,7 @@ const fs = require('fs');
     await (await page.$('[data-action="toggleQuoteService"][data-key="gravel"]')).click();
     await page.waitForTimeout(80);
     await (await page.$('button[data-action="wizNext"]')).click(); await page.waitForTimeout(300);
-    const optionTexts2 = await page.$eval('select[data-opt="style"]', el => Array.from(el.options).map(o=>o.textContent)).catch(()=>[]);
+    const optionTexts2 = await page.$eval('[data-row="0"] select[data-mf="gravelType"]', el => Array.from(el.options).map(o=>o.textContent)).catch(()=>[]);
     check('new material persists as a selectable option on a fresh quote after reload', optionTexts2.includes('Bradstone Blue Slate 600x600'));
   } else {
     check('reached a fresh new-quote flow after reload to verify dropdown persistence', false);

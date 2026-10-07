@@ -69,7 +69,7 @@ const fs = require('fs');
   check('blocker: £0 pea shingle', /Pea shingle has no price/.test(t));
 
   await tick('faceSkin');
-  await addVia('select[data-opt="faceProduct"]', {name:'Red brick face', price:1.65, facePricedPer:'piece', piecesPerM2:60, thicknessMm:102});
+  await addVia('[data-row="0"] select[data-mf="faceType"]', {name:'Red brick face', price:1.65, facePricedPer:'piece', piecesPerM2:60, thicknessMm:102});
   t = await txt();
   check('face = ROUNDUP(12 × 60) = 720', t.includes('Red brick face720'));
   check('2 skins: building sand 2, feb 4, cement ROUNDUP(23.4+12)=36', t.includes('Building sand2') && t.includes('Feb4') && t.includes('Cement36'));

@@ -45,7 +45,7 @@ const fs = require('fs');
   await page.fill('[data-row="0"] input[data-mf="length"]', '5');
   await page.waitForTimeout(200);
 
-  await page.selectOption('select[data-opt="style"]', '__add_other__');
+  await page.selectOption('[data-row="0"] select[data-mf="gravelType"]', '__add_other__');
   await page.waitForTimeout(200);
   check('add-material dialog has a Supplier field', (await page.$('#modalMatSupplier')) !== null);
   await (await page.$('#modalMatName')).fill('Cotswold Gold Gravel');
@@ -75,7 +75,7 @@ const fs = require('fs');
   await page.fill('[data-row="0"] input[data-mf="width"]', '4');
   await page.fill('[data-row="0"] input[data-mf="length"]', '5');
   await page.waitForTimeout(200);
-  await page.selectOption('select[data-opt="style"]', '__add_other__');
+  await page.selectOption('[data-row="0"] select[data-mf="gravelType"]', '__add_other__');
   await page.waitForTimeout(200);
   await (await page.$('#modalMatName')).fill('Cotswold Gold Gravel');
   await (await page.$('#modalMatPrice')).fill('42');

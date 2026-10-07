@@ -36,13 +36,13 @@ const fs = require('fs');
   let t = await txt();
   check('blockers: select steel + rebar', /Select a steel edging product/.test(t) && /Select a rebar/.test(t));
   check('picker label says £ per metre', /Steel edging \(£ per metre\)/.test(t));
-  await page.selectOption('select[data-opt="steelProduct"]','__add_other__'); await settle();
+  await page.selectOption('[data-row="0"] select[data-mf="steelType"]','__add_other__'); await settle();
   check('add form labels the price "£ per metre"', /Price \(£ per metre\)/.test(await txt()));
   await page.fill('#mf_name','Corten 150mm'); await page.fill('#mf_priceM','24'); await click('button[data-action="modalOk"]');
   await page.selectOption('select[data-opt="rebarProduct"]','__add_other__'); await settle();
   await page.fill('#mf_name','Rebar 6m'); await page.fill('#mf_price','12'); await page.fill('#mf_lengthMm','6000'); await click('button[data-action="modalOk"]');
   t = await txt();
-  check('picker option shows the per-metre price', /Corten 150mm — £24\.00 per metre/.test(await page.$eval('select[data-opt="steelProduct"]', s=>s.options[s.selectedIndex].textContent)));
+  check('picker option shows the per-metre price', /Corten 150mm — £24\.00 per metre/.test(await page.$eval('[data-row="0"] select[data-mf="steelType"]', s=>s.options[s.selectedIndex].textContent)));
   check('steel qty = 8.3 m, cost 8.3 × £20 net = £166.00', t.includes('Corten 150mm8.3') && /166\.00/.test(t));
   // stakes = (12+1) + (5+1) = 19; 6000/500 = 12 per bar -> ROUNDUP(19/12) = 2 bars
   check('stakes 19 -> 2 bars', /Stakes19/.test(t) && t.includes('Rebar 6m2'));
@@ -58,7 +58,7 @@ const fs = require('fs');
   check('settings list shows £ per metre', /Corten 150mm\s*£24\.00 per metre/.test(await txt()));
   await page.fill('#st_steelStakeLen','7000'); await click('button[data-action="saveSettingsForm"]');
   await click('button[data-nav="newquote"]');
-  for (let i=0;i<6 && !(await page.$('select[data-opt="steelProduct"]')); i++){ const b = await page.$('button[data-action="wizBack"]'); if(!b) break; await b.click(); await settle(); }
+  for (let i=0;i<6 && !(await page.$('[data-row="0"] select[data-mf="steelType"]')); i++){ const b = await page.$('button[data-action="wizBack"]'); if(!b) break; await b.click(); await settle(); }
   check('stake longer than bar blocks', /The stake length \(7000mm\) is longer than the rebar bar \(6000mm\)/.test(await txt()));
   // existing business gets the rebar seed
   await page.evaluate(()=>{ const st = JSON.parse(localStorage.getItem('__mockdb__')); for (const k of Object.keys(st)){ const d = st[k]; if(d && d.materials){ delete d.steelRebarSeeded; d.steelRebar = []; } } localStorage.setItem('__mockdb__', JSON.stringify(st)); });

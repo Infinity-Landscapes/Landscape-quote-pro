@@ -48,7 +48,7 @@ const fs = require('fs');
   await page.fill('[data-row="0"] input[data-mf="length"]', '3');
   await page.waitForTimeout(200);
   // Oct 2026: paving now needs a slab type and jointing compound before it can be saved.
-  await page.selectOption('select[data-opt="style"]', '__add_other__'); await page.waitForTimeout(200);
+  await page.selectOption('[data-row="0"] select[data-mf="slabType"]', '__add_other__'); await page.waitForTimeout(200);
   await page.fill('#modalMatName', 'Test slab'); await page.fill('#modalMatPrice', '40');
   await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
   await page.selectOption('select[data-opt="jointingCompound"]', '__add_other__'); await page.waitForTimeout(200);

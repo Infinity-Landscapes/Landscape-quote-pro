@@ -126,8 +126,8 @@ const fs = require('fs');
   const digDepthVal = await page.$eval('[data-opt="digOutDepth"]', el => el.value).catch(()=>null);
   check('"Dig-out depth (mm)" option present, defaults to 150', digDepthVal === '150');
 
-  const styleSelect = await page.$('select[data-opt="style"]');
-  check('slab-type select is marked customizable (the normal materials-pick mechanism)', (await styleSelect.getAttribute('data-customizable')) === 'paving');
+  const styleSelect = await page.$('[data-row="0"] select[data-mf="slabType"]');
+  check('slab-type select is marked customizable (the normal materials-pick mechanism)', (await styleSelect.getAttribute('data-row-material')) === 'paving');
   check('slab-type select has no selected value yet (placeholder, no built-in default)', await styleSelect.evaluate(el=>el.value) === '');
   const styleOptionTexts0 = await styleSelect.$$eval('option', els => els.map(e => e.textContent));
   check('slab-type select offers "+ Add new…"', styleOptionTexts0.includes('+ Add new…'));
@@ -142,7 +142,7 @@ const fs = require('fs');
   await (await page.$('#modalMatPrice')).fill('60');
   await (await page.$('button[data-action="modalOk"]')).click();
   await page.waitForTimeout(250);
-  check('slab-type select now shows the new slab type selected', await page.$eval('select[data-opt="style"]', el => el.value) === 'Premium Porcelain 900x600');
+  check('slab-type select now shows the new slab type selected', await page.$eval('[data-row="0"] select[data-mf="slabType"]', el => el.value) === 'Premium Porcelain 900x600');
 
   // Select the jointing compound added earlier via Settings; leave edging off for now.
   await page.selectOption('select[data-opt="jointingCompound"]', 'Everbuild Jointing Grout');
@@ -223,7 +223,7 @@ const fs = require('fs');
 
   await (await page.$('button[data-nav="menu"]')).click(); await page.waitForTimeout(150);
   await startPavingQuote('Paving rework — after delete', 5, 5);
-  const styleOptionTexts2 = await page.$eval('select[data-opt="style"]', el => Array.from(el.options).map(o=>o.textContent)).catch(()=>[]);
+  const styleOptionTexts2 = await page.$eval('[data-row="0"] select[data-mf="slabType"]', el => Array.from(el.options).map(o=>o.textContent)).catch(()=>[]);
   check('deleted slab type no longer offered on a fresh quote', !styleOptionTexts2.includes('Premium Porcelain 900x600'));
   check('with nothing selected, no slab-type material line is charged (name is empty, filtered out)', !/£NaN/.test(await page.$eval('#App', el => el.textContent)));
 
