@@ -5617,8 +5617,8 @@ async function sendQuoteEmail(q){
     // The PDF goes into the Gmail draft as an attachment, so the email itself is the short covering note.
     const b = shortQuoteEmailBody(q);
     const mt = `mailto:${email.trim()}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(b)}`;
+    // Opening the email doesn't mark the quote as sent — the dialog asks once it has really gone.
     S._modal = {type:"email", to:email, subject, body:b, mailto:mt, pdfNote:"", gmail:true, qid:q.id};
-    if(q.status==="draft"){ q.status="sent"; q.sentAt = new Date().toISOString(); await saveQuote(q); }
     render();
     return;
   }
@@ -5642,8 +5642,7 @@ async function sendQuoteEmail(q){
     }
   }
   const mailto = `mailto:${email.trim()}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  S._modal = {type:"email", to:email, subject, body, mailto, pdfNote};
-  if(q.status==="draft"){ q.status="sent"; q.sentAt = new Date().toISOString(); await saveQuote(q); }
+  S._modal = {type:"email", to:email, subject, body, mailto, pdfNote, qid:q.id};
   render();
 }
 
@@ -7629,6 +7628,13 @@ function modalHtml(){
           <button class="btn btn-ghost btn-sm" data-action="modalCopy" data-copy="body" style="margin-top:6px;">Copy message</button>
         </div>
         <a href="${esc(m.mailto)}" class="btn ${m.gmail?'btn-ghost':'btn-primary'} btn-block" style="margin-top:6px;text-decoration:none;">✉ Try opening your email app</a>
+        ${(()=>{ const eq = (S.quotes||[]).find(x=>x.id===m.qid);
+          if(m.markedSent) return `<div class="msg msg-ok" style="margin-top:12px;">Marked as sent to the customer.</div>`;
+          if(!eq || eq.status!=="draft") return '';
+          return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);">
+            <div class="hint" style="margin-bottom:6px;">This quote stays a <b>draft</b> until you confirm the email has actually gone to the customer.</div>
+            <button class="btn btn-primary btn-block" data-action="modalMarkSent">✓ I've sent it — mark as sent</button>
+          </div>`; })()}
         <button class="btn btn-ghost btn-block" data-action="modalCancel" style="margin-top:8px;">Close</button>
       </div>
     </div>`;
@@ -8127,14 +8133,32 @@ App.addEventListener("click", async (e)=>{
         let blob;
         try{ blob = fileArgs ? await buildEmailPdfBlob('letterCapture', 12*1024*1024) : await buildEmailPdfBlob('letterCapture', LIMIT); }
         catch(e){ throw {code:"pdf", message:(e&&e.message)||''}; }
-        let content;
-        if(fileArgs) content = {$file:{data:blob, name:filename, type:"application/pdf"}};
-        else if(blob.size <= LIMIT) content = await blobToBase64(blob);
-        else throw {code:"too_big", size:blob.size};
-        const res = await mcp.callTool("Gmail", "create_draft", {
+        const draftArgs = content => ({
           to:[String(m.to||'').trim()], subject:m.subject, body:m.body,
           attachments:[{filename, mimeType:"application/pdf", content}],
-        }, {cache:false});
+        });
+        const sendInline = async b => {
+          if(b.size > LIMIT){
+            try{ b = await buildEmailPdfBlob('letterCapture', LIMIT); }catch(e){ throw {code:"pdf", message:(e&&e.message)||''}; }
+          }
+          if(b.size > LIMIT) throw {code:"too_big", size:b.size};
+          return mcp.callTool("Gmail", "create_draft", draftArgs(await blobToBase64(b)), {cache:false});
+        };
+        let res;
+        if(fileArgs){
+          // The platform's file route can refuse the upload (e.g. "file upload failed (415)").
+          // The draft wasn't created in that case, so fall back to sending the PDF inline.
+          try{
+            res = await mcp.callTool("Gmail", "create_draft", draftArgs({$file:{data:new Blob([blob], {type:"application/pdf"}), name:filename, type:"application/pdf"}}), {cache:false});
+          }catch(e){
+            const msg = String((e && e.message) || '');
+            const uploadRefused = e && (e.code==="transform_error" || e.code==="bad_request" || e.code==="capability_disabled") || /upload|415/i.test(msg);
+            if(!uploadRefused) throw e;
+            res = await sendInline(blob);
+          }
+        } else {
+          res = await sendInline(blob);
+        }
         const pl = res && res.payload;
         m.gmailDone = true; m.gmailFile = filename;
         m.gmailUrl = pl && typeof pl==="object" && typeof pl.viewUrl==="string" && /^https:\/\//.test(pl.viewUrl) ? pl.viewUrl : "";
@@ -8895,6 +8919,18 @@ App.addEventListener("click", async (e)=>{
       } else {
         startEditQuote(q.id);
       }
+      break;
+    }
+    case "modalMarkSent": {
+      const m = S._modal;
+      const q = m && S.quotes.find(x=>x.id===m.qid);
+      if(!q || q.status!=="draft") break;
+      q.status = "sent"; q.sentAt = new Date().toISOString();
+      if(!q.activityLog) q.activityLog = [];
+      q.activityLog.unshift({id:uid(), text:"Marked as sent to the customer", at:q.sentAt});
+      await saveQuote(q);
+      m.markedSent = true;
+      render();
       break;
     }
     case "markSent": {

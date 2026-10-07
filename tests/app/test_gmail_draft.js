@@ -28,10 +28,12 @@ async function run(mode){
       if(c==='mcp'){
         if(window.__MODE__==='none') return null;
         return {
-          listTools: async()=>({servers:[{server:'Gmail',authStatus:'connected',tools:[]}], fileArgs: window.__MODE__==='file'}),
+          listTools: async()=>({servers:[{server:'Gmail',authStatus:'connected',tools:[]}], fileArgs: window.__MODE__==='file' || window.__MODE__==='file415'}),
           callTool: async(server, tool, input)=>{
             window.__calls = (window.__calls||[]); window.__calls.push({server, tool, input:JSON.parse(JSON.stringify(input, (k,v)=> (v instanceof Blob) ? {blob:v.size} : v))});
             if(window.__MODE__==='notconnected') throw {code:'server_not_connected', message:'x'};
+            // the platform refusing the file upload, as seen live: "file upload failed (415)"
+            if(window.__MODE__==='file415' && JSON.stringify(input, (k,v)=> (v instanceof Blob) ? 'blob' : v).includes('$file')) throw {code:'transform_error', message:'file upload failed (415)'};
             return {content:[], payload:{id:'d1', threadId:'t1', viewUrl:'https://mail.google.com/mail/u/0/#drafts?compose=d1'}};
           },
         };
@@ -64,12 +66,17 @@ async function run(mode){
     await btn.click(); await page.waitForTimeout(600);
     const calls = await page.evaluate(()=>window.__calls||[]);
     const c = calls[0] || {};
-    check('called Gmail create_draft once', calls.length===1 && c.server==='Gmail' && c.tool==='create_draft');
-    check('to / subject / covering note', JSON.stringify(c.input.to)==='["cust@example.com"]' && /Your quote from/.test(c.input.subject) && /Please find attached your quote/.test(c.input.body));
-    const att = (c.input.attachments||[])[0]||{};
+    if (mode==='file415'){
+      check('file route tried first, then retried inline once', calls.length===2 && !!(calls[0].input.attachments[0].content||{}).$file && typeof calls[1].input.attachments[0].content==='string');
+      calls.shift();
+    } else check('called Gmail create_draft once', calls.length===1 && c.server==='Gmail' && c.tool==='create_draft');
+    const c2 = calls[0] || {};
+    check('to / subject / covering note', JSON.stringify(c2.input.to)==='["cust@example.com"]' && /Your quote from/.test(c2.input.subject) && /Please find attached your quote/.test(c2.input.body));
+    const att = (c2.input.attachments||[])[0]||{};
     check('PDF attached with filename + type', /\.pdf$/.test(att.filename) && att.mimeType==='application/pdf');
     if (mode==='file') check('sent as a file argument', att.content && att.content.$file && att.content.$file.name===att.filename && att.content.$file.type==='application/pdf');
     if (mode==='big'){ const n = Buffer.from(att.content||'','base64').length; console.log('  big PDF bytes attached:', n); check('big letter shrunk under 700 KB and sent inline', typeof att.content==='string' && n>0 && n<=700*1024); }
+    if (mode==='file415') check('the retry carries the PDF inline as base64', typeof att.content==='string' && Buffer.from(att.content,'base64').toString().startsWith('%PDF'));
     if (mode==='inline') check('sent as inline base64', typeof att.content==='string' && Buffer.from(att.content,'base64').toString().startsWith('%PDF'));
     const t = await page.$eval('.modal-box', e=>e.textContent);
     if (mode==='notconnected'){
@@ -86,6 +93,6 @@ async function run(mode){
 }
 (async()=>{
   let ok = true;
-  for (const m of ['inline','file','notconnected','none','big']) ok = (await run(m)) && ok;
+  for (const m of ['inline','file','file415','notconnected','none','big']) ok = (await run(m)) && ok;
   console.log(ok?'ALL CHECKS PASSED':'SOME CHECKS FAILED'); process.exit(ok?0:1);
 })();
