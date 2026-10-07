@@ -225,8 +225,9 @@
   .meas-row.two{grid-template-columns:1.6fr 1fr auto;}
   .meas-row.four{grid-template-columns:1.3fr 0.8fr 0.8fr 0.9fr auto;}
   .meas-row.four.chk{grid-template-columns:1.3fr 0.8fr 0.8fr 0.9fr 86px auto;}
+  .meas-row.four.chk2{grid-template-columns:1.2fr 0.75fr 0.75fr 0.75fr 80px 104px auto;}
   .meas-row .row-check{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;height:42px;cursor:pointer;white-space:nowrap;}
-  .meas-row .row-check input{width:18px;height:18px;margin:0;accent-color:var(--primary);}
+  .meas-row .row-check input{width:18px;height:18px;margin:0;flex:none;accent-color:var(--primary);}
   .meas-row.six{grid-template-columns:1.1fr repeat(5,minmax(0,0.8fr)) auto;gap:6px;}
   .meas-row.six input{padding-left:8px;padding-right:6px;}
   .meas-head{margin-bottom:2px;font-size:11px;font-weight:700;color:var(--muted);line-height:1.2;align-items:end;}
@@ -305,7 +306,7 @@
 
   .two-col{display:grid;grid-template-columns:1.3fr .8fr;gap:16px;align-items:start;}
   .two-col > *{min-width:0;}
-  @media (max-width:760px){ .two-col{grid-template-columns:1fr;} .meas-row{grid-template-columns:1fr;} .meas-row.two{grid-template-columns:1fr;} .meas-row.four{grid-template-columns:1fr;} .meas-row.four.chk{grid-template-columns:1fr;} .meas-row .row-check{height:auto;} .meas-row.six{grid-template-columns:1fr;} .meas-head{display:none;} }
+  @media (max-width:760px){ .two-col{grid-template-columns:1fr;} .meas-row{grid-template-columns:1fr;} .meas-row.two{grid-template-columns:1fr;} .meas-row.four{grid-template-columns:1fr;} .meas-row.four.chk,.meas-row.four.chk2{grid-template-columns:1fr;} .meas-row .row-check{height:auto;} .meas-row.six{grid-template-columns:1fr;} .meas-head{display:none;} }
 
   /* ---------- mobile ---------- */
   @media (max-width:640px){
@@ -2213,10 +2214,12 @@ steeledging: { label:"Steel Edging", group:"Hard landscaping", unitLabel:"Length
   }},
 
 flowerbeds: { label:"Flower Beds", group:"Planting & beds", unitLabel:"Area", cols:["desc","width","length","digOutDepth"],
-  colLabels:["Description","Width (m)","Length (m)","Dig-out depth (mm)"],
-  // Per-area tick (default on): untick an area that doesn't need bark mulch — compost then fills
-  // its whole dig-out instead.
-  rowChecks:[{field:"mulch", label:"Bark mulch"}],
+  colLabels:["Description","Width (m)","Length (m)","Depth (mm)"],
+  // Per-area ticks (both default on). "Dig out" off = a built-up (raised) bed: its depth is the
+  // height it's built up and filled, and it adds nothing to the waste removal. "Bark mulch" off =
+  // no mulch on that area; compost then fills its whole depth.
+  rowChecks:[{field:"digOut", label:"Dig out"}, {field:"mulch", label:"Bark mulch"}],
+  rowsHint:"Depth is how deep the bed is dug out — or, with Dig out unticked, how high it's built up and filled.",
   options:[
     // October 2026 rework: per-row dig-out depth (default 300mm, from Settings). Compost and bark
     // mulch are built in (Materials list, priced per 1-tonne bulk bag of fbBagVolume m³): the top
@@ -2242,14 +2245,17 @@ flowerbeds: { label:"Flower Beds", group:"Planting & beds", unitLabel:"Area", co
       // wasteArea 0: an old quote never fed the waste pool, so re-saving it mustn't start to.
       return {area, wasteArea:0, digOutDepth:0, days, personDays, materials:[["Peat free compost bulk bag", ru(area/1.666)],["Geotextile membrane", opt.plantingNow?0:area],["Bark mulch", ru(area/5)],["Consumables", area>0?1:0]], plant:[], keyFigures:[["Total area",area.toFixed(2)+" m²"]]};
     }
-    let area = 0, volumeM3 = 0;
+    let area = 0, volumeM3 = 0, dugArea = 0;
     rows.forEach((r,ri)=>{
       const wm = Number(r.width)||0, lm = Number(r.length)||0;
       if(!(wm*lm>0)) return;
       const a = r6((r6(wm*1000)*r6(lm*1000))/1e6);
       const d = Number(r.digOutDepth)||0;
-      if(!(d>0)) blockers.push(`Row ${ri+1}${(r.desc||'').trim()?` (${r.desc.trim()})`:''}: enter a dig-out depth`);
-      area += a; volumeM3 += a*(d/1000);
+      const dug = r.digOut!==false;
+      if(!(d>0)) blockers.push(`Row ${ri+1}${(r.desc||'').trim()?` (${r.desc.trim()})`:''}: enter a ${dug?'dig-out depth':'build-up height'}`);
+      area += a;
+      // Only dug-out areas produce spoil for the waste removal; a built-up bed's depth is fill.
+      if(dug){ dugArea += a; volumeM3 += a*(d/1000); }
     });
     const has = area>0;
     // Built-in compost and bark mulch: mulch is always the top fbMulchDepth (50mm) of the bed,
@@ -2283,9 +2289,9 @@ flowerbeds: { label:"Flower Beds", group:"Planting & beds", unitLabel:"Area", co
     if(has) bldZeroPriceBlockers(mats, [], ctx).forEach(x=>blockers.push(x));
     const personDays = area/(Number(opt.productivity)||6.7) + (es && edgingLen>0 ? edgingLen/(Number(opt.edgingProductivity)||12) : 0);
     const days = ruq(personDays/(ctx.peopleOnSite||1));
-    // Always feeds the shared waste pool: each row's area and its own depth (area-weighted).
-    const digOutDepth = has ? (volumeM3/area)*1000 : 0;
-    return {area, days, personDays, digOutDepth, mulchDepth: mulchMm, blockers, materials:mats, plant:[], keyFigures:[["Total area",area.toFixed(2)+" m²"],["Days required",days]]};
+    // Feeds the shared waste pool with the dug-out areas only, at their own depths (area-weighted).
+    const digOutDepth = dugArea>0 ? (volumeM3/dugArea)*1000 : 0;
+    return {area, wasteArea:dugArea, days, personDays, digOutDepth, mulchDepth: mulchMm, blockers, materials:mats, plant:[], keyFigures:[["Total area",area.toFixed(2)+" m²"],["Days required",days]]};
   }},
 };
 
@@ -2439,13 +2445,26 @@ const SERVICE_COPY = {
     const rows = ((s && s.rows)||[]).filter(r=>(Number(r.width)||0)*(Number(r.length)||0)>0);
     if(o.compost===undefined && !rows.some(r=>r.digOutDepth!==undefined))
       return [`Bed area dug out to a minimum depth of 300mm.`,`Filled with good quality peat-free compost.`, o.plantingNow ? `Planted directly, without a membrane, as agreed.` : `Geotextile membrane laid on top ahead of planting.`,`Topped with bark mulch.`];
-    const depths = rows.map(r=>Math.round(Number(r.digOutDepth)||0));
-    const same = depths.length && depths.every(d=>d===depths[0]);
-    const dig = !depths.length ? `Bed area dug out.` : same ? `Bed area dug out to a depth of ${depths[0]}mm.`
-      : `Bed areas dug out to: ${rows.map((r,i)=>`${esc((r.desc||'').trim()||('bed '+(i+1)))} ${depths[i]}mm`).join(', ')}.`;
+    const bedName = r => esc((r.desc||'').trim()||('bed '+(rows.indexOf(r)+1)));
+    const depthOf = r => Math.round(Number(r.digOutDepth)||0);
+    // One line for the dug-out beds and one for the built-up beds, naming them only when it's a mix
+    // or their depths differ.
+    const depthLine = (group, verbOne, verbMany, mixed) => {
+      if(!group.length) return null;
+      const ds = group.map(depthOf), same = ds.every(x=>x===ds[0]);
+      if(!mixed && same) return `${group.length===rows.length && rows.length>1 ? 'Bed areas' : 'Bed area'} ${verbOne} ${ds[0]}mm.`;
+      if(same) return `${group.map(bedName).join(', ')} ${verbOne} ${ds[0]}mm.`;
+      return `${verbMany}: ${group.map(r=>`${bedName(r)} ${depthOf(r)}mm`).join(', ')}.`;
+    };
+    const dugRows = rows.filter(r=>r.digOut!==false), upRows = rows.filter(r=>r.digOut===false);
+    const mixed = dugRows.length>0 && upRows.length>0;
+    const depthLines = !rows.length ? [`Bed area dug out.`] : [
+      depthLine(dugRows, 'dug out to a depth of', 'Bed areas dug out to', mixed),
+      depthLine(upRows, 'built up to a height of', 'Bed areas built up to', mixed),
+    ].filter(Boolean);
     const md = (s && s.mulchDepth!=null) ? s.mulchDepth : 50;
     const mulched = rows.filter(r=>r.mulch!==false);
-    const lines = [dig, `Filled with good quality peat-free compost.`,
+    const lines = [...depthLines, `Filled with good quality peat-free compost.`,
       o.plantingNow ? `Flower bed ready for immediate planting.` : `Geotextile membrane laid on top to suppress weeds until ready for planting.`];
     if(mulched.length===rows.length) lines.push(`Topped with ${md}mm of bark mulch.`);
     else if(mulched.length) lines.push(`Topped with ${md}mm of bark mulch: ${mulched.map(r=>esc((r.desc||'').trim()||('bed '+(rows.indexOf(r)+1)))).join(', ')}.`);
@@ -6090,6 +6109,7 @@ function wizMeasure(d){
         ${def.rowHtml ? '' : measHeadHtml(def, st.options)}
         ${st.rows.map((r,i)=>def.rowHtml ? def.rowHtml(r,i,st.options) : measRowHtml(def,r,i,st.options)).join('')}
       </div>
+      ${def.rowsHint ? `<div class="hint" style="margin:2px 0 6px;">${esc(def.rowsHint)}</div>` : ''}
       <button class="btn btn-ghost btn-sm" data-action="addMeasRow" style="margin-top:4px;">+ Add line</button>
 
       ${def.options.length? `<div style="margin-top:20px;"><label style="margin-bottom:8px;">Options</label>${serviceOptionsFor(def, st.options).map(o=>optionFieldHtml(o,st.options)).join('')}</div>` : ''}
@@ -6285,11 +6305,11 @@ function measHeadHtml(def, options){
   const rc = rowColsFor(def, options);
   if(rc.cols.length<4) return '';
   const checks = def.rowChecks||[];
-  return `<div class="${measRowClass(rc.cols.length)}${checks.length?' chk':''} meas-head">${rc.labels.map(l=>`<div>${esc(l)}</div>`).join('')}${checks.map(ch=>`<div>${esc(ch.label)}</div>`).join('')}<div class="icon-btn-spacer"></div></div>`;
+  return `<div class="${measRowClass(rc.cols.length)}${checks.length?' chk chk'+checks.length:''} meas-head">${rc.labels.map(l=>`<div>${esc(l)}</div>`).join('')}${checks.map(ch=>`<div>${esc(ch.label)}</div>`).join('')}<div class="icon-btn-spacer"></div></div>`;
 }
 function measRowHtml(def, r, i, options){
   const rc = rowColsFor(def, options);
-  const cls = measRowClass(rc.cols.length) + ((def.rowChecks||[]).length ? ' chk' : '');
+  const cls = measRowClass(rc.cols.length) + ((def.rowChecks||[]).length ? ' chk chk'+def.rowChecks.length : '');
   const numCols = rc.cols.slice(1);
   return `<div class="${cls}" data-row="${i}">
     <div><label class="mf-lbl">${rc.labels[0]}</label><input type="text" placeholder="${rc.labels[0]}" data-mf="desc" value="${esc(r.desc)}"></div>
