@@ -8,14 +8,15 @@ service cloud.firestore {
     function acct(uid) {
       return get(/databases/$(database)/documents/accounts/$(uid)).data;
     }
-    // Trial (7 days from account creation), a paid period, a payment-retry grace period, or a
+    // Trial (7 days from account creation, or a longer one-off trial set by admin as trialUntil), a paid period, a payment-retry grace period, or a
     // permanent free account. Only the server (store webhooks / admin) can set the paid fields.
     function entitled(uid) {
       let a = acct(uid);
       return a.get('freeForever', false) == true
         || (a.get('periodEnd', null) != null && a.periodEnd > request.time)
         || (a.get('graceUntil', null) != null && a.graceUntil > request.time)
-        || (a.createdAt + duration.value(7, 'd') > request.time);
+        || (a.createdAt + duration.value(7, 'd') > request.time)
+        || (a.get('trialUntil', null) != null && a.trialUntil > request.time);
     }
     function tierLimit(uid) {
       let a = acct(uid);

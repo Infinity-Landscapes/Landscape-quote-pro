@@ -173,6 +173,9 @@
     var a = account || {};
     var created = toDate(a.createdAt) || new Date();
     var trialEnd = new Date(created.getTime() + TRIAL_DAYS*86400000);
+    // A longer one-off trial given to a particular account (set by the server/admin only).
+    var trialUntil = toDate(a.trialUntil);
+    if (trialUntil && trialUntil.getTime() > trialEnd.getTime()) trialEnd = trialUntil;
     var periodEnd = toDate(a.periodEnd), graceUntil = toDate(a.graceUntil), now = Date.now();
     var s = { tier: a.tier || null, plan: a.tier ? planOf(a.tier) : null, store: a.store || null, period: a.billingPeriod || null,
       trialEnd: trialEnd, periodEnd: periodEnd, graceUntil: graceUntil, cancelled: !!a.cancelAtPeriodEnd, freeForever: !!a.freeForever };

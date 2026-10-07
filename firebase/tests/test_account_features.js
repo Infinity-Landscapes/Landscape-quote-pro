@@ -148,6 +148,18 @@ async function adminGet(docPath){ return rest('GET', `${FS}/${docPath}`, 'owner'
   check('lapsed: existing quotes still viewable', /Trial Customer/.test(await text(B.page)));
   r = await rest('PATCH', `${FS}/businesses/${uid}?updateMask.fieldPaths=x`, (await signIn('matt@test.co.uk','password123')).idToken, {fields:{x:{stringValue:'y'}}});
   check('rules: writes refused once the trial has ended', r.status===403);
+  r = await rest('PATCH', `${FS}/accounts/${uid}?updateMask.fieldPaths=trialUntil`, (await signIn('matt@test.co.uk','password123')).idToken, {fields:{trialUntil:{timestampValue:new Date(Date.now()+90*86400000).toISOString()}}});
+  check('rules: a user cannot give themselves a longer trial', r.status===403);
+
+  // ---------- 5b. one-off longer trial (admin sets trialUntil) -> editable again ----------
+  await adminPatch(`accounts/${uid}`, { trialUntil: new Date(Date.now() + 20.5*86400000) });
+  await B.page.reload(); await settle(B.page, 2500); await unlock(B.page);
+  check('extended trial: banner shows the new days left (21)', /Free trial: 21 days left/.test(await B.page.evaluate(()=>{ const b=document.getElementById('pfBanner'); return b?b.innerText:''; })));
+  r = await rest('PATCH', `${FS}/businesses/${uid}?updateMask.fieldPaths=x`, (await signIn('matt@test.co.uk','password123')).idToken, {fields:{x:{stringValue:'y'}}});
+  check('rules: writes allowed again during the extended trial', r.status===200);
+  await adminPatch(`accounts/${uid}`, { trialUntil: new Date(Date.now() - 86400000) });
+  await B.page.reload(); await settle(B.page, 2500); await unlock(B.page);
+  check('extended trial over: read-only again', /free trial has ended/.test(await B.page.evaluate(()=>document.getElementById('pfBanner').innerText)));
 
   // ---------- 6. plan bought (server sets it) -> editable, Team = 5 devices ----------
   await adminPatch(`accounts/${uid}`, { tier: 'team', periodEnd: new Date(Date.now() + 30*86400000), store: 'play_store', billingPeriod: 'monthly' });
