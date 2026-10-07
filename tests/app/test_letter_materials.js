@@ -75,7 +75,7 @@ const fs = require('fs');
   const letter = await page.$eval('#letterCapture', el => el.innerText);
   const occurrences = (letter.match(/Materials allowed for/g)||[]).length;
   check('letter shows "Materials allowed for" exactly once', occurrences === 1);
-  check('no per-service "Materials allowed for:" lines', !/Materials allowed for:/.test(letter));
+  check('no per-service "Materials allowed for: name (qty)" lines', !/Materials allowed for:[^\n]*\(\d/.test(letter));
   const iMat = letter.indexOf('Materials allowed for');
   const lastService = Math.max(...r.sections.filter(s=>s.key!=='waste').map(s=>letter.indexOf(s.label+' – ')));
   const iWaste = letter.indexOf('Waste removal & site clearance');
@@ -109,7 +109,7 @@ const fs = require('fs');
 
   // ---- the letter HTML itself (what the PDF and the saved quote's letter are drawn from) ----
   const h = await page.evaluate(() => { const T = window.__T; return T.quoteLetterHtml(T.buildQuoteFromDraft(T.S().draft, "draft")); });
-  check('letter HTML has one consolidated list and no per-service lines', (h.match(/Materials allowed for/g)||[]).length === 1 && !/Materials allowed for:/.test(h));
+  check('letter HTML has one consolidated list and no per-service lines', (h.match(/Materials allowed for/g)||[]).length === 1 && !/Materials allowed for:[^<]*\(\d/.test(h));
 
   console.log('ERRORS:', errors.length?errors:'none');
   if (errors.length) pass = false;

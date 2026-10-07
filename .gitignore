@@ -6,3 +6,4 @@ tests/app/*.png
 tests/app/_*_exposed.html
 .firebase/
 tests/app/tour_shots/
+tests/app/*.pdf
