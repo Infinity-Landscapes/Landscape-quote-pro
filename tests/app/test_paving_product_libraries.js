@@ -103,7 +103,7 @@ const fs = require('fs');
   const grabM3Setting = await page.$eval('#st_wasteGrabM3PerLoad', el => el.value).catch(()=>null);
   check('paving primer coverage field present, defaults to 20', primerCoverage === '20');
   check('paving edging productivity setting field present, defaults to 12', edgingProdSetting === '12');
-  check('grab hire capacity (m³/load) field present, defaults to 5', grabM3Setting === '5');
+  check('grab hire capacity (m³/load) field present, defaults to 8', grabM3Setting === '8');
 
   // --- Add a jointing compound via Settings > Pricing > Paving's own "+ Add…" button (the
   //     tenant-built-library mechanism, unchanged apart from being refactored to share code

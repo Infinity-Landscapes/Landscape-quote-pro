@@ -54,7 +54,7 @@ const fs = require('fs');
 
   const grabField = await page.$('[data-opt="grabM3PerLoad"]');
   check('"Grab hire capacity (m³/load)" per-job override field is present', !!grabField);
-  check('grab hire capacity defaults to 5 m³/load', (await grabField.inputValue()) === '5');
+  check('grab hire capacity defaults to 8 m³/load', (await grabField.inputValue()) === '8');
   const diggerField = await page.$('[data-opt="diggerProductivity"]');
   check('digger hire productivity field unchanged (still m²/day)', !!diggerField);
   check('digger hire productivity defaults to 50 m²/day', (await diggerField.inputValue()) === '50');
@@ -63,9 +63,9 @@ const fs = require('fs');
   // before advancing (the customer-facing quote letter later only shows the £ totals, not the
   // plant item quantities by name).
   check('digger hire: 1 block (area-based, unchanged: ROUNDUP(ROUNDUP(100/50)/5)=1)', /Digger hire1/.test(bodyText));
-  // Grab hire: volume-based. grabLoads = ROUNDUP(20/5) = 4 loads — NOT ROUNDUP(100/35)=3, which
+  // Grab hire: volume-based. grabLoads = ROUNDUP(20/8) = 3 loads — NOT the old ROUNDUP(20/5)=4 or area-based figure, which
   // is what the old area-based formula would have given.
-  check('grab hire: 4 loads (volume-based: ROUNDUP(20m³/5)=4, not the old area-based figure of 3)', /Grab hire4/.test(bodyText));
+  check('grab hire: 3 loads (volume-based at the 8 m³ default: ROUNDUP(20m³/8)=3)', /Grab hire3/.test(bodyText));
 
   await (await page.$('button[data-action="wizNext"]')).click(); await page.waitForTimeout(200); // -> people
   await page.fill('#q_people', '3');
@@ -74,10 +74,10 @@ const fs = require('fs');
   await (await page.$('button[data-action="wizNext"]')).click(); await page.waitForTimeout(300); // -> preview
 
   bodyText = await page.$eval('#App', el => el.textContent);
-  // Cross-check via the final quote's totals: digger (1 block × net £300 = £300) + grab (4 loads
-  // × net £300 = £1,200) = £1,500 plant cost for the waste section — confirms both quantities
+  // Cross-check via the final quote's totals: digger (1 block × net £300 = £300) + grab (3 loads
+  // × net £300 = £900) = £1,200 plant cost for the waste section — confirms both quantities
   // held through to the saved quote, not just the live wizard preview.
-  check('waste section plant cost = £1,500.00 (1 digger block + 4 grab loads, at £300 net each)', /Plant hire£1,?500\.00/.test(bodyText));
+  check('waste section plant cost = £1,200.00 (1 digger block + 3 grab loads, at £300 net each)', /Plant hire£1,?200\.00/.test(bodyText));
 
   console.log('\nERRORS:', errors.length ? errors : 'none');
   console.log('\n' + (pass && errors.length===0 ? 'ALL CHECKS PASSED' : 'SOME CHECKS FAILED'));

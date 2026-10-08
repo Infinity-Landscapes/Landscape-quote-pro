@@ -59,7 +59,7 @@ const fs = require('fs');
   check('digger hire billed as 2 blocks (depth-scaled 4 digger-days ÷ 2-day block size)', /Digger hire2/.test(bodyText));
   // grabLoads unaffected by depth scaling: volume = 100 x 0.3 = 30 m³, grabLoads =
   // ROUNDUP(30/5) = 6 — i.e. driven directly by volume, not by the depth-scaled digger-days path.
-  check('grab hire still volume-based, unaffected by the depth scaling (ROUNDUP(30m³/5)=6)', /Grab hire6/.test(bodyText));
+  check('grab hire still volume-based, unaffected by the depth scaling (ROUNDUP(30m³/8)=4)', /Grab hire4/.test(bodyText));
 
   // Clearance labour: labourPersonDays = (100/20) * (300/150) = 5 * 2 = 10 person-days, at the
   // default 3-person crew -> labourDays = ROUNDUP(10/3 to nearest 1/4) = 3.5 days.

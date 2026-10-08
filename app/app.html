@@ -4009,7 +4009,7 @@ function defaultSettings(){
     cbSeeded: true,
     // Grab-hire capacity for the volume-pooled waste-removal formula (area × dig-out depth) —
     // see calcWasteRemoval/WASTE_DEFAULT_DEPTH_MM.
-    wasteGrabM3PerLoad: 5,
+    wasteGrabM3PerLoad: 8,
     // Which services feed the shared Waste removal & site clearance pool — see SPOIL_GATE_OPTION
     // and calcWasteRemoval. Reproduces exactly what used to be hardcoded in WASTE_ELIGIBLE, plus
     // Pond and Block Retaining Wall (now pooled instead of hiring their own standalone digger).
@@ -4215,7 +4215,7 @@ function ctxFor(settings, peopleOnSite){
     netPrice: (price, vatIncluded) => netOf(price, vatIncluded!==false),
     // Grab-hire capacity for the volume-based waste-removal pooling below (see
     // calcWasteRemoval) — replaces the old area-based wasteGrab (m²/load) productivity figure.
-    wasteGrabM3PerLoad: settings.wasteGrabM3PerLoad!=null ? settings.wasteGrabM3PerLoad : 5,
+    wasteGrabM3PerLoad: settings.wasteGrabM3PerLoad!=null ? settings.wasteGrabM3PerLoad : 8,
     wasteSkips: settings.wasteSkips || [],
     // Per-service "generates spoil?" flags (built-in and custom) that replace the old hardcoded
     // WASTE_ELIGIBLE list — see calcWasteRemoval/SPOIL_GATE_OPTION.
@@ -4354,7 +4354,7 @@ async function loadAll(){
       artificialturf: settings.atWastagePercent!=null ? Number(settings.atWastagePercent) : 20} : {};
     settings._wastageMigrated = true;
   }
-  if(settings.wasteGrabM3PerLoad==null) settings.wasteGrabM3PerLoad = 5;
+  if(settings.wasteGrabM3PerLoad==null) settings.wasteGrabM3PerLoad = 8;
   if(!Array.isArray(settings.pavingJointingCompounds)) settings.pavingJointingCompounds = [];
   if(!Array.isArray(settings.pavingEdgingStyles)) settings.pavingEdgingStyles = [];
   // anyone with settings saved before Block paving's own tenant-built libraries/sub-base/wastage
@@ -4795,7 +4795,7 @@ function ensureSectionState(key){
       const p = S.settings.productivity || {};
       S.draft.sectionsRaw.waste = {rows: [], options: {
         diggerProductivity: p.wasteDigger!=null ? p.wasteDigger : 50,
-        grabM3PerLoad: S.settings.wasteGrabM3PerLoad!=null ? S.settings.wasteGrabM3PerLoad : 5,
+        grabM3PerLoad: S.settings.wasteGrabM3PerLoad!=null ? S.settings.wasteGrabM3PerLoad : 8,
         labourProductivity: p.wasteLabour!=null ? p.wasteLabour : 20,
       }, notes: []};
     }
@@ -7488,7 +7488,7 @@ function renderSettings(){
       }).join('')}
       <tr>
         <td>Grab hire</td>
-        <td class="num"><input type="text" inputmode="decimal" id="st_wasteGrabM3PerLoad" value="${s.wasteGrabM3PerLoad!=null?s.wasteGrabM3PerLoad:5}" style="width:90px;text-align:right;"> <span class="hint" style="display:inline;">m³/load</span></td>
+        <td class="num"><input type="text" inputmode="decimal" id="st_wasteGrabM3PerLoad" value="${s.wasteGrabM3PerLoad!=null?s.wasteGrabM3PerLoad:8}" style="width:90px;text-align:right;"> <span class="hint" style="display:inline;">m³/load</span></td>
       </tr>
       </table>
     </div>
