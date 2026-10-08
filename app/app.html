@@ -278,6 +278,8 @@
   .letter-foot-band b{font-size:13px;}
   .letter-body{padding:30px 34px 10px;font-size:14.5px;line-height:1.45;color:#1f1f1f;font-family:Calibri,Carlito,'Manrope',sans-serif;}
   .letter-body p{margin:0 0 11px;}
+  .letter-body .gbp{font-size:1.2em;line-height:0;}
+  .letter-total-box b .gbp{font-size:inherit;}
   .letter-body .lt-green{color:var(--lt-accent);}
   .letter-body h4.lt-works{font-family:inherit;font-size:inherit;font-weight:700;color:var(--lt-accent);text-decoration:underline;margin:14px 0 11px;}
   .letter-body p.lt-sec{margin:14px 0 8px;}
@@ -5798,7 +5800,15 @@ function letterPriceHtml(q){
   bold(`${days} working day${days===1?'':'s'}`);
   return h;
 }
-function quoteLetterHtml(q, opts){
+// The letter font (Calibri / Carlito) draws £ noticeably shorter than its figures, so in the
+// letter every £ is wrapped and scaled up to the height of the numbers next to it. Only text
+// between tags is touched (never attributes), and never inside an edit box's text.
+function letterPoundSigns(html){
+  return html.split(/(<textarea[\s\S]*?<\/textarea>)/i).map((part, i) => i % 2 ? part
+    : part.replace(/>([^<]*)/g, (m, t) => '>' + t.replace(/£/g, '<span class="gbp">£</span>'))).join('');
+}
+function quoteLetterHtml(q, opts){ return letterPoundSigns(quoteLetterHtmlRaw(q, opts)); }
+function quoteLetterHtmlRaw(q, opts){
   const editing = !!(opts && opts.editing);
   const sections = q.sections.filter(s=>s.key!=="waste" && s.subtotal>0.004);
   const waste = q.sections.find(s=>s.key==="waste");
