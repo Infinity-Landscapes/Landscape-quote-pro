@@ -1370,6 +1370,10 @@ brickwall: { label:"Block Retaining Wall", group:"Walls", unitLabel:"Area", cols
   // Footing length follows the row's wall length until overwritten (see the data-mf listener).
   rowDefaults:{footingWidth:450, footingDepth:300},
   options:[
+    {key:"firstSkinProduct",label:"First skin product",type:"select",source:"brickwallFirstSkinProducts",default:"Concrete blocks",placeholder:"Select a first skin product…",
+      extraOptions:[{value:"Concrete blocks",label:"Concrete blocks (default)"}],
+      addLabel:"first skin product", addFields:["price","facePricedPer","piecesPerM2","thicknessMm"],
+      hint:"The inside skin of the wall. Concrete blocks by default — or pick a product you've added, or add a new one (priced per piece with pieces per m², or per m²)."},
     {key:"faceSkin",label:"Face skin?",type:"yesno",default:false},
     {key:"faceProduct",label:"Face skin product",type:"select",source:"brickwallFaceProducts",default:"",showIf:"faceSkin",placeholder:"Select a face product…",
       addLabel:"face product", addFields:["price","facePricedPer","piecesPerM2","thicknessMm"],
@@ -1420,7 +1424,12 @@ brickwall: { label:"Block Retaining Wall", group:"Walls", unitLabel:"Area", cols
     // Skins: inside skin always concrete blocks; optional tenant face product.
     const face = opt.faceSkin && opt.faceProduct ? (ctx.brickwallFaceProducts||[]).find(x=>x.name===opt.faceProduct) : null;
     const skins = opt.faceSkin ? 2 : 1;
+    // First (inside) skin: concrete blocks unless a tenant first-skin product is picked.
+    const firstName = opt.firstSkinProduct || "Concrete blocks";
+    const firstIsBlocks = firstName==="Concrete blocks";
+    const firstProd = firstIsBlocks ? null : (ctx.brickwallFirstSkinProducts||[]).find(x=>x.name===firstName) || null;
     const blocks = ru(wallArea*(Number(ctx.brickwallBlocksPerM2)||0));
+    const firstQty = firstProd ? (firstProd.facePricedPer==="m2" ? wallArea : ru(wallArea*(Number(firstProd.piecesPerM2)||0))) : 0;
     let faceQty = 0;
     if(face) faceQty = face.facePricedPer==="m2" ? wallArea : ru(wallArea*(Number(face.piecesPerM2)||0));
     const sand = ru(wallArea/14)*skins;
@@ -1437,7 +1446,8 @@ brickwall: { label:"Block Retaining Wall", group:"Walls", unitLabel:"Area", cols
       const lib = !isSlab && cp ? (ctx.brickwallCopings||[]).find(x=>x.name===cp) : null;
       const perM2 = isSlab || (lib && lib.copingPricedPer==="m2");
       const faceThk = opt.faceSkin ? (face && face.thicknessMm!=null && face.thicknessMm!=='' ? Number(face.thicknessMm) : null) : 0;
-      const widthMm = (Number(ctx.brickwallWallThickness)||0) + (faceThk||0) + 2*(Number(ctx.brickwallCopingOverhang)||0);
+      const firstThk = firstProd && firstProd.thicknessMm!=null && firstProd.thicknessMm!=='' ? Number(firstProd.thicknessMm) : (Number(ctx.brickwallWallThickness)||0);
+      const widthMm = firstThk + (faceThk||0) + 2*(Number(ctx.brickwallCopingOverhang)||0);
       const qty = perM2 ? ru(wallLen*widthMm/1000) : wallLen;
       if(!isSlab && !lib) copingErr = "Select a coping";
       else if(perM2 && opt.faceSkin && face && faceThk==null) copingErr = "Add a thickness to the face product — it's needed for the coping width";
@@ -1446,6 +1456,11 @@ brickwall: { label:"Block Retaining Wall", group:"Walls", unitLabel:"Area", cols
     }
     if(hasWall){
       if(footVol>0 && !(ctx.price("Sharp sand")>0)) blockers.push("Sharp sand has no price — enter one in Materials (it's shared with Paving and Block paving)");
+      if(!firstIsBlocks){
+        if(!firstProd) blockers.push("Select a first skin product");
+        else if(firstProd.facePricedPer!=="m2" && !(Number(firstProd.piecesPerM2)>0)) blockers.push("The first skin product needs a pieces-per-m² figure");
+        else if(!(Number(firstProd.price)>0)) blockers.push("The first skin product price can't be £0");
+      }
       if(opt.faceSkin){
         if(!face) blockers.push("Select a face skin product");
         else if(face.facePricedPer!=="m2" && !(Number(face.piecesPerM2)>0)) blockers.push("The face product needs a pieces-per-m² figure");
@@ -1468,7 +1483,7 @@ brickwall: { label:"Block Retaining Wall", group:"Walls", unitLabel:"Area", cols
       ["Building sand", sand],
       ["Cement", cement],
       ["Feb", feb],
-      ["Concrete blocks", blocks],
+      firstIsBlocks ? ["Concrete blocks", blocks] : (firstProd ? [firstName, firstQty, ctx.netPrice(firstProd.price, firstProd.vatIncluded), '', firstProd.facePricedPer==="m2"?'m²':'each'] : ['', 0]),
       face ? [opt.faceProduct, faceQty, ctx.netPrice(face.price, face.vatIncluded), '', face.facePricedPer==="m2"?'m²':'each'] : ['', 0],
       ["Wall ties", wallTies],
       rebar ? [opt.rebarProduct, rebarQty, ctx.netPrice(rebar.price, rebar.vatIncluded), '', 'each'] : ['', 0],
@@ -2464,7 +2479,7 @@ const SERVICE_COPY = {
     const rng = (a,d)=>{ if(!a.length) return d+'mm'; const mn=Math.min(...a), mx=Math.max(...a); return mn===mx ? mn+'mm' : mn+'–'+mx+'mm'; };
     const faceName = o.faceProduct || o.skin1 || '';
     return [`Foundations excavated and a concrete footing poured ${rng(ws,450)} wide by ${rng(ds,300)} deep${o.rebar?', reinforced with rebar':''}.`,
-      `Wall built up in concrete blocks in a staggered running bond.`,
+      `Wall built up in ${o.firstSkinProduct && o.firstSkinProduct!=="Concrete blocks" ? esc(o.firstSkinProduct) : 'concrete blocks'} in a staggered running bond.`,
       `Damp-proof membrane applied to the back face of the blockwork.`,
       `Wall backfilled with pea shingle to roughly a third of its height, separated from the retained soil with a geotextile membrane.`,
       o.faceSkin && faceName ? `Wall faced in ${esc(faceName)}.` : ``,
@@ -3933,6 +3948,7 @@ function defaultSettings(){
     brickwallFinishingProductivity: 10,// m/person/day — coping, only when coping is ticked
     brickwallConsumablesQty: 1,
     brickwallFaceProducts: [],   // [{id, name, price, facePricedPer:'piece'|'m2', piecesPerM2, thicknessMm, vatIncluded}]
+    brickwallFirstSkinProducts: [], // same shape as face products — alternatives to the default concrete blocks
     brickwallRebar: [],          // [{id, name, price, lengthMm, vatIncluded}] — price per bar
     brickwallCopings: [],        // [{id, name, price, copingPricedPer:'m'|'m2', vatIncluded}]
     // Sleeper Retaining Wall (October 2026). Post stock length, in-ground depth and postcrete bags
@@ -4158,6 +4174,7 @@ function ctxFor(settings, peopleOnSite){
     brickwallFinishingProductivity: settings.brickwallFinishingProductivity!=null ? settings.brickwallFinishingProductivity : 10,
     brickwallConsumablesQty: settings.brickwallConsumablesQty!=null ? settings.brickwallConsumablesQty : 1,
     brickwallFaceProducts: settings.brickwallFaceProducts || [],
+    brickwallFirstSkinProducts: settings.brickwallFirstSkinProducts || [],
     brickwallRebar: settings.brickwallRebar || [],
     brickwallCopings: settings.brickwallCopings || [],
     sleeperPostSpacing: settings.sleeperPostSpacing!=null ? settings.sleeperPostSpacing : 1200,
@@ -4376,7 +4393,7 @@ async function loadAll(){
     gravelCoverage:10, gravelBaselineDepth:50, gravelMotCoverage:5, gravelMotBaselineDepth:100, gravelConsumablesQty:1}).forEach(([k,v])=>{ if(settings[k]==null) settings[k]=v; });
   if(!Array.isArray(settings.gravelEdgingStyles)) settings.gravelEdgingStyles = [];
   Object.entries({brickwallFootingBaseArea:10, brickwallFootingBaseDepth:100, brickwallFootingBallast:1, brickwallFootingSharpSand:1, brickwallFootingCement:12, brickwallRebarLines:2, brickwallRebarLap:300, brickwallBlocksPerM2:10, brickwallWallThickness:100, brickwallCopingOverhang:50, brickwallFinishingProductivity:10, brickwallConsumablesQty:1}).forEach(([k,v])=>{ if(settings[k]==null) settings[k]=v; });
-  ['brickwallFaceProducts','brickwallRebar','brickwallCopings','sleeperProducts','sleeperScrews'].forEach(k=>{ if(!Array.isArray(settings[k])) settings[k] = []; });
+  ['brickwallFaceProducts','brickwallFirstSkinProducts','brickwallRebar','brickwallCopings','sleeperProducts','sleeperScrews'].forEach(k=>{ if(!Array.isArray(settings[k])) settings[k] = []; });
   Object.entries({sleeperPostSpacing:1200, sleeperScrewsPerSleeper:6, sleeperConsumablesQty:1}).forEach(([k,v])=>{ if(settings[k]==null) settings[k]=v; });
   // Fencing's fence types: a business saved before they existed gets the three pre-filled types.
   if(!Array.isArray(settings.fenceTypes)) settings.fenceTypes = deepClone(FENCE_TYPES_BUILTIN);
@@ -4832,6 +4849,9 @@ function ensureSectionState(key){
   // An older quote opened for editing: show the wastage it was priced with.
   if(def.options.some(o=>o.key==="wastagePct") && S.draft.sectionsRaw[key].options && S.draft.sectionsRaw[key].options.wastagePct===undefined)
     S.draft.sectionsRaw[key].options.wastagePct = quoteWastagePct(key, {});
+  // A Block Retaining Wall saved before the first skin could be changed used concrete blocks.
+  if(key==="brickwall" && S.draft.sectionsRaw[key].options && S.draft.sectionsRaw[key].options.firstSkinProduct===undefined)
+    S.draft.sectionsRaw[key].options.firstSkinProduct = "Concrete blocks";
   if(!S.draft.sectionsRaw[key].notes) S.draft.sectionsRaw[key].notes = [];
   return S.draft.sectionsRaw[key];
 }
@@ -7565,6 +7585,7 @@ function renderSettings(){
     <div class="row">
       <div class="field"><label>Consumables quantity (per job)</label><input id="st_bwConsumables" type="text" inputmode="decimal" value="${s.brickwallConsumablesQty!=null?s.brickwallConsumablesQty:1}"></div>
     </div>
+    ${pavingProductLibraryHtml("brickwallFirstSkinProducts","First skin products (alternatives to concrete blocks)","first skin product",["price","facePricedPer","piecesPerM2","thicknessMm"])}
     ${pavingProductLibraryHtml("brickwallFaceProducts","Face skin products","face product",["price","facePricedPer","piecesPerM2","thicknessMm"])}
     ${pavingProductLibraryHtml("brickwallRebar","Rebar","rebar",["price","lengthMm"])}
     ${pavingProductLibraryHtml("brickwallCopings","Coping products","coping",["price","copingPricedPer"])}
@@ -8288,7 +8309,7 @@ function productSection(libKey){
   return libKey==="wasteSkips" ? "Waste removal" : "Other products";
 }
 function productUnit(libKey, e){
-  if(libKey==="brickwallFaceProducts") return e.facePricedPer==="m2" ? 'm²' : 'each';
+  if(libKey==="brickwallFaceProducts" || libKey==="brickwallFirstSkinProducts") return e.facePricedPer==="m2" ? 'm²' : 'each';
   if(libKey==="brickwallCopings") return e.copingPricedPer==="m2" ? 'm²' : 'm';
   if(e.priceM!=null && e.price==null) return 'm';
   return PRODUCT_UNITS[libKey] || 'each';
@@ -10435,3 +10456,4 @@ loadAll();
 
 })();
 </script>
+
