@@ -61,7 +61,9 @@ const fs = require('fs');
   check('gravel at 40mm = ROUNDUP(2.4) = 3', t.includes('Test gravel3'));
   check('MOT rounded once on total: 4.4 + 3.2 = 7.6 -> 8 (not 5+4)', t.includes('Type 1 MOT8'));
   await page.fill('[data-opt="gravelDepth"]','150'); await settle();
-  check('blocker: gravel depth >= a row dig-out depth', /Gravel depth \(150mm\) must be less than every row's dig-out depth/.test(await txt()));
+  check('gravel depth equal to a row\'s dig-out is fine (that row needs no MOT)', !/Gravel depth \(150mm\)/.test(await txt()));
+  await page.fill('[data-opt="gravelDepth"]','160'); await settle();
+  check('blocker: gravel depth deeper than a row\'s dig-out', /Gravel depth \(160mm\) can't be more than a row's dig-out depth/.test(await txt()));
   await page.fill('[data-opt="gravelDepth"]','50'); await settle();
 
   // Tenant edging style

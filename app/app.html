@@ -230,6 +230,8 @@
   .meas-row.two.sel{grid-template-columns:1.4fr 0.8fr 1.4fr auto;}
   .meas-row.four.sel{grid-template-columns:1.1fr 0.65fr 0.65fr 0.75fr 1.35fr auto;}
   .meas-row.six.sel{grid-template-columns:1fr repeat(5,minmax(0,0.7fr)) 1.3fr auto;}
+  .step-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:6px;align-items:end;margin-bottom:8px;}
+  .step-row input{padding-left:8px;padding-right:6px;}
   .meas-row .row-check{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;height:42px;cursor:pointer;white-space:nowrap;}
   .meas-row .row-check input{width:18px;height:18px;margin:0;flex:none;accent-color:var(--primary);}
   .meas-row.six{grid-template-columns:1.1fr repeat(5,minmax(0,0.8fr)) auto;gap:6px;}
@@ -735,7 +737,7 @@ function rowColsFor(def, options){
 const SERVICES = {
 
 paving: { label:"Paving", group:"Hard landscaping", unitLabel:"Area", cols:["desc","width","length"],
-  cut:{options:['style'], edging:['edgingStyle']},
+  cut:{options:['style','stepsSlab'], edging:['edgingStyle']},
   rowSelects:[{field:"slabType", label:"Slab type", optKey:"style", group:"paving", placeholder:"Select a slab…"}],
   colLabels:["Description","Width (m)","Length (m)"],
   options:[
@@ -756,6 +758,10 @@ paving: { label:"Paving", group:"Hard landscaping", unitLabel:"Area", cols:["des
       hint:"Pick one you've already added, or add a new one — it's saved to your Paving settings for future quotes too."},
     {key:"covers",label:"Recessed manhole covers?",type:"yesno",default:false},
     {key:"coverCount",label:"Number of covers",type:"number",default:1,showIf:"covers"},
+    {key:"steps",label:"Steps?",type:"yesno",default:false},
+    {key:"stepRows",label:"Steps",type:"steplist",showIf:"steps"},
+    {key:"stepsSlab",label:"Slab for the step treads",type:"select",options:[],default:"",customizable:"paving",showIf:"steps",placeholder:"Same slab as the first area",
+      hint:"Leave it on the first area's slab, or pick a different one for the steps."},
     {key:"edging",label:"Edging needed?",type:"yesno",default:false},
     {key:"edgingLength",label:"Edging length (m)",type:"number",default:0,showIf:"edging"},
     {key:"edgingStyle",label:"Edging style",type:"select",source:"pavingEdgingStyles",default:"",showIf:"edging",placeholder:"Select an edging style…",
@@ -824,6 +830,44 @@ paving: { label:"Paving", group:"Hard landscaping", unitLabel:"Area", cols:["des
       if(opt.edging && edgingLen>0 && !es) blockers.push("Select an edging style for the edging length entered");
     }
     return {area, days, personDays, digOutDepth, blockers, materials:mats, plant, keyFigures:[["Total area",area.toFixed(2)+" m²"],["Days required",days]]};
+  },
+  // Steps: each entry is width × depth (the tread, in m) and height (mm), times how many. The
+  // risers are built like a Block Retaining Wall in concrete blocks — wall length = width + depth
+  // + depth (both sides), times the height. The tread area is paved like the rest of the patio
+  // (slabs, sharp sand, cement, primer, jointing, cleaner) and added to the paving m²; it isn't
+  // dug out, so it adds no Type 1 MOT, membrane or waste. Runs once on the whole job, after any
+  // per-area slab split, so the steps are never counted twice.
+  after(raw, rows, opt, ctx){
+    const st = pavingStepTotals(opt);
+    if(!opt.steps || !(st.tread>0)) return raw;
+    const firstRow = (rows||[]).find(r=>(Number(r.width)||0)*(Number(r.length)||0)>0) || {};
+    const slab = opt.stepsSlab || firstRow.slabType || opt.style || '';
+    const tread = SERVICES.paving.calc([{width:st.tread, length:1}], Object.assign({}, opt, {style:slab, edging:false, covers:false, steps:false}), ctx);
+    const keep = new Set(["Sharp sand","Cement","Paving primer","Patio cleaner", slab, opt.jointingCompound||'']);
+    const merge = (line) => {
+      if(!line || !line[0] || !(Number(line[1])>0)) return;
+      const ex = raw.materials.find(m=>m[0]===line[0] && !m.notRowChoice);
+      if(ex) ex[1] = (Number(ex[1])||0) + Number(line[1]); else raw.materials.splice(raw.materials.length-1, 0, line.slice());
+    };
+    (tread.materials||[]).filter(m=>keep.has(m[0])).forEach(merge);
+    // Risers: concrete blocks and mortar, exactly as the Block Retaining Wall works them out.
+    const W = st.riser;
+    const sand = ru(W/14);
+    merge(["Concrete blocks", ru(W*(Number(ctx.brickwallBlocksPerM2)||10))]);
+    merge(["Building sand", sand]);
+    merge(["Cement", 6*sand]);
+    merge(["Feb", ru(W/10)]);
+    const wallProd = (S.settings && S.settings.productivity && Number(S.settings.productivity.brickwall)) || 2.7;
+    const stepDays = (tread.personDays||0) + W/wallProd;
+    raw.personDays = (raw.personDays||0) + stepDays;
+    raw.days = ruq(raw.personDays/(ctx.peopleOnSite||1));
+    (raw.plant||[]).forEach(p=>{ if(p[3]!=='flat') p[2] = raw.days; });
+    if(raw.wasteArea==null) raw.wasteArea = raw.area;
+    raw.area = (raw.area||0) + st.tread;
+    raw.blockers = (raw.blockers||[]).slice();
+    if(!slab) raw.blockers.push("Select a slab for the step treads");
+    raw.keyFigures = [["Total area", raw.area.toFixed(2)+" m²"], ["Steps", `${st.count} (${st.tread.toFixed(2)} m² of treads)`], ["Days required", raw.days]];
+    return raw;
   }},
 
 gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Area", cols:["desc","width","length","digOutDepth"],
@@ -840,7 +884,7 @@ gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Are
     {key:"style",label:"Gravel type",type:"select",options:[],default:"",customizable:"gravel",showIf:()=>false,
       hint:"Pick a gravel you've already added, or add a new one (price per tonne) — it's saved to your materials for future quotes too."},
     {key:"gravelDepth",label:"Gravel depth (mm)",type:"number",default:50,
-      hint:"Depth of the finished gravel layer. The Type 1 MOT depth on each row is that row's dig-out depth minus this."},
+      hint:"Depth of the finished gravel layer. The Type 1 MOT depth on each row is that row's dig-out depth minus this — a row dug out only as deep as the gravel needs no Type 1 MOT (and only one membrane)."},
     {key:"edging",label:"Edging needed?",type:"yesno",default:false},
     {key:"edgingStyle",label:"Edging style",type:"select",source:"gravelEdgingStyles",extraOptions:[{value:GRAVEL_STEEL_EDGING,label:"Steel edging"}],
       default:"",showIf:"edging",placeholder:"Select an edging style…", addLabel:"edging style", addFields:["piecesPerMetre","price"],
@@ -863,7 +907,7 @@ gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Are
     // A row saved before the rework has no digOutDepth of its own — fall back to that job's old
     // single dig-out option (or 150).
     const legacyDepth = Number(opt.digOutDepth)>0 ? Number(opt.digOutDepth) : 150;
-    let area=0, motT=0, volumeM3=0; const depths=[];
+    let area=0, motT=0, volumeM3=0, membrane=0; const depths=[];
     // Gravel tonnes per type (each area has its own type), each total rounded up once.
     const gravelByType = {}; const typeOrder = [];
     rows.forEach((r,ri)=>{
@@ -876,9 +920,12 @@ gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Are
       if(!type) blockers.push(`Select a gravel type for line ${ri+1}${(r.desc||'').trim()?` (${r.desc.trim()})`:''}`);
       else { if(!(type in gravelByType)){ gravelByType[type] = 0; typeOrder.push(type); } gravelByType[type] += (a/cov)*(gravelDepth/base); }
       motT += (a/motCov)*(Math.max(0, d-gravelDepth)/motBase);
+      // One membrane under the gravel; a second one goes between the MOT and the gravel only
+      // where there is a Type 1 MOT layer (dug out deeper than the gravel).
+      membrane += a * (d > gravelDepth ? 2 : 1);
     });
     const hasArea = area>0;
-    if(depths.some(d=>gravelDepth>=d)) blockers.push(`Gravel depth (${gravelDepth}mm) must be less than every row's dig-out depth — there's no room left for the Type 1 MOT`);
+    if(depths.some(d=>gravelDepth>d)) blockers.push(`Gravel depth (${gravelDepth}mm) can't be more than a row's dig-out depth — dig out at least as deep as the gravel`);
     if(hasArea) typeOrder.forEach(t=>{ if(!(ctx.price(t)>0)) blockers.push(`The price of "${t}" can't be £0`); });
     // Edging: a tenant-built style is priced here; Steel edging is priced by its own section.
     const steel = !!opt.edging && opt.edgingStyle===GRAVEL_STEEL_EDGING;
@@ -898,7 +945,7 @@ gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Are
       : legacyEdging ? (opt.edgingType==="Block edging" ? ["Edging blocks", ru(20*edgingLen)] : ["Edging for gravel", edgingLen])
       : ['', 0];
     const mats = [
-      ["Geotextile membrane", 2*area],
+      ["Geotextile membrane", membrane],
       ["Type 1 MOT", ru(motT)],
       ...typeOrder.map(t=>[t, ru(gravelByType[t])]),
       edgingLine,
@@ -2410,9 +2457,15 @@ flowerbeds: { label:"Flower Beds", group:"Planting & beds", unitLabel:"Area", co
   }},
 };
 
+// Paving letter: one line for any steps (count, risers and what the treads are finished in).
+function pavingStepsLetterLine(o){
+  if(!o || !o.steps) return [];
+  const t = pavingStepTotals(o); if(!(t.count>0)) return [];
+  return [`${t.count} step${t.count===1?'':'s'} built with concrete block risers set in mortar, with treads finished in ${o.stepsSlab ? esc(o.stepsSlab) : 'the same paving'} to match.`];
+}
 /* Narrative copy used to build the quote letter, in the voice of the existing template */
 const SERVICE_COPY = {
-  paving: (o)=>{ const d = Number(o.digOutDepth)||150; const mot = Math.max(0, d-50); return [`Patio area excavated to a minimum depth of ${d}mm.`,`Geotextile membrane installed across the sub-grade for stabilisation.`,`A minimum 50mm sand/bedding layer${mot>0?` over a ${mot}mm compacted Type 1 MOT sub-base`:''} installed.`,`Underside of the slabs primed with a paving primer.`,`${esc(o.style)} laid on a full contact bed of sharp sand and cement mortar.`,`Joints finished with a suitable jointing compound.`]; },
+  paving: (o)=>{ const d = Number(o.digOutDepth)||150; const mot = Math.max(0, d-50); return [`Patio area excavated to a minimum depth of ${d}mm.`,`Geotextile membrane installed across the sub-grade for stabilisation.`,`A minimum 50mm sand/bedding layer${mot>0?` over a ${mot}mm compacted Type 1 MOT sub-base`:''} installed.`,`Underside of the slabs primed with a paving primer.`,`${esc(o.style)} laid on a full contact bed of sharp sand and cement mortar.`,`Joints finished with a suitable jointing compound.`].concat(pavingStepsLetterLine(o)); },
   // Depths come from the quote itself: per-row dig-out (a range if rows differ), MOT = dig-out −
   // gravel depth, and the gravel depth/type chosen. The edge-restraint line only shows with edging.
   gravel: (o, s)=>{
@@ -2422,15 +2475,21 @@ const SERVICE_COPY = {
     const ds = (s.rows||[]).filter(r=>(Number(r.width)||0)*(Number(r.length)||0)>0).map(r=>r.digOutDepth===undefined ? legacy : Math.round(Number(r.digOutDepth)||0));
     const mn = ds.length ? Math.min(...ds) : legacy, mx = ds.length ? Math.max(...ds) : legacy;
     const dig = mn===mx ? `to a depth of ${mn}mm` : `to depths of ${mn}–${mx}mm`;
-    const m1 = Math.max(0, mn-gd), m2 = Math.max(0, mx-gd);
-    const mot = m1===m2 ? `${m1}mm` : `${m1}–${m2}mm`;
-    // Finish: one gravel for every area, or each area's own gravel by name.
+    // Type 1 MOT only where an area is dug out deeper than the gravel.
     const areas = (s.rows||[]).filter(r=>(Number(r.width)||0)*(Number(r.length)||0)>0);
+    const motDs = ds.length ? ds.filter(d=>d>gd) : (legacy>gd ? [legacy] : []);
+    const m1 = motDs.length ? Math.min(...motDs)-gd : 0, m2 = motDs.length ? Math.max(...motDs)-gd : 0;
+    const mot = m1===m2 ? `${m1}mm` : `${m1}–${m2}mm`;
+    const someWithout = ds.length && motDs.length && motDs.length < ds.length;
+    const motNames = someWithout ? areas.map((r,i)=>ds[i]>gd ? esc((r.desc||'').trim()||('area '+(i+1))) : null).filter(Boolean).join(', ') : '';
+    // Finish: one gravel for every area, or each area's own gravel by name.
     const typeOf = r => r.gravelType || o.style || '';
     const types = [...new Set(areas.map(typeOf).filter(Boolean))];
     const finish = types.length<=1 ? `Finished with ${gd}mm of ${esc(types[0]||o.style||'')}.`
       : `Finished with ${gd}mm of gravel: ${areas.map((r,i)=>`${esc((r.desc||'').trim()||('area '+(i+1)))} in ${esc(typeOf(r))}`).join(', ')}.`;
-    return [`Area excavated ${dig} and the subsoil compacted.`, o.edging ? `Edge restraints installed around the perimeter.` : ``, `Geotextile membrane laid to the excavation.`, `A ${mot} compacted Type 1 MOT sub-base installed.`, `A second geotextile membrane laid over the sub-base to prevent migration.`, finish].filter(Boolean);
+    return [`Area excavated ${dig} and the subsoil compacted.`, o.edging ? `Edge restraints installed around the perimeter.` : ``, `Geotextile membrane laid to the excavation.`,
+      motDs.length ? `A ${mot} compacted Type 1 MOT sub-base installed${someWithout?` (${motNames})`:''}.` : ``,
+      motDs.length ? `A second geotextile membrane laid over the sub-base to prevent migration.` : ``, finish].filter(Boolean);
   },
   // Dig-out and Type 1 MOT depths come from the priced section itself (s.digOutDepth is the
   // area-weighted average of the per-row depths, s.motDepth is that minus the surface build-up —
@@ -2697,7 +2756,22 @@ function rowChoiceGroups(def, rows, options){
   (rows||[]).filter(r=>rowHasSize(def, r)).forEach(r=>{ const v = r[sel.field] || options[sel.optKey] || ''; if(!(v in by)){ by[v] = []; groups.push(v); } by[v].push(r); });
   return {sel, groups, by};
 }
+// Paving steps: tread area (m²), riser wall area (m²) and how many steps, from the step list.
+function pavingStepTotals(opt){
+  let tread = 0, riser = 0, count = 0;
+  ((opt && opt.stepRows) || []).forEach(sr=>{
+    const w = Number(sr.width)||0, dp = Number(sr.depth)||0, h = (Number(sr.heightMm)||0)/1000;
+    const n = (sr.qty===undefined || sr.qty==='') ? 1 : Math.max(0, Math.floor(Number(sr.qty)||0));
+    if(!(w>0 && dp>0 && n>0)) return;
+    tread += r6(w*dp)*n; riser += r6((w + 2*dp)*h)*n; count += n;
+  });
+  return {tread: r6(tread), riser: r6(riser), count};
+}
 function calcWithRowChoices(def, rows, options, ctx){
+  const raw = calcWithRowChoicesCore(def, rows, options, ctx);
+  return def.after ? def.after(raw, rows, options, ctx) : raw;
+}
+function calcWithRowChoicesCore(def, rows, options, ctx){
   const g = rowChoiceGroups(def, rows, options);
   if(!g || g.groups.length<=1){
     if(!g) return def.calc(rows, options, ctx);
@@ -6551,6 +6625,20 @@ function optionFieldHtml(o, opts){
     const customPlaceholder = needsCustomPlaceholder ? `<option value="" disabled selected>${esc(o.placeholder||('Select '+o.label.toLowerCase()+'…'))}</option>` : '';
     return `<div class="field"><label>${o.label}</label><select data-opt="${o.key}"${customAttr}>${customPlaceholder}${optionsList.map(v=>`<option value="${esc(v)}" ${v===value?'selected':''}>${esc(v)}</option>`).join('')}${o.customizable?`<option value="__add_other__">+ Add new…</option>`:''}${o.customizable && !needsCustomPlaceholder && S.settings.materials && S.settings.materials[value]?`<option value="__edit_current__">✎ Edit "${esc(value)}"…</option>`:''}</select></div>${o.hint?`<div class="hint">${esc(o.hint)}</div>`:''}`;
   }
+  if(o.type==="steplist"){
+    const list = (value && value.length) ? value : [{}];
+    const inp = (i, f, v, ph) => `<input type="text" inputmode="decimal" data-step-f="${f}" value="${esc(v==null?'':v)}" placeholder="${esc(ph)}">`;
+    return `<div class="field"><label>${o.label}</label>
+      <div class="hint" style="margin:0 0 6px;">Width and depth of each step's tread, and its height. Steps with different sizes go on their own line.</div>
+      ${list.map((sr,i)=>`<div class="step-row" data-steprow="${i}">
+        <div><div class="mf-lbl" style="display:block;">Width (m)</div>${inp(i,'width',sr.width,'e.g. 2')}</div>
+        <div><div class="mf-lbl" style="display:block;">Depth (m)</div>${inp(i,'depth',sr.depth,'e.g. 0.4')}</div>
+        <div><div class="mf-lbl" style="display:block;">Height (mm)</div>${inp(i,'heightMm',sr.heightMm,'e.g. 150')}</div>
+        <div><div class="mf-lbl" style="display:block;">How many</div>${inp(i,'qty',sr.qty==null?1:sr.qty,'1')}</div>
+        <button type="button" class="icon-btn" data-action="removeStepRow" data-idx="${i}" title="Remove" ${list.length<2?'disabled':''}>✕</button>
+      </div>`).join('')}
+      <button type="button" class="btn btn-ghost btn-sm" data-action="addStepRow">+ Add steps with different dimensions</button></div>`;
+  }
   if(o.type==="yesno"){
     return `<div class="field"><label>${o.label}</label>
       <div class="row" style="gap:6px;">
@@ -8445,6 +8533,7 @@ function reflow(){
     sel = {
       row: rowEl ? rowEl.getAttribute('data-row') : null, mf: active.getAttribute('data-mf'),
       opt: active.getAttribute('data-opt'), ef: active.getAttribute('data-ef'),
+      stepf: active.getAttribute('data-step-f'), step: active.closest && active.closest('[data-steprow]') ? active.closest('[data-steprow]').getAttribute('data-steprow') : null,
       extraIdx: active.closest ? (active.closest('[data-extra]')?active.closest('[data-extra]').getAttribute('data-extra'):null) : null,
       id: active.id, selStart: active.selectionStart, selEnd: active.selectionEnd,
     };
@@ -8452,7 +8541,8 @@ function reflow(){
   render();
   if(sel){
     let el = null;
-    if(sel.mf!=null && sel.row!=null) el = App.querySelector(`[data-row="${sel.row}"] [data-mf="${sel.mf}"]`);
+    if(sel.stepf!=null && sel.step!=null) el = App.querySelector(`[data-steprow="${sel.step}"] [data-step-f="${sel.stepf}"]`);
+    else if(sel.mf!=null && sel.row!=null) el = App.querySelector(`[data-row="${sel.row}"] [data-mf="${sel.mf}"]`);
     else if(sel.opt!=null) el = App.querySelector(`[data-opt="${sel.opt}"]`);
     else if(sel.ef!=null && sel.extraIdx!=null) el = App.querySelector(`[data-extra="${sel.extraIdx}"] [data-ef="${sel.ef}"]`);
     else if(sel.id) el = document.getElementById(sel.id);
@@ -9411,9 +9501,17 @@ App.addEventListener("click", async (e)=>{
       if(r) r[t.getAttribute("data-field")] = t.getAttribute("data-val")==="true";
       render(); break;
     }
+    case "addStepRow": case "removeStepRow": {
+      const st = ensureSectionState(currentMeasureKey(d));
+      if(!Array.isArray(st.options.stepRows) || !st.options.stepRows.length) st.options.stepRows = [{qty:1}];
+      if(action==="addStepRow") st.options.stepRows.push({qty:1});
+      else if(st.options.stepRows.length>1) st.options.stepRows.splice(parseInt(t.getAttribute("data-idx"),10), 1);
+      render(); if(S.draft && S.screen==="newquote") scheduleDraftSave(); break;
+    }
     case "setOpt": {
       const key = currentMeasureKey(d); const st = ensureSectionState(key);
       st.options[t.getAttribute("data-opt")] = t.getAttribute("data-val")==="true";
+      if(key==="paving" && t.getAttribute("data-opt")==="steps" && st.options.steps && !(st.options.stepRows||[]).length) st.options.stepRows = [{qty:1}];
       // Ticking an option that adds a per-row dig-out depth column (see rowColsFor) backfills any
       // row that doesn't have a depth yet with the business default, rather than leaving it blank.
       if(SERVICES[key] && SERVICES[key].depthCol===t.getAttribute("data-opt") && st.options[SERVICES[key].depthCol]){
@@ -9952,6 +10050,16 @@ App.addEventListener("input", (e)=>{
     const k = t.getAttribute('data-rc-setting'); const n = parseFloat(t.value);
     S.settings[k] = t.value.trim()==='' || isNaN(n) ? null : n;
     rcRefreshFigures(); rcSaveSoon();
+    return;
+  }
+  if(t.matches('[data-step-f]')){
+    const i = parseInt(t.closest('[data-steprow]').getAttribute('data-steprow'),10);
+    const st = ensureSectionState(currentMeasureKey(d));
+    if(!Array.isArray(st.options.stepRows) || !st.options.stepRows.length) st.options.stepRows = [{qty:1}];
+    while(st.options.stepRows.length<=i) st.options.stepRows.push({qty:1});
+    st.options.stepRows[i][t.getAttribute('data-step-f')] = t.value;
+    reflow();
+    if(S.draft && S.screen==="newquote") scheduleDraftSave();
     return;
   }
   if(t.matches('[data-row-check]')){
