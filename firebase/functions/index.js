@@ -186,7 +186,12 @@ functions.http('checkout', wrap(async (req, res) => {
   const paidElsewhere = a.store && a.store !== 'stripe' && a.periodEnd && a.periodEnd.toMillis() > Date.now();
   if (paidElsewhere) throw httpError(409, 'Your plan is already paid through the app store — change it there.');
   // Already subscribed on the website: changes go through the customer portal (it prorates).
+  // (A subscription left over from Stripe's test mode doesn't exist here, so it's ignored.)
+  let liveSub = null;
   if (a.stripeSubscriptionId && ['active', 'trialing', 'past_due'].includes(a.stripeStatus)) {
+    try { liveSub = await stripe('GET', `subscriptions/${a.stripeSubscriptionId}`); } catch (e) { if (e.status !== 404) throw e; }
+  }
+  if (liveSub && ['active', 'trialing', 'past_due'].includes(liveSub.status)) {
     const p = await stripe('POST', 'billing_portal/sessions', { customer: a.stripeCustomerId, return_url: origin + '/', configuration: cfg.portalConfigId,
       flow_data: { type: 'subscription_update', subscription_update: { subscription: a.stripeSubscriptionId }, after_completion: { type: 'redirect', redirect: { return_url: origin + '/?billing=updated' } } } });
     return send(res, 200, { url: p.url });
@@ -204,7 +209,7 @@ functions.http('checkout', wrap(async (req, res) => {
   const trialEnd = endOfUkDay(trialEndOf(a));
   const trialSecs = Math.floor(trialEnd.getTime() / 1000);
   const subData = { metadata: { uid: user.uid, plan, period }, default_tax_rates: [cfg.taxRateId] };
-  if (!a.stripeSubscriptionId && trialSecs > Math.floor(Date.now() / 1000) + 2 * 86400 + 600) subData.trial_end = trialSecs;
+  if (!liveSub && trialSecs > Math.floor(Date.now() / 1000) + 2 * 86400 + 600) subData.trial_end = trialSecs;
   const s = await stripe('POST', 'checkout/sessions', {
     mode: 'subscription', customer, client_reference_id: user.uid, locale: 'en-GB',
     line_items: [{ price: cfg.prices[`${plan}_${period}`], quantity: 1 }],
@@ -226,6 +231,8 @@ functions.http('portal', wrap(async (req, res) => {
   const cfg = await config();
   const a = (await db.doc(`accounts/${user.uid}`).get()).data() || {};
   if (!a.stripeCustomerId) throw httpError(404, "There's no website subscription on this account yet.");
+  try { await stripe('GET', `customers/${a.stripeCustomerId}`); }
+  catch (e) { if (e.status === 404) throw httpError(404, "There's no website subscription on this account yet."); throw e; }
   const p = await stripe('POST', 'billing_portal/sessions', { customer: a.stripeCustomerId, return_url: originOf(req, req.body) + '/', configuration: cfg.portalConfigId });
   send(res, 200, { url: p.url });
 }));

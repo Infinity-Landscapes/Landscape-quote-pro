@@ -146,6 +146,13 @@ const acct = async uid => (await db.doc('accounts/' + uid).get()).data() || {};
   // portal
   r = await call('portal', {}, 'tok_u1');
   check('Manage subscription opens the Stripe portal', /billing\.stripe\.com/.test(r.body.url));
+  // a billing record left over from Stripe's test mode (ids unknown here): buying starts afresh
+  await db.doc('accounts/u7').set({ createdAt: admin.firestore.Timestamp.fromMillis(Date.now() - 30*86400000), store:'stripe', tier:'business', stripeStatus:'active', stripeSubscriptionId:'sub_fromtestmode', stripeCustomerId:'cus_fromtestmode', periodEnd: admin.firestore.Timestamp.fromMillis(Date.now() - 1000) });
+  r = await call('checkout', { plan:'solo', period:'monthly' }, 'tok_u7');
+  check('a leftover test-mode subscription is ignored: a new checkout with a new customer', /checkout\.stripe\.com/.test(r.body.url) && (await acct('u7')).stripeCustomerId !== 'cus_fromtestmode');
+  await db.doc('accounts/u8').set({ createdAt: admin.firestore.Timestamp.now(), stripeCustomerId:'cus_fromtestmode' });
+  r = await call('portal', {}, 'tok_u8');
+  check('portal with a leftover test-mode customer says there is no subscription', r.status === 404);
   r = await call('portal', {}, 'tok_u9');
   check('no website subscription: portal says so', r.status === 404);
 
