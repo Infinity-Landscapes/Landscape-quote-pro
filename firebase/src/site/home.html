@@ -54,14 +54,15 @@ header{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 8
 .lede{font-size:clamp(17px,2vw,19px);color:var(--muted);margin:18px 0 28px;max-width:34em}
 .cta{display:flex;gap:12px;flex-wrap:wrap}
 .fine{font-size:14px;color:var(--muted);margin-top:14px}
-.phones{position:relative;height:560px}
-.phone{position:absolute;width:280px;border-radius:34px;padding:10px;background:#1a1f16;box-shadow:var(--shadow)}
-.phone img{display:block;width:100%;border-radius:26px;background:#fff}
-.phone .scr{height:520px;overflow:hidden;border-radius:26px}
-.phone.a{right:150px;top:0;transform:rotate(-4deg)}
-.phone.b{right:0;top:40px;transform:rotate(4deg)}
-@media (max-width:900px){.hero-grid{grid-template-columns:1fr}.phones{height:470px;max-width:520px;margin:0 auto;width:100%}.phone{width:230px}.phone .scr{height:430px}.phone.a{left:6%;right:auto}.phone.b{right:6%}}
-@media (max-width:480px){.phones{height:400px}.phone{width:190px;padding:8px;border-radius:28px}.phone .scr{height:360px;border-radius:22px}.phone.a{left:0}.phone.b{right:0}}
+.visual{position:relative;height:560px}
+.doc{position:absolute;right:0;top:0;width:min(400px,78%);height:500px;overflow:hidden;border-radius:14px;border:1px solid var(--line);background:#fff;box-shadow:var(--shadow)}
+.doc img{display:block;width:100%;height:auto}
+.doc::after{content:"";position:absolute;left:0;right:0;bottom:0;height:90px;background:linear-gradient(rgba(255,255,255,0),#fff)}
+.phone{border-radius:38px;padding:9px;background:#1a1f16;box-shadow:var(--shadow);width:250px}
+.phone img{display:block;width:100%;height:auto;border-radius:30px;background:#fff}
+.visual .phone{position:absolute;left:0;bottom:0}
+@media (max-width:900px){.hero-grid{grid-template-columns:1fr}.visual{height:auto;display:flex;justify-content:center}.visual .doc{display:none}.visual .phone{position:static}}
+.split-phone{display:flex;justify-content:center}
 /* sections */
 section{padding:64px 0}
 .sec-head{max-width:720px;margin:0 0 36px}
@@ -158,9 +159,9 @@ footer{padding:40px 0 56px;color:var(--muted);font-size:14px}
       </div>
       <p class="fine">No card needed to start. Works on your phone, tablet and computer.</p>
     </div>
-    <div class="phones" aria-hidden="true">
-      <div class="phone a"><div class="scr"><img src="/img/shot-measure.webp" alt="" width="600" height="1137"></div></div>
-      <div class="phone b"><div class="scr"><img src="/img/shot-letter.webp" alt="" width="600" height="1137"></div></div>
+    <div class="visual">
+      <div class="doc"><img src="/img/letter.webp" alt="A finished quote letter for a patio and new lawn, with the price, VAT and a description of the works" width="1000" height="1183"></div>
+      <div class="phone"><img src="/img/screen-measure.webp" alt="Measuring a patio in the app, with the running total updating" width="750" height="1520"></div>
     </div>
   </div>
 </div>
@@ -195,7 +196,7 @@ footer{padding:40px 0 56px;color:var(--muted);font-size:14px}
 
 <section>
   <div class="wrap showcase">
-    <div class="shot"><img src="/img/shot-calendar.webp" alt="The calendar, with an accepted job booked across four working days" width="1400" height="491"></div>
+    <div class="shot"><img src="/img/calendar.webp" alt="The calendar, with an accepted job booked across four working days" width="1400" height="491"></div>
     <div>
       <h2 style="font-size:clamp(24px,3vw,32px);font-weight:800">Win the job, and the rest sorts itself out</h2>
       <ul class="ticks">
@@ -205,6 +206,21 @@ footer{padding:40px 0 56px;color:var(--muted);font-size:14px}
         <li><b>Your own services</b>: other trades can add whatever they price, with their own materials and wording</li>
       </ul>
     </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap showcase">
+    <div>
+      <h2 style="font-size:clamp(24px,3vw,32px);font-weight:800">Know what to order, and what you're making</h2>
+      <ul class="ticks">
+        <li><b>One order per supplier</b>: every material on the job added up, ready to copy and send</li>
+        <li><b>Tick off as you order</b> with the price you actually paid</li>
+        <li><b>Labour and running costs</b> logged against what you quoted</li>
+        <li><b>Profit so far</b> on every job, and across the business once jobs are finished</li>
+      </ul>
+    </div>
+    <div class="split-phone"><div class="phone"><img src="/img/screen-finances.webp" alt="Job finances: materials to order, grouped by supplier" width="750" height="1520"></div></div>
   </div>
 </section>
 

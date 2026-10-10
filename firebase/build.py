@@ -34,6 +34,7 @@ def main():
     # Public front page (/home) and its images.
     site = os.path.join(ROOT, "src", "site")
     if os.path.isdir(site):
+        shutil.rmtree(os.path.join(PUB, "img"), ignore_errors=True)  # no stale images left behind
         shutil.copytree(site, PUB, dirs_exist_ok=True)
     html = (
         "<!doctype html>\n<html lang=\"en-GB\">\n<head>\n<meta charset=\"utf-8\">\n"
