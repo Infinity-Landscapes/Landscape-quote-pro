@@ -5610,8 +5610,9 @@ function renderSetup(){
   }
   App.innerHTML = `
   <div style="max-width:620px;margin:28px auto;">
-    <div style="text-align:center;margin-bottom:18px;">
+    <div style="text-align:center;margin-bottom:18px;position:relative;">
       <div class="brand" style="justify-content:center;">${brandMarkHtml()}<div class="brand-word">${esc(s.company.name)}<small>Quote builder setup</small></div></div>
+      ${window.__platform ? `<button class="icon-btn" data-action="account" title="Account, plan and devices" aria-label="Account" style="position:absolute;right:0;top:50%;transform:translateY(-50%);">👤</button>` : ''}
     </div>
     <div class="card">
       ${body}
