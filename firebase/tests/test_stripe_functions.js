@@ -72,6 +72,7 @@ const acct = async uid => (await db.doc('accounts/' + uid).get()).data() || {};
   check('a 20% VAT rate, added on top', S.tax_rates[r.body.taxRateId].percentage === 20 && !S.tax_rates[r.body.taxRateId].inclusive);
   check('customer portal: cancel at period end, switch plans, update card', S.portal[r.body.portalConfigId].b['features[subscription_cancel][mode]'] === 'at_period_end' && S.portal[r.body.portalConfigId].b['features[subscription_update][enabled]'] === 'true' && S.portal[r.body.portalConfigId].b['features[payment_method_update][enabled]'] === 'true');
   check('products are named "Landscape Quote Pro — Solo / Team / Business"', Object.values(S.products).map(p=>p.name).sort().join('|') === 'Landscape Quote Pro — Business|Landscape Quote Pro — Solo|Landscape Quote Pro — Team');
+  check('changing plan during the free trial keeps the trial', S.portal[r.body.portalConfigId].b['features[subscription_update][trial_update_behavior]'] === 'continue_trial');
   check('webhook endpoint registered', !!r.body.webhookId && S.webhooks[r.body.webhookId].url.endsWith('/api/stripe-webhook'));
   const cfg = r.body;
   const nPrices = Object.keys(S.prices).length;

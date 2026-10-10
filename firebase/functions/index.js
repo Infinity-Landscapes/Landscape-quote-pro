@@ -312,7 +312,8 @@ functions.http('admin', wrap(async (req, res) => {
       invoice_history: { enabled: true },
       payment_method_update: { enabled: true },
       subscription_cancel: { enabled: true, mode: 'at_period_end', cancellation_reason: { enabled: true, options: ['too_expensive', 'missing_features', 'switched_service', 'unused', 'other'] } },
-      subscription_update: { enabled: true, default_allowed_updates: ['price'], proration_behavior: 'create_prorations',
+      // Changing plan during the free trial keeps the trial (Stripe would otherwise end it and charge straight away).
+      subscription_update: { enabled: true, default_allowed_updates: ['price'], proration_behavior: 'create_prorations', trial_update_behavior: 'continue_trial',
         products: Object.keys(PLANS).map(id => ({ product: products[id], prices: [prices[`${id}_monthly`], prices[`${id}_yearly`]] })) },
     },
     default_return_url: SITE + '/',
