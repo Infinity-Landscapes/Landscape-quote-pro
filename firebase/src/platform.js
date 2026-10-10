@@ -1,4 +1,4 @@
-/* Infinity Landscape Quote Pro — own-website platform layer (Firebase).
+/* Landscape Quote Pro — own-website platform layer (Firebase).
  *
  * The app itself (app/app.html) is written against a tiny storage/identity API:
  *   claude.use("db")   -> doc(path).get/set/update/delete, doc.collection(name), collection.orderBy/limit/get
@@ -35,6 +35,7 @@
     { id:"team", name:"Team", devices:5, monthly:45, yearly:450, storeMonthly:"£54.99", storeYearly:"£539.99", popular:true },
     { id:"business", name:"Business", devices:10, monthly:70, yearly:700, storeMonthly:"£83.99", storeYearly:"£839.99" },
   ];
+  var BRAND_LOGO = '<svg class="pf-logo" viewBox="0 0 48 48" aria-hidden="true"><circle cx="22" cy="22" r="14" fill="none" stroke="currentColor" stroke-width="6"/><path d="M22 25C31 22 41 30 44 44C30 43 22 35 22 25Z" fill="#8bc34a" stroke="var(--pf-card,#fff)" stroke-width="2.5"/></svg>';
   var SUPPORT_EMAIL = "support@landscapequotepro.co.uk";
   var BUSINESS_COLLECTIONS = ["quotes", "calendarEntries", "drafts", "branding"];
 
@@ -220,7 +221,7 @@
     var title = mode === "signup" ? "Create your account" : mode === "reset" ? "Reset your password" : "Sign in";
     var sub = mode === "signup" ? "Start your free " + TRIAL_DAYS + "-day trial. One account per business." : mode === "reset" ? "We'll email you a link to choose a new password." : "Welcome back.";
     o.innerHTML =
-      '<div class="pf-box"><div class="pf-brand">Infinity Landscape <b>Quote Pro</b></div>' +
+      '<div class="pf-box"><div class="pf-brand">' + BRAND_LOGO + 'Landscape <b>Quote Pro</b></div>' +
       '<h1>' + title + '</h1><p class="pf-sub">' + sub + '</p>' +
       (msg ? '<div class="pf-msg ' + msgKind + '">' + esc(msg) + '</div>' : '') +
       '<form novalidate>' +
@@ -316,7 +317,7 @@
         (d.lastSeen ? "Last used " + fmtDate(d.lastSeen) : "") + '</div></div>' +
         (left > 0 ? '<button class="pf-btn pf-small pf-ghost" data-pf="kick" data-id="' + esc(d.id) + '">Sign out</button>' : '') + '</div>';
     }).join("");
-    o.innerHTML = '<div class="pf-box"><div class="pf-brand">Infinity Landscape <b>Quote Pro</b></div>' +
+    o.innerHTML = '<div class="pf-box"><div class="pf-brand">' + BRAND_LOGO + 'Landscape <b>Quote Pro</b></div>' +
       '<h1>Too many devices</h1>' +
       '<p class="pf-sub">Your ' + esc(plan) + ' can be used on ' + st.limit + ' device' + (st.limit === 1 ? '' : 's') + ' at once. ' +
       (left > 0 ? 'To use it here, sign one of these out. You can swap devices ' + MAX_SWAPS + ' times a month — ' + left + ' swap' + (left === 1 ? '' : 's') + ' left this month.'
@@ -456,7 +457,7 @@
       : (!p && !webSells()) ? '<div class="pf-msg warn">' + esc(WEB_SOON) + '</div>'
       : (!p && st.state === "trial" && daysLeft(st.trialEnd) > 2) ? '<div class="pf-msg ok">Choose a plan now and you won\'t be charged until your free trial ends on ' + fmtDate(st.trialEnd) + '.</div>' : '';
     o.innerHTML = '<div class="pf-box pf-wide"><button class="pf-close" data-pf="close" aria-label="Close">×</button>' +
-      '<div class="pf-brand">Infinity Landscape <b>Quote Pro</b></div><h1>Choose your plan</h1>' +
+      '<div class="pf-brand">' + BRAND_LOGO + 'Landscape <b>Quote Pro</b></div><h1>Choose your plan</h1>' +
       '<p class="pf-sub">One subscription covers your whole business. Every plan has every feature — the difference is how many devices can be signed in at once.' +
       (st.state === "trial" ? ' Your free trial ends ' + fmtDate(st.trialEnd) + '.' : '') + '</p>' +
       (planMsg ? '<div class="pf-msg ' + (planMsg.ok ? 'ok' : 'err') + '">' + esc(planMsg.text) + '</div>' : '') + webNote +
@@ -562,7 +563,7 @@
         (me ? '' : left > 0 ? '<button class="pf-btn pf-small pf-ghost" data-pf="remove" data-id="' + esc(d.id) + '">Remove</button>' : '') + '</div>';
     }).join("");
     o.innerHTML = '<div class="pf-box"><button class="pf-close" data-pf="close" aria-label="Close">×</button>' +
-      '<div class="pf-brand">Infinity Landscape <b>Quote Pro</b></div><h1>Account</h1>' +
+      '<div class="pf-brand">' + BRAND_LOGO + 'Landscape <b>Quote Pro</b></div><h1>Account</h1>' +
       '<p class="pf-sub">Signed in as <b>' + esc(user ? user.email : "") + '</b></p>' +
       (acctMsg ? '<div class="pf-msg ' + acctMsg.kind + '">' + esc(acctMsg.text) + '</div>' : '') +
       '<h2>Plan</h2><p class="pf-sub" style="margin-bottom:8px">' + esc(statusLine(st)) + '</p>' +

@@ -1,4 +1,4 @@
-# Infinity Landscape Quote Pro
+# Landscape Quote Pro
 
 Quoting and job-management app for landscapers, by Infinity Landscapes and Design LTD.
 

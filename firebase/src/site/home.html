@@ -9,6 +9,7 @@
 <meta property="og:description" content="The quoting app for landscapers: accurate prices from your measurements, branded quote letters, payment plans, calendar and job finances.">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#3f611f">
+<link rel="icon" href="/img/logo.svg" type="image/svg+xml"><link rel="icon" href="/img/favicon-32.png" sizes="32x32"><link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -31,7 +32,8 @@ h1,h2,h3{font-family:Poppins,system-ui,sans-serif;line-height:1.15;margin:0}
 header{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid var(--line)}
 .nav{display:flex;align-items:center;gap:16px;height:64px}
 .logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font-family:Poppins,sans-serif;font-weight:700;font-size:16px;white-space:nowrap}
-.logo svg{width:34px;height:34px;flex:none}
+.logo svg{width:34px;height:34px;flex:none;color:#3f611f}
+@media (prefers-color-scheme:dark){.logo svg{color:#b7dd8a}}
 .logo b{color:var(--brand)}
 .nav-links{display:flex;gap:22px;margin-left:auto;align-items:center}
 .nav-links a{color:var(--muted);text-decoration:none;font-weight:600;font-size:15px}
@@ -44,7 +46,7 @@ header{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 8
 .btn-ghost:hover{border-color:var(--brand)}
 .btn-sm{padding:8px 14px;font-size:14px;border-radius:10px}
 @media (max-width:760px){.nav-links a.hide-sm{display:none}.nav-links{gap:10px}.logo span{font-size:14px}}
-@media (max-width:420px){.logo span .long{display:none}}
+@media (max-width:420px){.logo{font-size:14.5px;gap:8px}.logo svg{width:30px;height:30px}}
 /* hero */
 .hero{padding:64px 0 40px;overflow:hidden}
 .hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
@@ -134,7 +136,7 @@ footer{padding:40px 0 56px;color:var(--muted);font-size:14px}
 <header>
   <div class="wrap nav">
     <a class="logo" href="/home" aria-label="Landscape Quote Pro home">
-      <svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><defs><linearGradient id="lg" x1="2" y1="10" x2="46" y2="34" gradientUnits="userSpaceOnUse"><stop stop-color="#a9d977"/><stop offset="1" stop-color="#4C6B1F"/></linearGradient></defs><path d="M6 24C14 10 30 8 42 18C32 16 20 20 14 30C11 25 8 24 6 24Z" fill="url(#lg)"/><path d="M42 26C34 40 18 40 6 30C16 32 28 28 34 18C37 23 40 25 42 26Z" fill="url(#lg)" opacity=".85"/></svg>
+      <svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="22" cy="22" r="14" fill="none" stroke="currentColor" stroke-width="6" class="ring"/><path d="M22 25C31 22 41 30 44 44C30 43 22 35 22 25Z" fill="#8bc34a" stroke="var(--bg)" stroke-width="2.5"/></svg>
       <span><span class="long">Landscape </span><b>Quote Pro</b></span>
     </a>
     <nav class="nav-links">

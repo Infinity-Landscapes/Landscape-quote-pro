@@ -39,7 +39,9 @@ def main():
     html = (
         "<!doctype html>\n<html lang=\"en-GB\">\n<head>\n<meta charset=\"utf-8\">\n"
         "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n"
-        "<title>Infinity Landscape Quote Pro</title>\n"
+        "<title>Landscape Quote Pro</title>\n"
+        "<link rel=\"icon\" href=\"/img/logo.svg\" type=\"image/svg+xml\"><link rel=\"icon\" href=\"/img/favicon-32.png\" sizes=\"32x32\"><link rel=\"apple-touch-icon\" href=\"/img/apple-touch-icon.png\">\n"
+        "<meta name=\"theme-color\" content=\"#3f611f\">\n"
         "<style>html,body{margin:0;padding:0;}\n" + open(CSS_FILE, encoding="utf-8").read() + "</style>\n"
         "<script>window.__FIREBASE_CONFIG__ = " + json.dumps(CONFIG) + ";window.__WEB_BILLING__ = " + ("true" if WEB_BILLING else "false") + ";</script>\n"
         "<script src=\"/sdk/firebase-app-compat.js\"></script>\n"

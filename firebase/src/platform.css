@@ -19,7 +19,8 @@
 .pf-box{width:100%;max-width:440px;background:var(--pf-card);border-radius:16px;padding:24px 20px;margin:auto 0;
   box-shadow:0 8px 30px rgba(0,0,0,.08);}
 .pf-wide{max-width:760px;}
-.pf-brand{font-family:Poppins,system-ui,sans-serif;font-weight:700;color:var(--pf-accent);margin-bottom:12px;font-size:15px;}
+.pf-brand{font-family:Poppins,system-ui,sans-serif;font-weight:700;color:var(--pf-accent);margin-bottom:12px;font-size:15px;display:flex;align-items:center;gap:8px;}
+.pf-logo{width:26px;height:26px;flex:none;}
 .pf-box h1{font-family:Poppins,system-ui,sans-serif;font-size:22px;margin:0 0 4px;line-height:1.25;}
 .pf-box h2{font-family:Poppins,system-ui,sans-serif;font-size:16px;margin:22px 0 8px;}
 .pf-sub{margin:0 0 16px;color:var(--pf-muted);font-size:14px;line-height:1.5;}

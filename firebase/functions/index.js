@@ -1,4 +1,4 @@
-/* Infinity Landscape Quote Pro — website payments (Stripe).
+/* Landscape Quote Pro — website payments (Stripe).
  *
  * Four small HTTP functions (Cloud Functions, europe-west2), reached through the website at
  * /api/... (Firebase Hosting rewrites), so they're same-origin and need no CORS:
@@ -273,13 +273,17 @@ functions.http('admin', wrap(async (req, res) => {
       let price = await findPrice(lk);
       if (!price) {
         if (!products[id]) {
-          const p = await stripe('POST', 'products', { name: `Infinity Landscape Quote Pro — ${pl.name}`, description: `Use on up to ${pl.devices} devices. Every feature included.`, metadata: { plan: id }, tax_code: 'txcd_10103001' });
+          const p = await stripe('POST', 'products', { name: `Landscape Quote Pro — ${pl.name}`, description: `Use on up to ${pl.devices} devices. Every feature included.`, metadata: { plan: id }, tax_code: 'txcd_10103001' });
           products[id] = p.id;
         }
         price = await stripe('POST', 'prices', { product: products[id], currency: 'gbp', unit_amount: pl[period], tax_behavior: 'exclusive',
           recurring: { interval: period === 'yearly' ? 'year' : 'month' }, lookup_key: lk, nickname: `${pl.name} ${period}`, metadata: { plan: id, period } });
       }
       products[id] = typeof price.product === 'string' ? price.product : price.product.id;
+      // Keep the product's name in step with the app's name (it shows at checkout and on invoices).
+      const want = `Landscape Quote Pro — ${pl.name}`;
+      const prod = await stripe('GET', `products/${products[id]}`);
+      if (prod.name !== want) await stripe('POST', `products/${products[id]}`, { name: want });
       prices[`${id}_${period}`] = price.id;
     }
   }
@@ -291,7 +295,7 @@ functions.http('admin', wrap(async (req, res) => {
   }
   // Customer portal: update card, see invoices, switch plan (prorated), cancel at period end.
   const portalParams = {
-    business_profile: { headline: 'Infinity Landscape Quote Pro — manage your subscription', privacy_policy_url: SITE + '/privacy', terms_of_service_url: SITE + '/terms' },
+    business_profile: { headline: 'Landscape Quote Pro — manage your subscription', privacy_policy_url: SITE + '/privacy', terms_of_service_url: SITE + '/terms' },
     features: {
       customer_update: { enabled: true, allowed_updates: ['email', 'address', 'name', 'tax_id'] },
       invoice_history: { enabled: true },

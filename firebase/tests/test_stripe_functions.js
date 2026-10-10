@@ -23,6 +23,8 @@ global.fetch = async (url, opts) => {
   if (opts.headers.Authorization !== 'Bearer sk_test_dummy') return { ok:false, status:401, json: async()=>({error:{message:'bad key'}}) };
   if (p === 'prices' && m === 'GET') { const lk = u.searchParams.get('lookup_keys[0]'); return ok({ data: Object.values(S.prices).filter(x=>x.lookup_key===lk) }); }
   if (p === 'products' && m === 'POST') { const x = { id:id('prod'), name:b.name }; S.products[x.id] = x; return ok(x); }
+  if (p.startsWith('products/') && m === 'GET') { const x = S.products[p.split('/')[1]]; return x ? ok(x) : nf(); }
+  if (p.startsWith('products/') && m === 'POST') { const x = S.products[p.split('/')[1]]; if (!x) return nf(); if (b.name) x.name = b.name; return ok(x); }
   if (p === 'prices' && m === 'POST') { const x = { id:id('price'), product:b.product, unit_amount:+b.unit_amount, lookup_key:b.lookup_key, recurring:{ interval:b['recurring[interval]'] }, tax_behavior:b.tax_behavior }; S.prices[x.id] = x; return ok(x); }
   if (p === 'tax_rates' && m === 'POST') { const x = { id:id('txr'), percentage:+b.percentage, inclusive:b.inclusive==='true' }; S.tax_rates[x.id] = x; return ok(x); }
   if (p.startsWith('billing_portal/configurations')) { const x = { id: p.split('/')[2] || id('bpc'), b }; S.portal[x.id] = x; return ok(x); }
@@ -69,6 +71,7 @@ const acct = async uid => (await db.doc('accounts/' + uid).get()).data() || {};
   check('prices: £30 / £45 / £70 monthly, £300 / £450 / £700 yearly, VAT on top', ['solo_monthly:3000','team_monthly:4500','business_monthly:7000','solo_yearly:30000','team_yearly:45000','business_yearly:70000'].every(x=>{ const [k,a] = x.split(':'); return S.prices[r.body.prices[k]].unit_amount === +a && S.prices[r.body.prices[k]].tax_behavior === 'exclusive'; }));
   check('a 20% VAT rate, added on top', S.tax_rates[r.body.taxRateId].percentage === 20 && !S.tax_rates[r.body.taxRateId].inclusive);
   check('customer portal: cancel at period end, switch plans, update card', S.portal[r.body.portalConfigId].b['features[subscription_cancel][mode]'] === 'at_period_end' && S.portal[r.body.portalConfigId].b['features[subscription_update][enabled]'] === 'true' && S.portal[r.body.portalConfigId].b['features[payment_method_update][enabled]'] === 'true');
+  check('products are named "Landscape Quote Pro — Solo / Team / Business"', Object.values(S.products).map(p=>p.name).sort().join('|') === 'Landscape Quote Pro — Business|Landscape Quote Pro — Solo|Landscape Quote Pro — Team');
   check('webhook endpoint registered', !!r.body.webhookId && S.webhooks[r.body.webhookId].url.endsWith('/api/stripe-webhook'));
   const cfg = r.body;
   const nPrices = Object.keys(S.prices).length;
