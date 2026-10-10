@@ -18,7 +18,7 @@ CONFIG = {
 }
 
 # Website payments (Stripe) switch on once the payment functions are deployed and set up.
-WEB_BILLING = os.environ.get("WEB_BILLING", "0") == "1"
+WEB_BILLING = os.environ.get("WEB_BILLING", "1") == "1"  # on since 10 Oct 2026 (Stripe live)
 
 CSS_FILE = os.path.join(ROOT, "src", "platform.css")
 
