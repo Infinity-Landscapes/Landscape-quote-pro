@@ -61,7 +61,7 @@ async function prepare(){
   // The functions run as the default compute service account: let it read the key.
   const num = await projectNumber();
   const runtimeSA = `serviceAccount:${num}-compute@developer.gserviceaccount.com`;
-  const pol = await call('POST', `${SM}/${SECRET}:getIamPolicy`, {});
+  const pol = await call('GET', `${SM}/${SECRET}:getIamPolicy`);
   pol.bindings = pol.bindings || [];
   let b = pol.bindings.find(x => x.role === 'roles/secretmanager.secretAccessor');
   if (!b) { b = { role: 'roles/secretmanager.secretAccessor', members: [] }; pol.bindings.push(b); }
@@ -85,6 +85,7 @@ async function deploy(){
   const ops = [];
   for (const f of FUNCS) {
     const body = {
+      name: `projects/${PROJECT}/locations/${REGION}/functions/${f.id}`,
       buildConfig: { runtime: 'nodejs22', entryPoint: f.entry, source: { storageSource: src } },
       serviceConfig: {
         availableMemory: '256M', timeoutSeconds: 60, maxInstanceCount: 5, minInstanceCount: 0, ingressSettings: 'ALLOW_ALL',
@@ -107,7 +108,7 @@ async function deploy(){
     console.log(`${f.id} ready: ${fn.serviceConfig && fn.serviceConfig.uri}`);
     // Public functions: anyone may call them (each checks the signed-in user, or fetches the event back from Stripe).
     const svc = `https://run.googleapis.com/v1/projects/${PROJECT}/locations/${REGION}/services/${f.id}`;
-    const pol = await call('POST', `${svc}:getIamPolicy`, {});
+    const pol = await call('GET', `${svc}:getIamPolicy`);
     pol.bindings = (pol.bindings || []).filter(b => !(b.role === 'roles/run.invoker' && b.members.includes('allUsers')));
     if (f.public) pol.bindings.push({ role: 'roles/run.invoker', members: ['allUsers'] });
     await call('POST', `${svc}:setIamPolicy`, { policy: pol });
