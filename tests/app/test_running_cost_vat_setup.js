@@ -6,7 +6,7 @@ const fs = require('fs');
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await (await browser.newContext({ viewport: { width: 1200, height: 1400 } })).newPage();
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type()==='error' && !/net::ERR/.test(m.text())) errors.push('CONSOLE: '+m.text()); });
@@ -23,7 +23,7 @@ const fs = require('fs');
     await (await page.$$('select[data-rc-field="freq"]'))[n].selectOption(freq);
     await settle();
   };
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
+  await page.goto('file:///home/claude/build/app.html'); await page.waitForTimeout(400);
   await page.fill('#f_name','Infinity Landscapes and Design');
   for (let i=0;i<2;i++) await click('button[data-action="setupNext"]');
   // ---- Setup step 3 ----

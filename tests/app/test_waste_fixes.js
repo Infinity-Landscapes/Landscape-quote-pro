@@ -6,9 +6,9 @@
 //      grab (/35) — NOT a flat £/day rate.
 //   4) Each of the three productivity rates can be overridden per job via calcWasteRemoval's
 //      third (opts) argument, and the actually-used values round-trip through .options.
-const { ru, sum, ctxFor, calcWasteRemoval, WASTE_ELIGIBLE } = require(__dirname+'/engine_extract3.js');
+const { ru, sum, ctxFor, calcWasteRemoval, WASTE_ELIGIBLE } = require('/tmp/mobiletest/engine_extract3.js');
 
-const settings = require(__dirname+'/sample_settings.json');
+const settings = require('/tmp/mobiletest/real_settings.json');
 // Make sure the settings blob has the new productivity keys (defaultSettings()/loadAll()'s
 // migration would normally do this on load) so ctxFor's fallbacks aren't the only thing tested.
 settings.productivity = settings.productivity || {};
@@ -18,7 +18,7 @@ if (settings.productivity.wasteLabour == null) settings.productivity.wasteLabour
 
 function approxEqual(a,b,eps=0.01){ return Math.abs(a-b)<eps; }
 
-// Example job: waste-eligible combined area 207.76 m², 3 people on site.
+// Reproduce the live draft: Rayner job, waste-eligible combined area 207.76 m², 3 people on site.
 const ctx = ctxFor(settings, 3);
 const sections = [
   {key:'paving', area: 4*10 + 4*8 + 3*3.6 + 1.2*3.5 + 1*27},

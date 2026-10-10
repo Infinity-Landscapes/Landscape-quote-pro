@@ -4,13 +4,13 @@ const fs = require('fs');
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const context = await browser.newContext({ viewport: { width: 1100, height: 1000 } });
   const page = await context.newPage();
-  const mockScript = fs.readFileSync(__dirname+'/db_mock.js', 'utf8');
+  const mockScript = fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8');
   await page.addInitScript(mockScript);
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', msg => { if (msg.type() === 'error' && !/net::ERR/.test(msg.text())) errors.push('CONSOLE: ' + msg.text()); });
 
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html'));
+  await page.goto('file:///home/claude/build/app.html');
   await page.waitForTimeout(400);
   // Oct 2026: a new business must enter its own rates in setup; Infinity's are restored by name.
   { const n = await page.$('#f_name'); if (n) await n.fill('Infinity Landscapes and Design'); }
@@ -53,7 +53,7 @@ const fs = require('fs');
   // Instead of the top-nav "New quote" tab, go to Menu — the "unfinished quote" banner shows
   // (since S.draft is still truthy) — and click its "Resume ->" button, exactly as a user would.
   await (await page.$('button[data-nav="menu"]')).click(); await page.waitForTimeout(200);
-  await page.screenshot({ path: __dirname+'/samesession_menu_banner.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/samesession_menu_banner.png', fullPage: true });
   const resumeBtn = await page.$('button[data-action="resumeDraft"]');
   console.log('Resume button visible on menu (same session, live draft):', !!resumeBtn);
 
@@ -64,7 +64,7 @@ const fs = require('fs');
   console.log('heading after clicking Resume (expect Turf/measure step, NOT the first wizard step):', heading);
   const widthVal = await page.$eval('[data-row="0"] input[data-mf="width"]', el => el.value).catch(()=>'FIELD NOT FOUND (wiped!)');
   console.log('width value after Resume click (expect 12):', widthVal);
-  await page.screenshot({ path: __dirname+'/samesession_after_resume.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/samesession_after_resume.png', fullPage: true });
 
   console.log('ERRORS:', errors.length ? errors : 'none');
   await browser.close();

@@ -6,8 +6,8 @@ const fs = require('fs');
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await (await browser.newContext({ viewport: { width: 1300, height: 1600 } })).newPage();
-  require(__dirname+'/row_helper.js')(page);
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+  require('/tmp/mobiletest/row_helper.js')(page);
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type()==='error' && !/net::ERR/.test(m.text())) errors.push('CONSOLE: '+m.text()); });
@@ -17,7 +17,7 @@ const fs = require('fs');
   const settle = () => page.waitForTimeout(230);
   const click = async sel => { await (await page.$(sel)).click(); await settle(); };
 
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
+  await page.goto('file:///home/claude/build/app.html'); await page.waitForTimeout(400);
   await page.fill('#f_name','Infinity Landscapes and Design');
   for (let i=0;i<3;i++){ await click('button[data-action="setupNext"]'); }
   await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');
@@ -91,7 +91,7 @@ const fs = require('fs');
   await click('button[data-action="svcBuilderNext"]');
   await page.fill('[data-svcmat-name="0"]','Trellis panel'); await page.fill('[data-svcmat-amount="0"]','1');
   await page.selectOption('[data-svcmat-basis="0"]','bay');
-  await page.selectOption('[data-svcmat-onlyif="0"]', {label:'"Trellis?" ticked'});
+  await page.selectOption('[data-svcmat-onlyif="0"]', {label:'Only when "Trellis?" ticked'});
   await page.fill('[data-svcmat-price="0"]','25'); await page.fill('[data-svcmat-supplier="0"]','Test supplier');
   await click('button[data-action="svcBuilderNext"]');
   await page.fill('#svcProductivity','4');
@@ -141,7 +141,7 @@ const fs = require('fs');
   await click('button[data-action="svcBuilderNext"]');
   await page.fill('[data-svcmat-name="0"]','Green waste bag'); await page.fill('[data-svcmat-amount="0"]','1'); await page.fill('[data-svcmat-per="0"]','10');
   await page.check('[data-svcmat-roundup="0"]');
-  await page.selectOption('[data-svcmat-onlyif="0"]', {label:'"Take away cuttings?" ticked'});
+  await page.selectOption('[data-svcmat-onlyif="0"]', {label:'Only when "Take away cuttings?" ticked'});
   await page.fill('[data-svcmat-unit="0"]','bag'); await page.fill('[data-svcmat-price="0"]','3'); await page.fill('[data-svcmat-supplier="0"]','Test supplier');
   await click('button[data-action="svcBuilderNext"]');
   await page.fill('#svcProductivity','20');

@@ -68,7 +68,7 @@ async function readStore(page){
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', msg => { if (msg.type() === 'error' && !/net::ERR/.test(msg.text())) errors.push('CONSOLE: ' + msg.text()); });
 
-  const mockScript = fs.readFileSync(__dirname+'/db_mock.js', 'utf8');
+  const mockScript = fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8');
   await page.addInitScript(seedScript);
   await page.addInitScript(mockScript);
   // No explicit uid script yet -> db_mock.js defaults window.__mockUid__ to 'u_matt_test'.
@@ -80,7 +80,7 @@ async function readStore(page){
   }
 
   // ---- 1. First load as the existing tenant (uid u_matt_test) triggers migration ----
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html'));
+  await page.goto('file:///home/claude/build/app.html');
   await page.waitForTimeout(500);
 
   const loginPin1 = await page.$('#loginPin');
@@ -113,11 +113,11 @@ async function readStore(page){
   await page.waitForTimeout(400);
   const brandWordA = await page.$eval('.brand-word', el => el.textContent).catch(()=>null);
   check('tenant A menu shows migrated company name', !!(brandWordA && brandWordA.includes('Infinity Landscapes and Design')));
-  await page.screenshot({ path: __dirname+'/mt_tenantA_menu.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/mt_tenantA_menu.png', fullPage: true });
 
   // ---- 3. A brand-new second tenant, same underlying store, different uid ----
   await page.addInitScript(setUidScript('u_second_tenant'));
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html'));
+  await page.goto('file:///home/claude/build/app.html');
   await page.waitForTimeout(500);
 
   const fName = await page.$('#f_name');
@@ -126,7 +126,7 @@ async function readStore(page){
   check('tenant B setup step 1 has BLANK company name (no leaked defaults)', fNameVal === '');
   const hintText = await page.$eval('.hint', el => el.textContent).catch(()=>'');
   check('tenant B sees the "fresh tenant" copy, not the "pulled in" copy', hintText.includes('Tell us a bit about your business'));
-  await page.screenshot({ path: __dirname+'/mt_tenantB_setup_step1.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/mt_tenantB_setup_step1.png', fullPage: true });
 
   // Walk tenant B through setup with its own distinct company name
   await page.fill('#f_name', 'Second Tenant Gardens Ltd');
@@ -139,7 +139,7 @@ async function readStore(page){
   await (await page.$('button[data-action="setupNext"]')).click(); await page.waitForTimeout(400); // finish -> menu
   const brandWordB = await page.$eval('.brand-word', el => el.textContent).catch(()=>null);
   check('tenant B menu shows its OWN company name after setup', !!(brandWordB && brandWordB.includes('Second Tenant Gardens Ltd')));
-  await page.screenshot({ path: __dirname+'/mt_tenantB_menu.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/mt_tenantB_menu.png', fullPage: true });
 
   // ---- 4. Cross-tenant isolation in the underlying (shared) mock store ----
   store = await readStore(page);

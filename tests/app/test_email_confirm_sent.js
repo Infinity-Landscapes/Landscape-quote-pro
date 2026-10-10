@@ -9,7 +9,7 @@ async function run(mode){
   const page = await (await browser.newContext({ viewport:{width:1100,height:1000} })).newPage();
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
   await page.addInitScript(`(()=>{
     window.__MODE__ = ${JSON.stringify(mode)};
     const orig = window.claude.use;
@@ -24,7 +24,7 @@ async function run(mode){
   })();`);
   let pass = true; const check = (l,c)=>{ console.log(`[${mode}] `+(c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
   const wait = ms => page.waitForTimeout(ms);
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await wait(400);
+  await page.goto('file:///home/claude/build/app.html'); await wait(400);
   await page.fill('#f_name','Infinity Landscapes and Design');
   for (let i=0;i<3;i++){ await page.click('button[data-action="setupNext"]'); await wait(200); }
   await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');

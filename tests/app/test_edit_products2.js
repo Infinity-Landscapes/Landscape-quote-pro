@@ -6,8 +6,8 @@ const fs = require('fs');
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await (await browser.newContext({ viewport: { width: 1300, height: 1600 } })).newPage();
-  require(__dirname+'/row_helper.js')(page);
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+  require('/tmp/mobiletest/row_helper.js')(page);
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type()==='error' && !/net::ERR/.test(m.text())) errors.push('CONSOLE: '+m.text()); });
@@ -18,7 +18,7 @@ const fs = require('fs');
   async function via(sel, val, f){ await page.selectOption(sel,val); await settle();
     for (const [k,x] of Object.entries(f)){ const el = await page.$('#mf_'+k); if(el) await el.fill(String(x)); }
     { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]'); }
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
+  await page.goto('file:///home/claude/build/app.html'); await page.waitForTimeout(400);
   await page.fill('#f_name','Infinity Landscapes and Design');
   for (let i=0;i<3;i++) await click('button[data-action="setupNext"]');
   await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');

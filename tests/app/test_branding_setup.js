@@ -11,13 +11,13 @@ const fs = require('fs');
   const errors = [];
   // a red test logo
   const png = await (async()=>{ const p = await (await browser.newContext()).newPage(); const u = await p.evaluate(()=>{ const c=document.createElement('canvas'); c.width=200; c.height=80; const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,200,80); x.fillStyle='#c62828'; x.fillRect(10,10,180,60); return c.toDataURL('image/png'); }); return Buffer.from(u.split(',')[1],'base64'); })();
-  fs.writeFileSync(__dirname+'/_logo_red.png', png);
+  fs.writeFileSync('/tmp/mobiletest/_logo_red.png', png);
 
   async function newBiz(name){
     const page = await (await browser.newContext({ viewport:{width:390,height:844}, timezoneId:'Europe/London' })).newPage();
-    await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+    await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
     page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
-    await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
+    await page.goto('file:///home/claude/build/app.html'); await page.waitForTimeout(400);
     return page;
   }
   const settle = p => p.waitForTimeout(250);
@@ -28,7 +28,7 @@ const fs = require('fs');
   let page = await newBiz();
   await page.fill('#f_name', 'Green Thumb Gardens');
   await page.fill('#f_email', 'hello@greenthumb.test'); await page.fill('#f_phone', '01234 567890');
-  await page.setInputFiles('#f_logoFile', __dirname+'/_logo_red.png'); await page.waitForTimeout(600);
+  await page.setInputFiles('#f_logoFile', '/tmp/mobiletest/_logo_red.png'); await page.waitForTimeout(600);
   check('logo preview shown in setup', !!(await page.$('img[src^="data:image"]')));
   const primary = await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--primary').trim());
   check('app recoloured from the logo (red primary)', /^#[0-9a-f]{6}$/i.test(primary) && parseInt(primary.slice(1,3),16) > parseInt(primary.slice(3,5),16)+40);

@@ -8,7 +8,7 @@ const { chromium } = require('playwright');
   page.on('console', msg => { if (msg.type() === 'error' && !/net::ERR/.test(msg.text())) errors.push('CONSOLE: ' + msg.text()); });
 
   await page.addInitScript('window.__NO_AUTO_TOUR__ = true;');
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html'));
+  await page.goto('file:///home/claude/build/app.html');
   await page.waitForTimeout(400);
   // Oct 2026: a new business must enter its own rates in setup; Infinity's are restored by name.
   { const n = await page.$('#f_name'); if (n) await n.fill('Infinity Landscapes and Design'); }
@@ -57,7 +57,7 @@ const { chromium } = require('playwright');
   // Try more targeted selectors
   const allMeasInputs = await page.$$('input[type=text][inputmode=decimal]');
   console.log('decimal text inputs on measure step:', allMeasInputs.length);
-  await page.screenshot({ path: __dirname+'/markup_measure_step.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/markup_measure_step.png', fullPage: true });
 
   await browser.close();
   console.log('ERRORS:', errors.length ? errors : 'none');

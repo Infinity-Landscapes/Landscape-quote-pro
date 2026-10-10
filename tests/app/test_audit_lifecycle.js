@@ -9,7 +9,7 @@ const fs = require('fs');
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await (await browser.newContext({ viewport: { width: 1100, height: 1400 }, timezoneId:'Europe/London' })).newPage();
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   let pass = true; const check = (l,c)=>{ console.log((c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
@@ -20,7 +20,7 @@ const fs = require('fs');
   const store = () => page.evaluate(()=>JSON.parse(localStorage.getItem('__mockdb__')));
   const quotesIn = st => Object.keys(st).filter(k=>/\/quotes\//.test(k)).map(k=>st[k]);
   const bizIn = st => st[Object.keys(st).find(k=>/business$/.test(k))];
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
+  await page.goto('file:///home/claude/build/app.html'); await page.waitForTimeout(400);
   await page.fill('#f_name', 'Infinity Landscapes and Design');
   for (let i=0;i<3;i++) await click('button[data-action="setupNext"]');
   await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');
@@ -71,11 +71,13 @@ const fs = require('fs');
   t = await txt();
   check('new job not shown as a loss (profit so far = quoted margin)', /Profit so far\s*£[1-9]/.test(t) && !/Profit so far\s*-£/.test(t));
   // VAT set aside 1/6
+  await click('button[data-action="openJobFinances"]');
   await click('button[data-action="addPayment"]');
   await page.fill('#mf_amount','1200'); { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]');
   q = quotesIn(await store()).find(x=>x.customer.name==='Mr & Mrs Rayner');
   check('VAT set aside on £1,200 = £200 (1/6)', q.finance.payments[0].vatSetAside===200);
   // ---- edit the ongoing job: double the area ----
+  await click('button[data-action="closeJobFinances"]');
   await click('button[data-action="editQuote"]');
   { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]'); // "Edit job"
   // jump to the measurement step via the step pill for the service

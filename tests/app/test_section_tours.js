@@ -3,12 +3,12 @@
 // finished or skipped (saved with the business), and can be replayed from Help.
 const { chromium } = require('playwright');
 const fs = require('fs');
-const OUT = require('path').join(__dirname, 'tour_shots');
+const OUT = '/tmp/mobiletest/tour_shots';
 fs.mkdirSync(OUT, {recursive:true});
 
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-  const mock = fs.readFileSync(__dirname+'/db_mock.js', 'utf8');
+  const mock = fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8');
   const errors = [];
   let pass = true; const check = (l,c)=>{ console.log((c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
   async function newPage(vp){
@@ -24,7 +24,7 @@ fs.mkdirSync(OUT, {recursive:true});
   const tip = p => p.$eval('#tourLayer .tour-tip', e=>e.innerText).catch(()=> '');
   const settings = async p => { const s = JSON.parse(await p.evaluate(()=>localStorage.getItem('__mockdb__')||'{}')); const k = Object.keys(s).find(k=>/business$/.test(k)); return k ? s[k] : {}; };
   async function setupAndSkipMain(p){
-    await p.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await wait(p, 400);
+    await p.goto('file:///home/claude/build/app.html'); await wait(p, 400);
     await p.fill('#f_name', 'Section Tours Ltd');
     for (let i=0;i<3;i++){ if (await p.$('#f_dayrate')) { await p.fill('#f_dayrate','180'); await p.fill('#f_expenses','90'); } await p.click('button[data-action="setupNext"]'); await wait(p, 200); }
     await p.fill('#f_pin','1234'); await p.fill('#f_pin2','1234');

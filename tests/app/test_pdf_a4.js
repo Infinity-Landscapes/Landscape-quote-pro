@@ -5,18 +5,18 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-  let html = fs.readFileSync(require('path').resolve(__dirname,'../../app/app.html'),'utf8');
+  let html = fs.readFileSync('/home/claude/build/app.html','utf8');
   const k = html.lastIndexOf('\n})();');
   html = html.slice(0,k) + '\nwindow.__T={captureForPdf,buildPdfBlobFromElement,pdfPageSlices,ensurePdfLibs,S:()=>S};' + html.slice(k);
-  fs.writeFileSync(__dirname+'/_pdf_exposed.html', html);
+  fs.writeFileSync('/tmp/mobiletest/_pdf_exposed.html', html);
   let pass = true; const check = (l,c)=>{ console.log((c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
   const results = {};
   for (const [label, vp] of [['phone',{width:390,height:844}],['desktop',{width:1280,height:1000}]]){
     const page = await (await browser.newContext({ viewport: vp })).newPage();
     const errors = []; page.on('pageerror', e => errors.push(e.message));
-    await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+    await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
     const wait = ms => page.waitForTimeout(ms);
-    await page.goto('file://'+__dirname+'/_pdf_exposed.html'); await wait(400);
+    await page.goto('file:///tmp/mobiletest/_pdf_exposed.html'); await wait(400);
     await page.fill('#f_name','Infinity Landscapes and Design');
     for (let i=0;i<3;i++){ await page.click('button[data-action="setupNext"]'); await wait(200); }
     await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');
@@ -41,7 +41,7 @@ const fs = require('fs');
       const txt = await blob.text();
       return { capW: c.width, capH: c.height, pages: slices.length, cuts: slices.map(s=>s[1]), pagePx, png: p1.toDataURL('image/png'), pdfPages: (txt.match(/\/Type\s*\/Page[^s]/g)||[]).length, mediabox: (txt.match(/\/MediaBox\s*\[[^\]]*\]/)||[''])[0] };
     });
-    fs.writeFileSync(`${__dirname}/pdf_a4_${label}_p1.png`, Buffer.from(r.png.split(',')[1], 'base64'));
+    fs.writeFileSync(`/tmp/mobiletest/pdf_a4_${label}_p1.png`, Buffer.from(r.png.split(',')[1], 'base64'));
     console.log(`  ${label}: letter on screen ${shown}px wide; captured ${r.capW}×${r.capH}; pages ${r.pages} (${r.pdfPages} in PDF); ${r.mediabox}`);
     check(`${label}: PDF letter captured at the fixed A4 width (760px), not the screen width`, r.capW === 760);
     check(`${label}: PDF pages are A4 (595 × 842 pt)`, /595\.\d*\s+841\.\d*|595\.28\s+841\.89/.test(r.mediabox));

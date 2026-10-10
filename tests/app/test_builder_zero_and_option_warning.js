@@ -6,14 +6,14 @@ const fs = require('fs');
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await (await browser.newContext({ viewport: { width: 1300, height: 1600 } })).newPage();
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   let pass = true; const check = (l,c)=>{ console.log((c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
   const txt = () => page.$eval('#App', el => el.textContent);
   const settle = () => page.waitForTimeout(230);
   const click = async sel => { await (await page.$(sel)).click(); await settle(); };
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
+  await page.goto('file:///home/claude/build/app.html'); await page.waitForTimeout(400);
   await page.fill('#f_name','Test Co');
   for (let i=0;i<3;i++){ if (await page.$('#f_dayrate')) { await page.fill('#f_dayrate','150'); await page.fill('#f_expenses','515'); } await click('button[data-action="setupNext"]'); }
   await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');
@@ -30,7 +30,7 @@ const fs = require('fs');
   await page.check('[data-svcmat-roundup="0"]'); await page.fill('[data-svcmat-price="0"]','0');
   await click('button[data-action="addSvcMaterialRow"]');
   await page.fill('[data-svcmat-name="1"]','Extra moss killer'); await page.fill('[data-svcmat-amount="1"]','1'); await page.fill('[data-svcmat-per="1"]','50');
-  await page.selectOption('[data-svcmat-onlyif="1"]', {label:'"Second coat?" ticked'}); await page.fill('[data-svcmat-price="1"]','12');
+  await page.selectOption('[data-svcmat-onlyif="1"]', {label:'Only when "Second coat?" ticked'}); await page.fill('[data-svcmat-price="1"]','12');
   await click('button[data-action="svcBuilderNext"]');
   check('builder refuses a new material at £0', !(await page.$('#svcProductivity')) && /Enter what "Moss killer" costs you/.test(await txt()));
   await page.fill('[data-svcmat-price="0"]','5');

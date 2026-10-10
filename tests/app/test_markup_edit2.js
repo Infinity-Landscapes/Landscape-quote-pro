@@ -4,12 +4,12 @@ const fs = require('fs');
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const context = await browser.newContext({ viewport: { width: 1100, height: 1000 } });
   const page = await context.newPage();
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', msg => { if (msg.type() === 'error' && !/net::ERR/.test(msg.text())) errors.push('CONSOLE: ' + msg.text()); });
 
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html'));
+  await page.goto('file:///home/claude/build/app.html');
   await page.waitForTimeout(400);
   // Oct 2026: a new business must enter its own rates in setup; Infinity's are restored by name.
   { const n = await page.$('#f_name'); if (n) await n.fill('Infinity Landscapes and Design'); }
@@ -53,12 +53,12 @@ const fs = require('fs');
   // advance (people / waste / extras) until the review page's save button appears
   for (let i=0; i<6 && !(await page.$('button[data-action="saveSentQuote"]')); i++) { await (await page.$('button[data-action="wizNext"]')).click(); await page.waitForTimeout(250); }
 
-  await page.screenshot({ path: __dirname+'/markup_preview_v1.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/markup_preview_v1.png', fullPage: true });
 
   // Save & mark as sent
   await (await page.$('button[data-action="saveSentQuote"]')).click();
   await page.waitForTimeout(400);
-  await page.screenshot({ path: __dirname+'/markup_quote_detail_v1.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/markup_quote_detail_v1.png', fullPage: true });
 
   const quoteNumber1 = await page.$eval('h3', el => el.textContent).catch(()=>null);
   console.log('quote number after create:', quoteNumber1);
@@ -66,25 +66,25 @@ const fs = require('fs');
   // Now edit the quote
   await (await page.$('button[data-action="editQuote"]')).click();
   await page.waitForTimeout(300);
-  await page.screenshot({ path: __dirname+'/markup_edit_jump_to_preview.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/markup_edit_jump_to_preview.png', fullPage: true });
 
   // jump back to measure step via step pill, change width to 20
   const measureStepPill = await page.$('.wstep.done[data-step="measure"]');
   if (measureStepPill) { await measureStepPill.click(); await page.waitForTimeout(250); }
   else console.log('measure step pill not found (done class)');
 
-  await page.screenshot({ path: __dirname+'/markup_edit_measure_step.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/markup_edit_measure_step.png', fullPage: true });
   await page.fill('[data-row="0"] input[data-mf="width"]', '20');
   await page.waitForTimeout(150);
 
   // walk forward to preview again
   // advance (people / waste / extras) until the review page's save button appears
   for (let i=0; i<6 && !(await page.$('button[data-action="saveSentQuote"]')); i++) { await (await page.$('button[data-action="wizNext"]')).click(); await page.waitForTimeout(250); }
-  await page.screenshot({ path: __dirname+'/markup_edit_preview_v2.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/markup_edit_preview_v2.png', fullPage: true });
 
   await (await page.$('button[data-action="saveSentQuote"]')).click();
   await page.waitForTimeout(400);
-  await page.screenshot({ path: __dirname+'/markup_quote_detail_v2.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/markup_quote_detail_v2.png', fullPage: true });
 
   // Go to quotes list, confirm only ONE quote exists (not duplicated)
   await (await page.$('button[data-nav="quotes"]')).click(); await page.waitForTimeout(300);

@@ -15,7 +15,7 @@ const PLATFORM = `window.__platform = { email:()=>'matt@example.com', signOut(){
     const ctx = await browser.newContext({ viewport: vp, acceptDownloads: true });
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push(label+' PAGEERROR: ' + e.message));
-    await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+    await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
     await page.addInitScript(PLATFORM);
     await page.addInitScript(`(()=>{
       window.__opened = []; window.__copied = []; window.__shared = null; window.__shareMode = 'ok';
@@ -36,7 +36,7 @@ const PLATFORM = `window.__platform = { email:()=>'matt@example.com', signOut(){
     const wait = ms => page.waitForTimeout(ms);
     const box = () => page.$eval('.modal-box', e=>e.innerText).catch(()=> '');
     const status = () => page.evaluate(()=>{ const s = JSON.parse(localStorage.getItem('__mockdb__')||'{}'); const k = Object.keys(s).find(k=>/quotes\//.test(k) && s[k].customer && s[k].customer.name==='Live Email Test'); return k ? s[k].status : null; });
-    await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await wait(400);
+    await page.goto('file:///home/claude/build/app.html'); await wait(400);
     await page.fill('#f_name','Infinity Landscapes and Design');
     for (let i=0;i<3;i++){ await page.click('button[data-action="setupNext"]'); await wait(200); }
     await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');
@@ -132,7 +132,7 @@ const PLATFORM = `window.__platform = { email:()=>'matt@example.com', signOut(){
       await wait(200); opened = await page.evaluate(()=>window.__opened);
       check('payment plan: a new email opens with the payment plan subject', opened.some(u=>u.startsWith('mailto:cust@example.com?') && decodeURIComponent(u).includes('subject=Payment plan for your quote')));
     }
-    await page.screenshot({path:`${__dirname}/live_email_${label}.png`});
+    await page.screenshot({path:`/tmp/mobiletest/live_email_${label}.png`});
     await ctx.close();
   }
   await run('phone', {width:390,height:844}, true);

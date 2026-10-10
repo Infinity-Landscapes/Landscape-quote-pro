@@ -6,8 +6,8 @@ const fs = require('fs');
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html'));
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
+  await page.goto('file:///home/claude/build/app.html');
   await page.waitForTimeout(400);
   // Oct 2026: a new business must enter its own rates in setup; Infinity's are restored by name.
   { const n = await page.$('#f_name'); if (n) await n.fill('Infinity Landscapes and Design'); }

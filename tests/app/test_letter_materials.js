@@ -11,12 +11,12 @@ const fs = require('fs');
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', msg => { if (msg.type() === 'error' && !/net::ERR/.test(msg.text())) errors.push('CONSOLE: ' + msg.text()); });
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
-  let html = fs.readFileSync(require('path').resolve(__dirname,'../../app/app.html'),'utf8');
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
+  let html = fs.readFileSync('/home/claude/build/app.html','utf8');
   const k = html.lastIndexOf('\n})();');
   html = html.slice(0,k) + '\nwindow.__T={buildQuoteFromDraft,quoteLetterPlainText,quoteLetterHtml,quoteMaterialsList,S:()=>S};' + html.slice(k);
-  fs.writeFileSync(__dirname+'/_matlist_exposed.html', html);
-  await page.goto('file://'+__dirname+'/_matlist_exposed.html');
+  fs.writeFileSync('/tmp/mobiletest/_matlist_exposed.html', html);
+  await page.goto('file:///tmp/mobiletest/_matlist_exposed.html');
   await page.waitForTimeout(400);
   let pass = true; const check = (l,c)=>{ console.log((c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
   const wait = ms => page.waitForTimeout(ms);
@@ -96,7 +96,7 @@ const fs = require('fs');
   check('letter table has one row per material', rows === r.list.length);
   check('consumables are left off the customer letter', !/Consumables/i.test(letter));
   check('consumables are still in the costing (only hidden from the letter)', r.hasConsumables);
-  await (await page.$('#letterCapture')).screenshot({ path: __dirname+'/letter_materials.png' });
+  await (await page.$('#letterCapture')).screenshot({ path: '/tmp/mobiletest/letter_materials.png' });
 
   // ---- plain-text (email) version ----
   const t = r.text;

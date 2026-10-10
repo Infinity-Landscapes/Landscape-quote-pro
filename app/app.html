@@ -309,6 +309,7 @@
     background:#fff;color:#231f20;max-width:760px;margin:0 auto;border-radius:10px;overflow:hidden;
     box-shadow:var(--shadow); border:1px solid var(--line); padding:34px 40px 30px;font-size:13px;line-height:1.55;
   }
+  .invoice-logo{display:block;max-height:70px;max-width:240px;object-fit:contain;margin:0 0 14px;}
   .invoice-brand{font-family:'Poppins';font-weight:500;font-size:26px;color:var(--brand-500);margin:0 0 14px;letter-spacing:.01em;}
   .invoice-companyinfo{font-size:12.5px;line-height:1.6;color:#231f20;margin-bottom:26px;}
   .invoice-meta{display:flex;justify-content:space-between;gap:20px;margin-bottom:22px;font-size:12.5px;flex-wrap:wrap;}
@@ -2818,7 +2819,7 @@ const SERVICE_COPY = {
 // registration or rate has changed since — see q.vatRegistered.
 function sectionMeasureRate(s, vatRate){
   const svcUnitLabel = SERVICES[s.key] && SERVICES[s.key].unitLabel;
-  const unit = svcUnitLabel==="Length" ? "m" : svcUnitLabel==="Count" ? "feature" : "m²";
+  const unit = svcUnitLabel==="Length" ? "m" : svcUnitLabel==="Count" ? "feature" : svcUnitLabel==="Volume" ? "m³" : "m²";
   const area = s.area||0;
   const totalIncVat = s.subtotal*(1+(vatRate||0));
   const rate = area>0.004 ? totalIncVat/area : null;
@@ -3201,9 +3202,12 @@ function registerCustomServices(){
   (S.settings.customServices||[]).forEach(cs=>{
     const isLength = cs.measureType==="length";
     const isWH = cs.measureType==="area_wh";
-    const cols = isLength ? ["desc","length"] : (isWH ? ["desc","length","height"] : ["desc","width","length"]);
-    const colLabels = isLength ? ["Description","Length (m)"] : (isWH ? ["Description","Length (m)","Height (m)"] : ["Description","Width (m)","Length (m)"]);
-    const unitSuffix = isLength ? "m" : "m²";
+    // Length × Width × Depth (Oct 2026): priced per m³; depth is typed in mm like every other
+    // depth in the app.
+    const isVol = cs.measureType==="volume";
+    const cols = isLength ? ["desc","length"] : isWH ? ["desc","length","height"] : isVol ? ["desc","width","length","depth"] : ["desc","width","length"];
+    const colLabels = isLength ? ["Description","Length (m)"] : isWH ? ["Description","Length (m)","Height (m)"] : isVol ? ["Description","Width (m)","Length (m)","Depth (mm)"] : ["Description","Width (m)","Length (m)"];
+    const unitSuffix = isLength ? "m" : isVol ? "m³" : "m²";
     // Whether this custom service feeds the shared Waste removal & site clearance pool is a
     // tenant-editable flag, same mechanism as every built-in service — see settings.generatesSpoil
     // (Settings → Pricing → Waste & spoil eligibility). Read live (not cached) here, since
@@ -3221,7 +3225,7 @@ function registerCustomServices(){
         ? {key:o.key, label:o.label, type:"number", default:(o.default!=null && o.default!=='') ? o.default : 0}
         : {key:o.key, label:o.label, type:"yesno", default:!!o.default});
     });
-    if(spoilEligible){
+    if(spoilEligible && !isVol){
       options.push({key:"digOutDepth", label:"Dig-out depth (mm)", type:"number", default: digOutDepthDefault,
         hint:"How deep this job digs out — feeds the shared Waste removal & site clearance totals alongside every other spoil-generating service."});
     }
@@ -3229,12 +3233,13 @@ function registerCustomServices(){
       ? cs.lines.concat(cs.waste && cs.waste.name ? [{material:cs.waste.name, basis:"unit", amount:cs.waste.amountPerUnit||0, per:1}] : [])
       : bldLegacyLines(cs);
     SERVICES[cs.key] = {
-      label: cs.label, group: cs.group || "Other services", unitLabel: isLength?"Length":"Area",
+      label: cs.label, group: cs.group || "Other services", unitLabel: isLength?"Length":isVol?"Volume":"Area",
       custom:true, cols, colLabels,
       options,
       calc(rows, opt, ctx){
         const rowPrims = rows.map(r=> isLength ? (Number(r.length)||0)
           : isWH ? (Number(r.length)||0)*(Number(r.height)||0)
+          : isVol ? (Number(r.width)||0)*(Number(r.length)||0)*(Number(r.depth)||0)/1000
           : (Number(r.width)||0)*(Number(r.length)||0)).filter(p=>p>0);
         const primary = sum(rowPrims);
         const productivity = Number(opt.productivity) || cs.productivityDefault || 1;
@@ -3252,8 +3257,15 @@ function registerCustomServices(){
         const blockers = primary>0 ? bldZeroPriceBlockers(mats, plant, ctx) : [];
         const result = {
           area: primary, days, personDays, materials: mats, plant, blockers,
-          keyFigures: [[isLength?"Total length":"Total area", primary.toFixed(2)+" "+unitSuffix], ["Days required", days]],
+          keyFigures: [[isLength?"Total length":isVol?"Total volume":"Total area", primary.toFixed(2)+" "+unitSuffix], ["Days required", days]],
         };
+        if(isVol && spoilEligible){
+          // Feeds the shared waste pool by its dug footprint and the depth actually typed per row.
+          const plan = sum(rows.map(r=>(Number(r.width)||0)*(Number(r.length)||0)*((Number(r.depth)||0)>0?1:0)));
+          result.wasteArea = plan;
+          result.digOutDepth = plan>0 ? primary/plan*1000 : 0;
+          return result;
+        }
         // Opting a custom service into the shared digger/grab-hire/clearance-labour pool feeds
         // its area and dig-out volume into calcWasteRemoval exactly like a built-in service.
         if(spoilEligible) result.digOutDepth = Number(opt.digOutDepth) || digOutDepthDefault;
@@ -3523,9 +3535,15 @@ function isWorkingDay(dateLike, settings){
 const TEAM_COLORS = ['#3a7ca5','#71a838','#a9527a','#c1812f','#5c6bc0','#c1503a','#2f9e8f','#8e44ad'];
 function teamById(id){ return (S.settings.teams||[]).find(tm=>tm.id===id) || null; }
 function teamLabel(id){ const tm = teamById(id); if(tm) return tm.name; return id ? "Unknown team" : "Unassigned"; }
+// A team can also have its colour picked by hand (Settings → Teams); otherwise it takes the
+// palette colour for its position.
+const TEAM_COLOR_CHOICES = [['#3a7ca5','Blue'],['#71a838','Green'],['#a9527a','Pink'],['#c1812f','Orange'],['#5c6bc0','Indigo'],['#c1503a','Red'],['#2f9e8f','Teal'],['#8e44ad','Purple'],['#d4a017','Yellow'],['#6d4c41','Brown'],['#546e7a','Slate grey'],['#e67e22','Amber']];
 function teamColor(id){
-  const idx = (S.settings.teams||[]).findIndex(tm=>tm.id===id);
-  return idx>=0 ? TEAM_COLORS[idx % TEAM_COLORS.length] : '#9aa39a';
+  const teams = S.settings.teams||[];
+  const idx = teams.findIndex(tm=>tm.id===id);
+  if(idx<0) return '#9aa39a';
+  const own = teams[idx].color;
+  return (own && /^#[0-9a-f]{6}$/i.test(own)) ? own : TEAM_COLORS[idx % TEAM_COLORS.length];
 }
 function defaultTeamId(){ return (S.settings.teams && S.settings.teams[0]) ? S.settings.teams[0].id : null; }
 
@@ -3837,7 +3855,7 @@ function materialsToOrderHtml(q){
   if(!groups.length) return '';
   return `<div class="card">
     <h3 style="margin:0 0 4px;font-size:15px;">🧱 Materials to order</h3>
-    <div class="hint" style="margin-bottom:8px;">Everything this job needs, with shared items added together and grouped by supplier. Tick items off as ordered in the finance tracker below.</div>
+    <div class="hint" style="margin-bottom:8px;">Everything this job needs, with shared items added together and grouped by supplier. Tick items off as ordered in the finance tracker's materials checklist.</div>
     ${groups.map((g,gi)=>`
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:12px 0 4px;flex-wrap:wrap;">
         <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;">${esc(g.supplier)}</div>
@@ -5137,7 +5155,10 @@ async function clearSavedDraft(){
   if(doc){ try{ await doc.collection("drafts").doc("current").delete(); }catch(e){} }
 }
 
-function goto(screen, extra){ S.screen = screen; Object.assign(S, extra||{}); render(); window.scrollTo(0,0); }
+function goto(screen, extra){
+  // Leaving a job (or opening a different one) closes its finances page and any half-done plan edit.
+  if(screen!==S.screen || (extra && extra.openQuoteId && extra.openQuoteId!==S.openQuoteId)){ S._financeQuoteId = null; S._planEdit = null; }
+  S.screen = screen; Object.assign(S, extra||{}); render(); window.scrollTo(0,0); }
 
 /* =========================================================================
    NEW-QUOTE DRAFT HELPERS
@@ -5562,7 +5583,7 @@ function renderSetup(){
       <div class="field"><label>Digger hire rate (£/block)</label><input id="f_diggerrate" type="text" inputmode="decimal" value="${blank(s.materials['Digger hire']&&s.materials['Digger hire'].price)}" placeholder="Leave blank if you don't hire one"><div class="hint">Billed per hire block (5 days by default), not per day.</div></div>
       <div class="field"><label>Grab hire rate (£/load, inc VAT)</label><input id="f_grabrate" type="text" inputmode="decimal" value="${blank(s.materials['Grab hire']&&s.materials['Grab hire'].price)}" placeholder="Leave blank if you don't use one"></div>
     </div>
-    <div class="field" style="max-width:320px;"><label>Weekly instalment on accepted quotes (£)</label><input id="f_weekly" type="text" inputmode="decimal" value="${s.weeklyPaymentAmount}"></div>
+    <div class="field" style="max-width:320px;"><label>Weekly instalment on accepted quotes (£) <span style="font-weight:400;">(the amount charged to the customer each week on their payment plan)</span></label><input id="f_weekly" type="text" inputmode="decimal" value="${s.weeklyPaymentAmount}"></div>
     <h3 style="margin:18px 0 8px;font-size:15px;">Your working week</h3>
     <div class="row" style="gap:6px;">${DAY_OPTS.map(([idx,l])=>`<label class="checkline" style="min-width:64px;flex:0 1 auto;"><input type="checkbox" data-setup-workday="${idx}" ${wd[idx]?'checked':''}> ${l}</label>`).join('')}</div>
     <div class="row" style="margin-top:10px;">
@@ -5785,7 +5806,7 @@ function quoteListItemHtml(q){
   const chase = q.status==="sent";
   const needs = quoteNeedsChasing(q);
   const od = financeOverdue(q);
-  return `<div class="quote-list-item" data-action="openQuote" data-id="${q.id}" style="${chase?'flex-wrap:wrap;':''}">
+  return `<div class="quote-list-item" data-action="openQuote" data-id="${q.id}" style="${(chase||q.status==="draft")?'flex-wrap:wrap;':''}">
     <div>
       <div style="font-weight:700;">${esc(q.customer.name||'Untitled customer')}</div>
       <div class="hint">${q.quoteNumber} · ${chase ? esc(chaseStatusText(q)) : fmtDate(q.createdAt)}</div>
@@ -5796,6 +5817,7 @@ function quoteListItemHtml(q){
       <span class="pill ${statusPillClass(q.status)}">${statusLabel(q.status)}</span>
     </div>
     ${chase ? `<div style="flex-basis:100%;order:3;">${chaseButtonsHtml(q, true)}</div>` : ''}
+    ${q.status==="draft" ? `<div style="flex-basis:100%;order:3;margin-top:6px;"><button type="button" class="btn btn-ghost btn-sm" data-action="markSentList" data-id="${q.id}" title="Sent to the customer outside the app (WhatsApp, text, by hand…)">✓ Mark as sent</button></div>` : ''}
   </div>`;
 }
 
@@ -5833,7 +5855,9 @@ function renderQuotes(){
    ========================================================================= */
 function renderOverview(){
   const jobs = S.quotes.filter(q=>q.finance && q.status!=="cancelled");
-  const totalProfit = Math.round(sum(jobs.map(q=>financeActualProfit(q)))*100)/100;
+  // Profit only counts once a job is marked finished — an ongoing job's figure is still moving.
+  const doneJobs = jobs.filter(q=>q.status==="finished");
+  const totalProfit = Math.round(sum(doneJobs.map(q=>financeActualProfit(q)))*100)/100;
   const totalOwed = Math.round(sum(jobs.map(q=>financeAmountOwed(q)))*100)/100;
   const totalPaid = Math.round(sum(jobs.map(q=>financePaymentsTotal(q)))*100)/100;
   const overdueJobs = jobs.filter(q=>financeOverdue(q).count>0);
@@ -5850,9 +5874,9 @@ function renderOverview(){
   App.innerHTML = shell(`
     <div class="card">
       <h2 style="margin:0 0 4px;font-size:18px;">📊 Business overview</h2>
-      <div class="hint" style="margin-bottom:14px;">Live totals across every ongoing or finished job's finance tracker.</div>
+      <div class="hint" style="margin-bottom:14px;">Live totals across every ongoing or finished job's finances. Total profit counts completed jobs only.</div>
       <div class="row" style="gap:10px;flex-wrap:wrap;" data-tour="ov-figures">
-        <div class="kfig"><div class="l">Total profit</div><div class="v" style="${totalProfit<0?'color:var(--danger);':''}">${gbp(totalProfit)}</div></div>
+        <div class="kfig" title="What you've made on completed jobs"><div class="l">Total profit <span style="font-weight:400;">(${doneJobs.length} completed job${doneJobs.length===1?'':'s'})</span></div><div class="v" style="${totalProfit<0?'color:var(--danger);':''}">${gbp(totalProfit)}</div></div>
         <div class="kfig"><div class="l">Owed by customers</div><div class="v">${gbp(totalOwed)}</div></div>
         <div class="kfig"><div class="l">Paid so far</div><div class="v">${gbp(totalPaid)}</div></div>
         <div class="kfig"><div class="l">Overdue</div><div class="v" style="${totalOverdue>0.004?'color:var(--danger);':''}">${gbp(totalOverdue)}</div></div>
@@ -5888,15 +5912,17 @@ function monthGridDates(year, month){
 }
 function calendarEntriesForRange(startStr, endStr, teamFilter){
   const map = {};
-  const addTo = (dateStr, bucket, item) => { const m = (map[dateStr] = map[dateStr] || {jobs:[], manual:[]}); m[bucket].push(item); };
+  const addTo = (dateStr, bucket, item) => { const m = (map[dateStr] = map[dateStr] || {jobs:[], manual:[], off:[]}); m[bucket].push(item); };
   S.quotes.forEach(q=>{
     if(q.status==="cancelled") return;
     if(teamFilter && q.teamId!==teamFilter) return;
     (q.scheduledDays||[]).forEach(d=>{ if(d>=startStr && d<=endStr) addTo(d, "jobs", q); });
+    (q.daysOff||[]).forEach(o=>{ if(o.date>=startStr && o.date<=endStr) addTo(o.date, "off", {kind:"q", id:q.id, name:q.customer.name||'Job', teamId:q.teamId, reason:o.reason}); });
   });
   (S.calendarEntries||[]).forEach(e=>{
     if(teamFilter && e.teamId!==teamFilter) return;
     entryScheduledDays(e).forEach(d=>{ if(d>=startStr && d<=endStr) addTo(d, "manual", e); });
+    (e.daysOff||[]).forEach(o=>{ if(o.date>=startStr && o.date<=endStr) addTo(o.date, "off", {kind:"e", id:e.id, name:e.title||'Job', teamId:e.teamId, reason:o.reason}); });
   });
   return map;
 }
@@ -5933,13 +5959,14 @@ function renderCalendar(){
           const dateStr = isoDate(d);
           const inMonth = d.getMonth()===ym.month;
           const nonworking = !wd[d.getDay()];
-          const info = entryMap[dateStr] || {jobs:[], manual:[]};
+          const info = entryMap[dateStr] || {jobs:[], manual:[], off:[]};
           return `<div class="cal-cell ${inMonth?'':'cal-cell-off'} ${nonworking?'cal-cell-nonworking':''} ${dateStr===todayStr?'cal-cell-today':''}">
             <div class="cal-cell-head">
               <span class="cal-daynum">${d.getDate()}</span>
-              <button type="button" class="cal-add-btn" data-action="addCalendarEntryForDay" data-date="${dateStr}" title="Add a calendar entry for this day">+</button>
+              <button type="button" class="cal-add-btn" data-action="addCalendarEntryForDay" data-date="${dateStr}" title="Add a calendar entry, or mark a day off for a job on this day">+</button>
             </div>
             <div class="cal-entries">
+              ${(info.off||[]).map(o=>`<div class="cal-entry cal-entry-off" style="border-left-color:${teamColor(o.teamId)};opacity:.75;font-style:italic;" ${o.kind==="q"?`data-action="openQuote" data-id="${o.id}"`:`data-action="editCalendarEntry" data-id="${o.id}"`} title="${esc(o.name)} — day off (${esc(o.reason||'')})">🌧 ${esc(o.name)} — day off</div>`).join('')}
               ${info.jobs.map(q=>`<div class="cal-entry cal-entry-job" style="border-left-color:${teamColor(q.teamId)};" data-action="openQuote" data-id="${q.id}" title="${esc(teamLabel(q.teamId))} — ${esc(q.customer.name||'Job')} — ${statusLabel(q.status)}${q.calendarBlocksDay===false?' (not blocking)':''}">📋 ${esc(q.customer.name||'Job')}${q.calendarBlocksDay===false?'':' 🔒'}</div>`).join('')}
               ${info.manual.map(e=>{
                 const days = entryScheduledDays(e);
@@ -5952,7 +5979,7 @@ function renderCalendar(){
           </div>`;
         }).join('')}
       </div>
-      <div class="hint" style="margin-top:14px;" data-tour="cal-legend">Each entry's left edge is coloured by its team. 📋 = a scheduled job, 🧰 = a manual entry marked as a job, 🔒 = blocks that day from other scheduling for that team.</div>
+      <div class="hint" style="margin-top:14px;" data-tour="cal-legend">Each entry's left edge is coloured by its team. 📋 = a scheduled job, 🧰 = a manual entry marked as a job, 🔒 = blocks that day from other scheduling for that team, 🌧 = a day off (weather or unforeseen) — tap <b>+</b> on a day with a job to mark one.</div>
     </div>
   `, "calendar");
 }
@@ -5963,6 +5990,7 @@ function renderCalendar(){
 function renderQuoteDetail(){
   const q = S.quotes.find(x=>x.id===S.openQuoteId);
   if(!q){ goto("quotes"); return; }
+  if(S._financeQuoteId===q.id){ renderJobFinances(q); return; }
   const pending = q.status==="draft" || q.status==="sent";
   const hasPlan = ["ongoing","finished","cancelled"].includes(q.status);
   App.innerHTML = shell(`
@@ -5995,7 +6023,7 @@ function renderQuoteDetail(){
             <button class="btn btn-ghost btn-block" data-action="emailQuote">📧 Email quote to customer${q.customer.email?'':' (no email on file)'}</button>
             <button class="btn btn-ghost btn-block" data-action="downloadQuotePdf" ${S._pdfBusy?'disabled':''}>${S._pdfBusy?'Preparing PDF…':'⬇ Download PDF'}</button>
             </div>
-            ${q.status==="draft"?`<button class="btn btn-ghost btn-block" data-action="markSent">Mark as sent to customer</button>`:''}
+            ${q.status==="draft"?`<button class="btn btn-ghost btn-block" data-action="markSent">✓ Mark as sent <span style="font-weight:400;">(sent outside the app)</span></button>`:''}
             ${pending?`<button class="btn btn-primary btn-block" data-action="showAccept">✓ Quote accepted — set up payment plan</button>`:''}
             <button class="btn btn-ghost btn-block" data-action="printQuote">🖨 Print / save as PDF</button>
             ${q.status!=="ongoing"?`<button class="btn btn-danger btn-block" data-action="deleteQuote">${["finished","cancelled"].includes(q.status)?'Permanently delete this job':'Delete quote'}</button>`:''}
@@ -6020,18 +6048,9 @@ function renderQuoteDetail(){
           <h3 style="margin:0 0 10px;font-size:15px;">Job status</h3>
           <button class="btn btn-ghost btn-block" data-action="reopenJob">↺ Reopen job (back to ongoing)</button>
         </div>`:''}
-        ${S._showAccept && pending ? `
-        <div class="card">
-          <h3 style="margin:0 0 10px;font-size:15px;">Payment plan</h3>
-          <div class="field"><label>Agreed start date</label><input id="acceptStart" type="date" value="${q.startDate||''}"></div>
-          <div class="field"><label>Team / crew</label><select id="acceptTeam">${(S.settings.teams||[]).map(tm=>`<option value="${tm.id}" ${(q.teamId||defaultTeamId())===tm.id?'selected':''}>${esc(tm.name)}</option>`).join('')}</select></div>
-          <button class="btn btn-primary btn-block" data-action="confirmAccept">Generate payment plan</button>
-        </div>`:''}
-        ${hasPlan ? paymentScheduleHtml(q) : ''}
-        ${hasPlan ? paymentTrackingHtml(q) : ''}
-        ${hasPlan ? materialsToOrderHtml(q) : ''}
+        ${hasPlan ? (S._planEdit && S._planEdit.qid===q.id ? paymentPlanEditorHtml(q, S._planEdit) : paymentScheduleHtml(q)) : ''}
+        ${hasPlan ? jobFinancesCardHtml(q) : ''}
         ${jobScheduleHtml(q)}
-        ${q.finance ? financeTrackerHtml(q) : ''}
         ${(q.finance || (q.activityLog||[]).length) ? activityLogHtml(q) : ''}
         ${quoteNotesHtml(q)}
         ${quoteBreakdownHtml(q)}
@@ -6302,8 +6321,17 @@ function canShareFiles(){
 }
 function pdfFileNameFor(q, suffix){ return `${(q.quoteNumber||'quote').replace(/[^\w-]+/g,'_')}${suffix||''}.pdf`; }
 function mailtoFor(to, subject, body){ return `mailto:${String(to||'').trim()}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; }
+// UK mobile "07…" → "447…" for WhatsApp links (wa.me needs the full international number).
+function waPhone(p){
+  let d = String(p||'').replace(/[^\d+]/g,'');
+  if(d.startsWith('+')) d = d.slice(1); else if(d.startsWith('00')) d = d.slice(2); else if(d.startsWith('0')) d = '44' + d.slice(1);
+  return d.replace(/\D/g,'');
+}
+function isIOS(){ return /iPhone|iPad|iPod/.test(navigator.userAgent||'') || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1); }
 function webmailUrl(via, m){
   const to = encodeURIComponent(String(m.to||'').trim()), su = encodeURIComponent(m.subject||''), bd = encodeURIComponent(m.body||'');
+  if(via==="whatsapp") return `https://wa.me/${waPhone(m.phone)}?text=${bd}`;
+  if(via==="gmailapp") return `googlegmail://co?to=${to}&subject=${su}&body=${bd}`;
   if(via==="gmail") return `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${su}&body=${bd}`;
   if(via==="outlook") return `https://outlook.live.com/mail/0/deeplink/compose?to=${to}&subject=${su}&body=${bd}`;
   return m.mailto;
@@ -6316,7 +6344,7 @@ function saveFileNow(file){
 }
 function openUrlNow(url){
   const a = document.createElement('a'); a.href = url;
-  if(!/^mailto:/i.test(url)){ a.target = '_blank'; a.rel = 'noopener'; }
+  if(!/^(mailto|googlegmail):/i.test(url)){ a.target = '_blank'; a.rel = 'noopener'; }
   document.body.appendChild(a); a.click(); a.remove();
 }
 async function openLiveEmail(m){
@@ -6334,13 +6362,23 @@ async function logEmailCreated(m){
   const q = m.qid && (S.quotes||[]).find(x=>x.id===m.qid);
   if(!q) return;
   if(!q.activityLog) q.activityLog = [];
-  q.activityLog.unshift({id:uid(), text:`Email created${m.pdfName?` with ${m.pdfName} attached`:''}`, at:new Date().toISOString()});
+  q.activityLog.unshift({id:uid(), text: m.lastVia==="whatsapp" ? `WhatsApp message opened to ${m.phone}${m.pdfName?` (${m.pdfName} saved to attach)`:''}` : `Email created${m.pdfName?` with ${m.pdfName} attached`:''}`, at:new Date().toISOString()});
   await saveQuote(q);
 }
 function liveEmailBlock(m){
-  const links = `<div class="row" style="gap:6px;margin-top:6px;">
-      <button class="btn btn-ghost btn-sm" data-action="emailDownloadOpen" data-via="gmail" style="flex:1;" ${m.pdfEl && m.pdfState!=="ready"?'disabled':''}>Use Gmail</button>
-      <button class="btn btn-ghost btn-sm" data-action="emailDownloadOpen" data-via="outlook" style="flex:1;" ${m.pdfEl && m.pdfState!=="ready"?'disabled':''}>Use Outlook</button>
+  const off = m.pdfEl && m.pdfState!=="ready" ? 'disabled' : '';
+  const wa = m.phone && waPhone(m.phone).length>=8;
+  // Every one of these opens addressed to the customer: email apps get their email address,
+  // WhatsApp their phone number (Oct 2026).
+  const links = `<div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm" data-action="emailDownloadOpen" data-via="gmail" style="flex:1;" ${off}>Use Gmail</button>
+      <button class="btn btn-ghost btn-sm" data-action="emailDownloadOpen" data-via="outlook" style="flex:1;" ${off}>Use Outlook</button>
+      ${wa ? `<button class="btn btn-ghost btn-sm" data-action="emailDownloadOpen" data-via="whatsapp" style="flex:1;" ${off}>WhatsApp ${esc(m.phone)}</button>` : ''}
+    </div>`;
+  const phoneLinks = `<div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm" data-action="emailDownloadOpen" data-via="mail" style="flex:1;" ${off}>Email app</button>
+      ${isIOS() ? `<button class="btn btn-ghost btn-sm" data-action="emailDownloadOpen" data-via="gmailapp" style="flex:1;" ${off}>Gmail app</button>` : ''}
+      ${wa ? `<button class="btn btn-ghost btn-sm" data-action="emailDownloadOpen" data-via="whatsapp" style="flex:1;" ${off}>WhatsApp</button>` : ''}
     </div>`;
   if(!m.pdfEl) return `<div class="hint" style="margin-bottom:12px;">Check the details, then open a new email with them filled in. Nothing is sent until you press Send.</div>
     <button class="btn btn-primary btn-block" data-action="emailDownloadOpen" data-via="mail">✉ Open email app</button>
@@ -6352,11 +6390,12 @@ function liveEmailBlock(m){
   return `<div class="hint" style="margin-bottom:10px;">Creates a new email with <b>${esc(m.pdfName)}</b> attached. Nothing is sent until you press Send in your email app.</div>
     ${status}
     ${m.shared ? `<div class="msg msg-ok">Email created — check it in your email app and press Send.</div>` : ''}
-    ${m.opened ? `<div class="msg msg-ok">${esc(m.pdfName)} downloaded and a new email opened — attach the PDF from your Downloads folder, then press Send.</div>` : ''}
+    ${m.opened ? `<div class="msg msg-ok">${m.lastVia==="whatsapp" ? `${esc(m.pdfName)} saved and WhatsApp opened to ${esc(m.phone)} — attach the PDF with the paperclip, then send.` : `${esc(m.pdfName)} downloaded and a new email opened — attach the PDF from your Downloads folder, then press Send.`}</div>` : ''}
     ${m.shareError ? `<div class="msg msg-err">${esc(m.shareError)}</div>` : ''}
     ${share ? `<button class="btn btn-primary btn-block" data-action="emailShare" ${ready?'':'disabled'}>📎 Create email with PDF attached</button>
-        <div class="hint" style="margin:6px 0 8px;">Choose Mail, Gmail or Outlook. The customer's address is copied — paste it into "To" if it's empty.</div>
-        <button class="btn btn-ghost btn-sm btn-block" data-action="emailDownloadOpen" data-via="mail" ${ready?'':'disabled'}>Or download the PDF and open your email app</button>`
+        <div class="hint" style="margin:6px 0 8px;">Choose Mail, Gmail or Outlook. Your phone's share menu doesn't let apps fill in "To", so ${m.to?`the customer's address (<b>${esc(String(m.to).trim())}</b>) is copied — paste it into "To"`:`add the customer's address in "To"`}.</div>
+        <div class="hint" style="margin:10px 0 0;">Or open it already addressed to ${esc(m.customerName||'the customer')} — the PDF is saved to your phone for you to attach:</div>
+        ${phoneLinks}`
       : `<button class="btn btn-primary btn-block" data-action="emailDownloadOpen" data-via="mail" ${ready?'':'disabled'}>📎 Download PDF &amp; open email</button>
         <div class="hint" style="margin:6px 0 2px;">The new email has the customer, subject and message filled in — attach ${esc(m.pdfName)} from your Downloads folder, then press Send. Use webmail instead:</div>
         ${links}`}
@@ -6379,7 +6418,7 @@ async function sendQuoteEmail(q){
   }
   if(liveSite()){
     const b = shortQuoteEmailBody(q);
-    await openLiveEmail({type:"email", live:true, to:email, subject, body:b, mailto:mailtoFor(email, subject, b), pdfEl:'letterCapture', pdfName:pdfFileNameFor(q), qid:q.id});
+    await openLiveEmail({type:"email", live:true, to:email, phone:q.customer.phone||'', customerName:q.customer.knownAs||q.customer.name||'', subject, body:b, mailto:mailtoFor(email, subject, b), pdfEl:'letterCapture', pdfName:pdfFileNameFor(q), qid:q.id});
     return;
   }
   if(short){
@@ -6614,7 +6653,176 @@ function jobScheduleHtml(q){
     <h3 style="margin:0 0 10px;font-size:15px;">📅 Schedule</h3>
     <div class="hint"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${teamColor(q.teamId)};margin-right:6px;vertical-align:middle;"></span><b style="color:var(--ink);">${esc(teamLabel(q.teamId))}</b> — ${q.scheduledDays.length} working day${q.scheduledDays.length===1?'':'s'}, ${fmtDate(first)}${last!==first?` to ${fmtDate(last)}`:''}.</div>
     <div class="hint" style="margin-top:4px;">${q.calendarBlocksDay===false ? "Doesn't block these days from other job scheduling for this team." : "Blocks these days from other job scheduling for this team."}</div>
+    ${(q.daysOff||[]).length ? `<div class="hint" style="margin-top:4px;">Days off: ${q.daysOff.map(o=>`${fmtDate(o.date)} (${esc(o.reason||'day off')})`).join(', ')}.</div>` : ''}
     ${q.status==="ongoing" ? `<button class="btn btn-ghost btn-sm" data-action="editJobSchedule" style="margin-top:10px;">✎ Edit schedule</button>` : ''}
+    ${q.status==="ongoing" ? `<div class="hint" style="margin-top:6px;">Lost a day to the weather? Tap <b>+</b> on that day in the Calendar to mark a day off — the rest of the job moves back a day.</div>` : ''}
+  </div>`;
+}
+/* "Add calendar entry" form, from "+ Add entry" or a day's "+" (see addCalendarEntryForDay). */
+function openAddEntryForm(presetDate){
+  presetDate = presetDate || isoDate(new Date());
+  const presetTeam = S._calTeamFilter || defaultTeamId();
+  showForm("Add calendar entry", "Not linked to any quote or job — for something like an evening appointment, a site visit, a day off, or a job booked outside the app.", [
+    {key:"title", label:"Title", type:"text", required:true, placeholder:"e.g. Evening appointment — Mrs Jones"},
+    {key:"date", label:"Start date", type:"date", required:true, value:presetDate},
+    {key:"teamId", label:"Team / crew", type:"select", options:(S.settings.teams||[]).map(tm=>({value:tm.id,label:tm.name})), value:presetTeam},
+    {key:"isJob", label:"This is a job (spans a number of working days)", type:"checkbox", value:false},
+    {key:"days", label:"Number of working days (only used if the above is ticked)", type:"number", value:1},
+    {key:"blocksDay", label:"Block this day off from other job scheduling for this team", type:"checkbox", value:false},
+  ], async (values)=>{
+    const isJob = !!values.isJob;
+    const teamId = values.teamId || defaultTeamId();
+    const scheduledDays = computeEntrySchedule(values.date, isJob, values.days, S.settings, blockedDateSet(null, null, teamId));
+    const entry = {
+      id:uid(), title:values.title, date:values.date, teamId, isJob, days: isJob ? scheduledDays.length : 1,
+      scheduledDays, blocksDay:!!values.blocksDay, createdAt:new Date().toISOString(),
+    };
+    await saveCalendarEntry(entry);
+    render();
+  }, {confirmLabel:"Add entry"});
+}
+/* Jobs booked on one day (app jobs and calendar entries marked as jobs), for the day-off choice. */
+function jobsOnDay(date, teamFilter){
+  const out = [];
+  S.quotes.forEach(q=>{
+    if(q.status!=="ongoing" || (teamFilter && q.teamId!==teamFilter)) return;
+    if((q.scheduledDays||[]).includes(date)) out.push({kind:"q", id:q.id, name:q.customer.name||q.quoteNumber||'Job', teamId:q.teamId});
+  });
+  (S.calendarEntries||[]).forEach(e=>{
+    if(!e.isJob || (teamFilter && e.teamId!==teamFilter)) return;
+    if(entryScheduledDays(e).includes(date)) out.push({kind:"e", id:e.id, name:e.title||'Job', teamId:e.teamId});
+  });
+  return out;
+}
+/* Marks a weather / unforeseen day off on a job and moves its remaining days back one working
+   day. Returns a sentence saying where the job now finishes (or why nothing changed). */
+async function applyDayOff(kind, id, date, reason, note){
+  const label = reason + (note ? ` — ${note}` : '');
+  if(kind==="q"){
+    const q = S.quotes.find(x=>x.id===id); if(!q) return "";
+    const oldDays = (q.scheduledDays||[]).slice();
+    const days = pushDaysForDayOff(oldDays, date, S.settings, jobBlockedSet(q));
+    if(!days) return `${q.customer.name||'This job'} isn't booked on or after ${fmtDate(date)}, so nothing moved.`;
+    const oldLast = oldDays[oldDays.length-1], newLast = days[days.length-1];
+    q.scheduledDays = days;
+    q.daysOff = (q.daysOff||[]).filter(o=>o.date!==date).concat({date, reason, note:note||''});
+    // The completion payment follows the job's new last day.
+    (q.paymentSchedule||[]).forEach(p=>{ if(/^Final payment/.test(p.label||'') && String(p.date||'').slice(0,10)===oldLast) p.date = newLast; });
+    if(!q.activityLog) q.activityLog = [];
+    q.activityLog.unshift({id:uid(), text:`Day off on ${fmtDate(date)} (${label}). Remaining days moved back — now finishes ${fmtDate(newLast)}.`, at:new Date().toISOString()});
+    await saveQuote(q);
+    return `${q.customer.name||'The job'}: ${fmtDate(date)} marked as a day off (${reason}). The rest of the job has moved back a day and now finishes ${fmtDate(newLast)}.`;
+  }
+  const e = (S.calendarEntries||[]).find(x=>x.id===id); if(!e) return "";
+  const blocked = blockedDateSet(null, e.id, e.teamId); (e.daysOff||[]).forEach(o=>blocked.add(o.date));
+  const days = pushDaysForDayOff(entryScheduledDays(e), date, S.settings, blocked);
+  if(!days) return "";
+  await saveCalendarEntry({...e, scheduledDays:days, date:days[0], days:days.length, daysOff:(e.daysOff||[]).filter(o=>o.date!==date).concat({date, reason, note:note||''})});
+  return `${e.title||'The job'}: ${fmtDate(date)} marked as a day off (${reason}). It now finishes ${fmtDate(days[days.length-1])}.`;
+}
+/* JOB FINANCES PAGE (Oct 2026) — the materials list, payments against the plan and the finance
+   tracker live on their own page, opened from a "Job finances" card on the job, so the job page
+   itself stays short. */
+function jobFinancesCardHtml(q){
+  const od = financeOverdue(q);
+  return `<div class="card">
+    <h3 style="margin:0 0 6px;font-size:15px;">💰 Job finances</h3>
+    ${q.finance ? `<div class="hint" style="margin:0 0 10px;">Profit so far <b style="color:${financeActualProfit(q)<0?'var(--danger)':'var(--ink)'};">${gbp(financeActualProfit(q))}</b> · Paid ${gbp(financePaymentsTotal(q))} of ${gbp(financeScheduleTotal(q))}${od.count?` · <b style="color:var(--danger);">${gbp(od.amount)} overdue</b>`:''}</div>`
+      : `<div class="hint" style="margin:0 0 10px;">Materials to order and payments for this job.</div>`}
+    <button class="btn btn-primary btn-block" data-action="openJobFinances">Open job finances →</button>
+    <div class="hint" style="margin-top:6px;">Materials to order, payments against the plan, costs and labour.</div>
+  </div>`;
+}
+function renderJobFinances(q){
+  App.innerHTML = shell(`
+    <div class="card">
+      <button class="btn btn-ghost btn-sm" data-action="closeJobFinances">← Back to the job</button>
+      <h2 style="margin:12px 0 2px;font-size:18px;">💰 Job finances — ${esc(q.customer.name||'Job')}</h2>
+      <div class="hint" style="margin:0;">${esc(q.quoteNumber)} · <span class="pill ${statusPillClass(q.status)}">${statusLabel(q.status)}</span></div>
+    </div>
+    <div class="two-col">
+      <div class="stack">
+        ${materialsToOrderHtml(q) || `<div class="card"><h3 style="margin:0 0 4px;font-size:15px;">🧱 Materials to order</h3><div class="hint">No materials on this job.</div></div>`}
+        ${paymentTrackingHtml(q)}
+      </div>
+      <div class="stack">
+        ${q.finance ? financeTrackerHtml(q) : `<div class="card"><div class="hint">This job has no finance tracker.</div></div>`}
+      </div>
+    </div>
+  `, "quotes");
+}
+/* Every day this job must not be booked on: other jobs/entries blocking for its team, plus its
+   own days off (weather etc.), so rescheduling never puts work back on a lost day. */
+function jobBlockedSet(q){
+  const set = blockedDateSet(q.id, null, q.teamId);
+  (q.daysOff||[]).forEach(o=>set.add(o.date));
+  return set;
+}
+/* Day off (weather or something unforeseen): the job's days from that date on move back by one
+   working day, skipping non-working days and days already blocked for the team. */
+function pushDaysForDayOff(days, date, settings, blocked){
+  const before = (days||[]).filter(d=>d<date);
+  const from = (days||[]).filter(d=>d>=date);
+  if(!from.length) return null;
+  const b2 = new Set(blocked); b2.add(date);
+  const moved = scheduleWorkingDays(isoDate(addDays(new Date(date), 1)), from.length, settings, b2);
+  return before.concat(moved);
+}
+// The payment plan the app would work out for this job now (billed extras kept on the end).
+function standardPlanFor(q){
+  const completion = (q.scheduledDays||[]).length ? q.scheduledDays[q.scheduledDays.length-1] : q.startDate;
+  const added = (q.paymentSchedule||[]).filter(p=>/^Additional work: /.test(p.label||''));
+  const addedTotal = sum(added.map(p=>Number(p.amount)||0));
+  const t = Object.assign({}, q.totals, {total: Math.round((q.totals.total - addedTotal)*100)/100});
+  return calcPaymentSchedule(q.sections, q.extras, t, q.startDate, S.settings.weeklyPaymentAmount, q.vatRegistered, completion).concat(deepClone(added));
+}
+/* PAYMENT PLAN EDITOR (Oct 2026) — amounts, dates and descriptions can be changed by hand (e.g.
+   splitting the deposit into two payments). It can only be saved while the payments add up to
+   the quote's total, to the penny. */
+function planAmt(v){ return parseFloat(String(v==null?'':v).replace(/[£,\s]/g,''))||0; }
+function planEditTarget(q){ return Math.round((Number(q.totals.total)||0)*100)/100; }
+function planEditSum(pe){ return Math.round(sum(pe.rows.map(r=>planAmt(r.amount)))*100)/100; }
+function planEditState(q, pe){
+  const target = planEditTarget(q), total = planEditSum(pe), diff = Math.round((target-total)*100)/100;
+  const missing = pe.rows.some(r=>!r.date || !(planAmt(r.amount)>0));
+  const ok = Math.abs(diff)<0.005 && !missing && pe.rows.length>0;
+  const text = Math.abs(diff)<0.005
+    ? (missing ? `Adds up to ${gbp(total)} ✓ — but every payment needs a date and an amount above £0.` : `✓ Adds up to ${gbp(target)}, the quote total.`)
+    : diff>0 ? `Adds up to ${gbp(total)} — ${gbp(diff)} still to allocate to reach the quote total of ${gbp(target)}.`
+    : `Adds up to ${gbp(total)} — ${gbp(-diff)} more than the quote total of ${gbp(target)}.`;
+  return {ok, text};
+}
+function planEditRefresh(){
+  const pe = S._planEdit; if(!pe) return;
+  const q = S.quotes.find(x=>x.id===pe.qid); if(!q) return;
+  const st = planEditState(q, pe);
+  const el = document.getElementById('planEditStatus');
+  if(el){ el.textContent = st.text; el.className = 'msg ' + (st.ok ? 'msg-ok' : 'msg-err'); }
+  const btn = document.getElementById('planEditSave'); if(btn) btn.disabled = !st.ok;
+}
+function paymentPlanEditorHtml(q, pe){
+  const st = planEditState(q, pe);
+  return `<div class="card" id="planEditor" style="border-color:var(--primary);">
+    <h3 style="margin:0 0 4px;font-size:15px;">✎ Edit payment plan</h3>
+    <div class="hint" style="margin-bottom:12px;">Change any description, date or amount — e.g. split the deposit across two payments. The payments must add up to the quote total (${gbp(planEditTarget(q))}) before you can save.</div>
+    <div class="stack" style="gap:10px;">
+      ${pe.rows.map((r,i)=>`<div class="card" data-perow="${i}" style="padding:10px 12px;">
+        <div class="field" style="margin-bottom:8px;"><label>Description</label><input type="text" data-pe="label" data-pe-i="${i}" value="${esc(r.label)}"></div>
+        <div class="row" style="gap:8px;align-items:end;flex-wrap:wrap;">
+          <div class="field" style="flex:1 1 140px;margin:0;"><label>Date</label><input type="date" data-pe="date" data-pe-i="${i}" value="${esc(r.date)}"></div>
+          <div class="field" style="flex:1 1 110px;margin:0;"><label>Amount (£)</label><input type="text" inputmode="decimal" data-pe="amount" data-pe-i="${i}" value="${esc(r.amount)}"></div>
+          <button type="button" class="btn btn-ghost btn-sm" data-action="planEditSplit" data-idx="${i}" style="flex:none;" title="Split this payment into two">Split in two</button>
+          <button type="button" class="icon-btn" data-action="planEditRemove" data-idx="${i}" title="Remove this payment" style="flex:none;">✕</button>
+        </div>
+      </div>`).join('')}
+    </div>
+    <button type="button" class="btn btn-ghost btn-sm" data-action="planEditAdd" style="margin-top:10px;">+ Add a payment</button>
+    <div id="planEditStatus" class="msg ${st.ok?'msg-ok':'msg-err'}" style="margin-top:12px;">${esc(st.text)}</div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;">
+      <button type="button" class="btn btn-ghost" data-action="planEditCancel" style="flex:1;">Cancel</button>
+      <button type="button" class="btn btn-ghost" data-action="planEditReset" style="flex:1;">Back to the standard plan</button>
+      <button type="button" class="btn btn-primary" id="planEditSave" data-action="planEditSave" style="flex:1;" ${st.ok?'':'disabled'}>Save plan</button>
+    </div>
   </div>`;
 }
 function paymentScheduleHtml(q){
@@ -6623,7 +6831,7 @@ function paymentScheduleHtml(q){
   const addrLines = String(c.address||'').split(',').map(s=>s.trim()).filter(Boolean);
   return `
   <div class="invoice-doc" id="paymentCapture">
-    <div class="invoice-brand">${esc(c.name)}</div>
+    ${S.logo ? `<img class="invoice-logo" src="${S.logo}" alt="${esc(c.name)}">` : `<div class="invoice-brand">${esc(c.name)}</div>`}
     <div class="invoice-companyinfo">
       ${addrLines.map(l=>esc(l)).join('<br>')}${addrLines.length?'<br>':''}
       ${esc(c.phone||'')}<br>
@@ -6657,6 +6865,8 @@ function paymentScheduleHtml(q){
     </div>
   </div>
   <div class="stack" style="gap:8px;margin-top:12px;">
+    ${q.planEdited ? `<div class="hint" style="margin:0;">This plan has been edited by hand.</div>` : ''}
+    ${q.status!=="cancelled" ? `<button class="btn btn-ghost btn-block" data-action="editPaymentPlan">✎ Edit payment plan</button>` : ''}
     <button class="btn btn-ghost btn-block" data-action="emailPaymentPlan">📧 Email payment plan to customer${q.customer.email?'':' (no email on file)'}</button>
     <button class="btn btn-ghost btn-block" data-action="downloadPaymentPdf" ${S._paymentPdfBusy?'disabled':''}>${S._paymentPdfBusy?'Preparing PDF…':'⬇ Download payment plan PDF'}</button>
   </div>`;
@@ -6682,7 +6892,7 @@ async function sendPaymentPlanEmail(q){
   const subject = `Payment plan for your quote ${q.quoteNumber} — ${S.settings.company.name}`;
   const body = paymentPlanPlainText(q);
   const mailto = `mailto:${email.trim()}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  if(liveSite()){ await openLiveEmail({type:"email", live:true, to:email, subject, body, mailto, pdfEl:'paymentCapture', pdfName:pdfFileNameFor(q,'_payment_plan'), qid:q.id}); return; }
+  if(liveSite()){ await openLiveEmail({type:"email", live:true, to:email, phone:q.customer.phone||'', customerName:q.customer.knownAs||q.customer.name||'', subject, body, mailto, pdfEl:'paymentCapture', pdfName:pdfFileNameFor(q,'_payment_plan'), qid:q.id}); return; }
   S._modal = {type:"email", to:email, subject, body, mailto, pdfNote:""};
   render();
 }
@@ -7372,8 +7582,9 @@ function refreshJobAfterEdit(q){
   }
   if(q.status==="ongoing" && q.startDate){
     if(!q.teamId) q.teamId = defaultTeamId();
-    q.scheduledDays = scheduleWorkingDays(q.startDate, q.totals.totalDays, S.settings, blockedDateSet(q.id, null, q.teamId));
+    q.scheduledDays = scheduleWorkingDays(q.startDate, q.totals.totalDays, S.settings, jobBlockedSet(q));
     const completion = q.scheduledDays.length ? q.scheduledDays[q.scheduledDays.length-1] : q.startDate;
+    q.planEdited = false; // the total may have changed, so the plan is worked out afresh
     const added = (q.paymentSchedule||[]).filter(p=>/^Additional work: /.test(p.label||''));
     const addedTotal = sum(added.map(p=>Number(p.amount)||0));
     const t = Object.assign({}, q.totals, {total: Math.round((q.totals.total - addedTotal)*100)/100});
@@ -7408,8 +7619,9 @@ const SVC_MEASURE_TYPES = [
   {key:"length", label:"Linear length", sub:"Priced per metre — e.g. fencing, edging, kerbing"},
   {key:"area_wl", label:"Length × Width", sub:"Priced per m² — e.g. paving, turf, gravel areas"},
   {key:"area_wh", label:"Length × Height", sub:"Priced per m² — e.g. walls, screens, cladding"},
+  {key:"volume", label:"Length × Width × Depth", sub:"Priced per m³ — e.g. dig-out, excavation, muck away"},
 ];
-function svcUnitSuffix(measureType){ return measureType==="length" ? "m" : "m²"; }
+function svcUnitSuffix(measureType){ return measureType==="length" ? "m" : measureType==="volume" ? "m³" : "m²"; }
 
 // The upgraded builder (October 2026) — the same flow builds a custom service (Settings →
 // Services) or a Fencing fence type (Settings → Pricing → Fencing, or "+ Add other…" on a quote),
@@ -7498,19 +7710,23 @@ function serviceBuilderHtml(b){
         const nm = (m.name||'').trim();
         const exists = !!S.settings.materials[nm];
         return `<div class="card" data-svcmatrow="${i}" style="padding:12px 14px;">
-          <div class="field" style="margin-bottom:10px;"><label>Material</label><input type="text" list="existingMaterialsList" data-svcmat-name="${i}" value="${esc(m.name)}" placeholder="e.g. Turf"></div>
+          <div class="row" style="align-items:end;gap:8px;margin-bottom:10px;">
+            <div class="field" style="flex:1;margin:0;"><label>Material</label><input type="text" list="existingMaterialsList" data-svcmat-name="${i}" value="${esc(m.name)}" placeholder="e.g. Turf"></div>
+            <button class="icon-btn" data-action="removeSvcMaterialRow" data-idx="${i}" title="Remove" style="flex:none;">✕</button>
+          </div>
+          <div class="field" style="margin-bottom:8px;"><label>Quantity worked out</label>${bldSelect('data-svcmat-basis', i, m.basis||'unit', bases.map(x=>({value:x.key,label:x.label(unitSuffix)})))}</div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <span class="hint" style="margin:0;">Amount</span>
             <input type="text" inputmode="decimal" data-svcmat-amount="${i}" value="${esc(m.amount)}" placeholder="Qty" style="width:70px;">
             <span class="hint" style="margin:0;">per</span>
             <input type="text" inputmode="decimal" data-svcmat-per="${i}" value="${esc(m.per)}" placeholder="1" style="width:70px;">
-            ${bldSelect('data-svcmat-basis', i, m.basis||'unit', bases.map(x=>({value:x.key,label:x.label(unitSuffix)})))}
             <label class="checkline" style="margin:0;"><input type="checkbox" data-svcmat-roundup="${i}" ${m.roundUp?'checked':''}> Round up</label>
-            <button class="icon-btn" data-action="removeSvcMaterialRow" data-idx="${i}" title="Remove" style="margin-left:auto;">✕</button>
           </div>
           <div class="row" style="margin-top:10px;flex-wrap:wrap;">
-            <div class="field" style="flex:1 1 180px;"><label>Only when</label>${bldSelect('data-svcmat-onlyif', i, m.onlyIf||'', ticks, 'Always')}</div>
-            <div class="field" style="flex:1 1 180px;"><label>Number option (for "× a number option")</label>${bldSelect('data-svcmat-option', i, m.optionKey||'', nums, '—')}</div>
+            <div class="field" style="flex:1 1 200px;"><label>Include this material</label>${bldSelect('data-svcmat-onlyif', i, m.onlyIf||'', ticks.map(c=>({value:c.value, label:'Only when '+c.label})), 'Always (on every quote)')}
+              <div class="hint">${ticks.length ? 'Pick a tick option from step 1 to add this material only when that box is ticked on the quote.' : 'Add a tick option in step 1 (e.g. "Gravel board needed?") to include a material only when it\'s ticked.'}</div></div>
+            <div class="field" style="flex:1 1 200px;"><label>Which number option?</label>${bldSelect('data-svcmat-option', i, m.optionKey||'', nums, '— not used —')}
+              <div class="hint">Only used when the quantity is worked out "× a number option on the quote" — e.g. 2 bags × the number of gates typed on the quote.</div></div>
           </div>
           <div class="row" style="margin-top:4px;flex-wrap:wrap;">
             <div class="field" style="flex:1 1 160px;"><label>Unit (if new)</label><input type="text" data-svcmat-unit="${i}" value="${esc(m.unit)}" placeholder="e.g. bag, each, m²"></div>
@@ -7566,12 +7782,14 @@ function serviceBuilderHtml(b){
       </div>`).join('')}
     </div>
     <button class="btn btn-ghost btn-sm" data-action="addSvcPlantRow" style="margin-top:8px;">+ Add plant</button>
-    <label style="margin:18px 0 6px;display:block;">Quote letter wording (optional)</label>
-    <div class="hint" style="margin-bottom:8px;">One line per bullet on the customer's letter — always shown, or only when a tick is on, with an optional extra phrase when another tick is on. You can use [in-ground depth], [fence height] and [total length].${isFence?' A gates line is added automatically when gates are ticked.':' With no lines, the letter lists the row descriptions instead.'}</div>
+    <label style="margin:18px 0 6px;display:block;">Quote letter wording${isFence?' (optional)':' <span style="color:var(--danger);">*</span>'}</label>
+    ${isFence ? `<div class="hint" style="margin-bottom:8px;">One line per bullet on the customer's letter — always shown, or only when a tick is on, with an optional extra phrase when another tick is on. You can use [in-ground depth], [fence height] and [total length]. A gates line is added automatically when gates are ticked.</div>`
+    : `<div class="hint" style="margin-bottom:8px;"><b>Describe your method here</b> — how you'll carry out this job, step by step, so the customer understands exactly how the work will be done and what they're paying for. Each line is one bullet on the quote letter. The three below are examples to get you started: rewrite them to match how you work, and add as many as you need.</div>
+    <div class="hint" style="margin-bottom:8px;">A line can show on every quote or only when one of your tick options is on. You can use [total length] to fill in the job's measurement.</div>`}
     <div class="stack" style="gap:8px;">
       ${(b.letter||[]).map((l,i)=>`<div class="card" data-svcltrrow="${i}" style="padding:10px 12px;">
         <div class="row" style="align-items:end;gap:8px;">
-          <div class="field" style="flex:3 1 260px;margin:0;"><label>Line</label><input type="text" data-svcltr-text="${i}" value="${esc(l.text)}" placeholder="e.g. Post holes dug to [in-ground depth]mm"></div>
+          <div class="field" style="flex:3 1 260px;margin:0;"><label>Bullet ${i+1}</label><input type="text" data-svcltr-text="${i}" value="${esc(l.text)}" placeholder="${isFence?'e.g. Post holes dug to [in-ground depth]mm':'e.g. Ground levelled and compacted ready for laying'}"></div>
           <div class="field" style="flex:1 1 160px;margin:0;"><label>Show</label>${bldSelect('data-svcltr-onlyif', i, l.onlyIf||'', ticks, 'Always')}</div>
           <button class="icon-btn" data-action="removeSvcLetterRow" data-idx="${i}" title="Remove">✕</button>
         </div>
@@ -7581,7 +7799,7 @@ function serviceBuilderHtml(b){
         </div>
       </div>`).join('')}
     </div>
-    <button class="btn btn-ghost btn-sm" data-action="addSvcLetterRow" style="margin-top:8px;">+ Add letter line</button>
+    <button class="btn btn-ghost btn-sm" data-action="addSvcLetterRow" style="margin-top:8px;">+ Add bullet</button>
     ${errHtml}
     <div class="btnbar"><button class="btn btn-ghost" data-action="svcBuilderBack">Back</button><button class="btn btn-primary" data-action="svcBuilderNext">Continue →</button></div>`;
   } else {
@@ -7706,10 +7924,19 @@ function bldValidateStep(b, step){
   } else if(step===3){
     if(!isFence && b.waste && !(b.wasteItem && b.wasteItem.name && b.wasteItem.name.trim() && (Number(b.wasteItem.amount)||0)>0))
       return "Add the waste item and an amount, or switch waste removal to No.";
+    if(!isFence && !(b.letter||[]).some(l=>l && String(l.text||'').trim()))
+      return "Add at least one bullet to the quote letter wording — describe how you'll carry out the job.";
   }
   return "";
 }
 function bldBlankMaterial(){ return {name:"",amount:"",per:"1",unit:"",price:"",supplier:"",basis:"unit",roundUp:false,onlyIf:"",optionKey:""}; }
+function bldLetterTemplate(){
+  return [
+    {text:"Work area marked out and prepared, with surrounding surfaces protected", onlyIf:"", appendIf:"", append:""},
+    {text:"Works carried out using the materials specified, laid and fixed to the manufacturer's guidelines", onlyIf:"", appendIf:"", append:""},
+    {text:"Area left clean and tidy on completion, with all waste removed from site", onlyIf:"", appendIf:"", append:""},
+  ];
+}
 // Opens the builder for a new or existing custom service ("service") or fence type ("fence").
 function openServiceBuilder(mode, editKey, extra){
   S.err = "";
@@ -7741,6 +7968,9 @@ function openServiceBuilder(mode, editKey, extra){
         plant:(ft.plant||[]).map(p=>({name:p.name, price:""})), letter:deepClone(ft.letter||[])});
     }
   }
+  // A service's letter wording is required (Oct 2026): start from three example bullets in the
+  // app's own style for the business to rewrite as its method.
+  if(mode==="service" && !(b.letter||[]).some(l=>l && String(l.text||'').trim())) b.letter = bldLetterTemplate();
   S._svcBuilder = b;
   S._settingsTab = "services";
   goto("settings");
@@ -7874,7 +8104,7 @@ function renderSettings(){
     </div>
     <div class="row">
       <div class="field"><label>VAT rate (%)</label><input id="st_vatrate" type="text" inputmode="decimal" value="${pctText(s.vatRate)}" ${s.vatRegistered===false?'disabled':''}></div>
-      <div class="field"><label>Weekly instalment (£)</label><input id="st_weekly" type="text" inputmode="decimal" value="${s.weeklyPaymentAmount}"></div>
+      <div class="field"><label>Weekly instalment (£) <span style="font-weight:400;">(the amount charged to the customer each week on their invoice)</span></label><input id="st_weekly" type="text" inputmode="decimal" value="${s.weeklyPaymentAmount}"></div>
     </div>
     <div class="row">
       <div class="field">
@@ -8217,10 +8447,17 @@ function renderSettings(){
       ${teams.map((tm,i)=>`
         <div class="card" style="padding:16px;">
           <div class="row" style="align-items:flex-start;gap:10px;">
-            <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:${teamColor(tm.id)};margin-top:10px;flex:none;"></span>
-            <div class="field" style="flex:1;margin-bottom:0;">
+            <span data-team-swatch="${tm.id}" style="display:inline-block;width:14px;height:14px;border-radius:4px;background:${teamColor(tm.id)};margin-top:30px;flex:none;"></span>
+            <div class="field" style="flex:2 1 160px;margin-bottom:0;">
               <label>Team name</label>
               <input type="text" data-team-name="${tm.id}" value="${esc(tm.name)}">
+            </div>
+            <div class="field" style="flex:1 1 130px;margin-bottom:0;">
+              <label>Colour</label>
+              <select data-team-color="${tm.id}">
+                <option value="" ${!tm.color?'selected':''}>Automatic</option>
+                ${TEAM_COLOR_CHOICES.map(([hex,name])=>`<option value="${hex}" ${tm.color===hex?'selected':''}>${name}</option>`).join('')}
+              </select>
             </div>
             <button type="button" class="btn btn-ghost btn-sm" data-action="removeTeam" data-team="${tm.id}" title="Remove this team" style="margin-top:22px;flex:none;">Remove team</button>
           </div>
@@ -8239,26 +8476,32 @@ function renderSettings(){
     <div><button class="btn btn-primary" data-action="saveTeamsForm" style="margin-top:14px;">Save changes</button></div>`;
   } else if(tab==="materials"){
     const q = (S._matFilter||"").toLowerCase();
+    // Grouped by supplier (Oct 2026), so a price check with one supplier is one list.
+    const NO_SUP = 'No supplier set';
     const bySection = {};
     Object.entries(s.materials).forEach(([name,m])=>{
-      if(q && !name.toLowerCase().includes(q) && !m.section.toLowerCase().includes(q)) return;
-      (bySection[m.section] = bySection[m.section]||[]).push({name,...m});
+      const sup = String(m.supplier||'').trim();
+      if(q && !name.toLowerCase().includes(q) && !String(m.section||'').toLowerCase().includes(q) && !sup.toLowerCase().includes(q)) return;
+      const g = sup || NO_SUP;
+      (bySection[g] = bySection[g]||[]).push({name,...m});
     });
-    const sections = Object.keys(bySection).sort();
+    Object.values(bySection).forEach(list=>list.sort((a,b)=>a.name.localeCompare(b.name)));
+    const sections = Object.keys(bySection).sort((a,b)=> a===NO_SUP ? 1 : b===NO_SUP ? -1 : a.localeCompare(b));
     body = `
-    <div class="field" style="max-width:320px;"><input id="matFilter" type="text" placeholder="Search materials or category…" value="${esc(S._matFilter||"")}"></div>
+    <div class="msg msg-ok" style="margin-bottom:10px;">📅 Check your prices with each supplier roughly once a month, so your quotes keep up with what you're actually paying.</div>
+    <div class="field" style="max-width:320px;"><input id="matFilter" type="text" placeholder="Search materials, suppliers or categories…" value="${esc(S._matFilter||"")}"></div>
     <div class="hint" style="margin:2px 0 4px;">Tick "Inc. VAT" for any price that already has VAT baked in (e.g. a supplier's quoted price) — this stops that VAT being charged again on the customer's invoice.</div>
     <label style="display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:13px;cursor:pointer;margin:8px 0 2px;padding:6px 10px;background:var(--panel);border:1px solid var(--line);border-radius:8px;">
       <input type="checkbox" id="matVatAll" data-action="toggleAllMatVat" style="width:16px;height:16px;accent-color:var(--green-600);">
       Switch "Inc. VAT" on or off for all materials shown below
     </label>
-    <div class="hint" style="margin:2px 0 10px;">Tick or untick the switch above to set every material below the same way in one go (search first to limit it to one category) — you can still flip any single material individually, and nothing is saved until you hit "Save changes".</div>
+    <div class="hint" style="margin:2px 0 10px;">Tick or untick the switch above to set every material below the same way in one go (search first to limit it to one supplier or category) — you can still flip any single material individually, and nothing is saved until you hit "Save changes".</div>
     <div class="tbl-wrap">
     ${sections.map(sec=>`
       <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 6px;">${esc(sec)}</div>
       <table><tr><th>Material</th><th style="text-align:right;">Unit price</th><th style="text-align:center;">Inc. VAT</th><th>Unit</th><th>Supplier</th></tr>
       ${bySection[sec].map(m=>`<tr>
-        <td>${esc(m.name)}</td>
+        <td>${esc(m.name)}${m.section?`<div class="hint" style="margin:0;font-size:11px;">${esc(m.section)}</div>`:''}</td>
         <td class="num"><input type="text" inputmode="decimal" data-mat="${esc(m.name)}" value="${m.price}" style="width:90px;text-align:right;"></td>
         <td style="text-align:center;"><input type="checkbox" data-matvat="${esc(m.name)}" ${m.vatIncluded?'checked':''} style="width:16px;height:16px;accent-color:var(--green-600);"></td>
         <td>${esc(m.unit)}</td>
@@ -8545,6 +8788,35 @@ function modalHtml(){
         </div>`}
         <a href="${esc(m.href)}" target="_blank" rel="noopener" class="btn btn-primary btn-block" style="margin-top:6px;text-decoration:none;">${isCall?'📞 Call '+esc(m.to):'💬 Open Messages'}</a>
         <button class="btn btn-ghost btn-block" data-action="modalCancel" style="margin-top:8px;">Close</button>
+      </div>
+    </div>`;
+  }
+  if(m.type==="accept"){
+    const q = S.quotes.find(x=>x.id===m.qid) || {};
+    return `<div class="modal-overlay" data-action="modalCancel">
+      <div class="modal-box" data-action="modalStop" style="max-width:420px;">
+        <div style="font-weight:800;font-size:15px;margin-bottom:4px;">Quote accepted — set up the payment plan</div>
+        <div class="hint" style="margin-bottom:14px;">Pick the day work starts. ${esc((q.customer&&q.customer.name)||'The job')} is booked into the calendar from then (working days only) and the payment plan is worked out from it.</div>
+        <div class="field"><label>Agreed start date</label><input id="acceptStart" type="date" value="${esc(m.start||'')}"></div>
+        <div class="field"><label>Team / crew</label><select id="acceptTeam">${(S.settings.teams||[]).map(tm=>`<option value="${tm.id}" ${m.teamId===tm.id?'selected':''}>${esc(tm.name)}</option>`).join('')}</select></div>
+        ${m.error?`<div class="msg msg-err" style="margin-bottom:10px;">${esc(m.error)}</div>`:''}
+        <div class="row" style="gap:8px;">
+          <button class="btn btn-ghost" data-action="modalCancel" style="flex:1;">Cancel</button>
+          <button class="btn btn-primary" data-action="confirmAccept" style="flex:1;">Generate payment plan</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  if(m.type==="dayOptions"){
+    return `<div class="modal-overlay" data-action="modalCancel">
+      <div class="modal-box" data-action="modalStop" style="max-width:440px;">
+        <div style="font-weight:800;font-size:15px;margin-bottom:4px;">${esc(new Date(m.date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'long'}))}</div>
+        <div class="hint" style="margin-bottom:12px;">Lost the day to the weather or something unforeseen? Mark a day off and the rest of that job moves back by one working day.</div>
+        <div class="stack" style="gap:8px;">
+          ${m.jobs.map(j=>`<button class="btn btn-ghost btn-block" data-action="dayOffForJob" data-kind="${j.kind}" data-id="${esc(j.id)}" style="text-align:left;justify-content:flex-start;"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${teamColor(j.teamId)};margin-right:8px;flex:none;"></span>🌧 Day off for ${esc(j.name)}</button>`).join('')}
+          <button class="btn btn-primary btn-block" data-action="dayAddEntry" data-date="${m.date}">+ Add a calendar entry for this day</button>
+          <button class="btn btn-ghost btn-block" data-action="modalCancel">Close</button>
+        </div>
       </div>
     </div>`;
   }
@@ -9305,7 +9577,8 @@ App.addEventListener("click", async (e)=>{
       // copy the address first (the share menu can't fill in "To"), then open the menu straight away
       try{ if(navigator.clipboard && m.to) navigator.clipboard.writeText(String(m.to).trim()).catch(()=>{}); }catch(e){}
       try{
-        await navigator.share({files:[m.pdfFile], title:m.subject, text:m.body});
+        // Standard email line endings, so the message keeps its paragraph spacing in the email app.
+        await navigator.share({files:[m.pdfFile], title:m.subject, text:String(m.body||'').replace(/\r?\n/g, '\r\n')});
         m.shared = true; m.shareError = "";
         await logEmailCreated(m);
       }catch(e){
@@ -9322,6 +9595,7 @@ App.addEventListener("click", async (e)=>{
       if(!m || m.type!=="email") break;
       if(m.pdfEl && !m.pdfFile) break;
       const via = t.getAttribute("data-via") || "mail";
+      m.lastVia = via;
       if(m.pdfFile) saveFileNow(m.pdfFile);
       openUrlNow(via==="mail" ? m.mailto : webmailUrl(via, m));
       if(m.pdfFile){ m.opened = true; m.shareError = ""; await logEmailCreated(m); }
@@ -9824,7 +10098,11 @@ App.addEventListener("click", async (e)=>{
         const staffInputs = App.querySelectorAll(`[data-team-staff="${team.id}"]`);
         const staff = Array.from(staffInputs).map(inp=>inp.value.trim()).filter(Boolean);
         const name = nameInput ? nameInput.value.trim() : team.name;
-        return {...team, name: name || team.name, staff};
+        const colorSel = App.querySelector(`[data-team-color="${team.id}"]`);
+        const color = colorSel ? colorSel.value : (team.color||'');
+        const out = {...team, name: name || team.name, staff};
+        if(color) out.color = color; else delete out.color;
+        return out;
       });
       await saveSettings({teams:S.settings.teams});
       S._stDirty=null; S._savedMsg = "Teams saved."; render(); break;
@@ -10105,11 +10383,69 @@ App.addEventListener("click", async (e)=>{
     case "markSent": {
       const q = S.quotes.find(x=>x.id===S.openQuoteId); q.status="sent"; q.sentAt = new Date().toISOString(); await saveQuote(q); render(); break;
     }
-    case "showAccept": S._showAccept = true; render(); break;
+    case "showAccept": {
+      // Oct 2026: a centred dialog rather than a card further down the page.
+      const q = S.quotes.find(x=>x.id===S.openQuoteId);
+      if(!q) break;
+      S._modal = {type:"accept", qid:q.id, start:q.startDate||'', teamId:q.teamId||defaultTeamId()};
+      render();
+      setTimeout(()=>{ const e = document.getElementById('acceptStart'); if(e && !e.value) try{ e.focus(); }catch(_){} }, 30);
+      break;
+    }
+    case "markSentList": {
+      const q = S.quotes.find(x=>x.id===t.getAttribute("data-id"));
+      if(!q || q.status!=="draft") break;
+      q.status = "sent"; q.sentAt = new Date().toISOString();
+      await saveQuote(q); render(); break;
+    }
+    case "openJobFinances": S._financeQuoteId = S.openQuoteId; S._planEdit = null; render(); window.scrollTo(0,0); break;
+    case "closeJobFinances": S._financeQuoteId = null; render(); window.scrollTo(0,0); break;
+    case "editPaymentPlan": {
+      const q = S.quotes.find(x=>x.id===S.openQuoteId);
+      if(!q) break;
+      const dayOf = d => { const v = String(d||''); return v.length>10 ? isoDate(v) : v; };
+      S._planEdit = {qid:q.id, rows:(q.paymentSchedule||[]).map(p=>({label:p.label||'', date:dayOf(p.date), amount:(Math.round((Number(p.amount)||0)*100)/100).toFixed(2)}))};
+      render();
+      setTimeout(()=>{ const e = document.getElementById('planEditor'); if(e && e.scrollIntoView) e.scrollIntoView({block:'start', behavior:'smooth'}); }, 30);
+      break;
+    }
+    case "planEditAdd": { const pe = S._planEdit; if(!pe) break; const last = pe.rows[pe.rows.length-1]; pe.rows.push({label:"Payment", date:last?last.date:'', amount:""}); render(); break; }
+    case "planEditRemove": { const pe = S._planEdit; if(!pe) break; pe.rows.splice(parseInt(t.getAttribute("data-idx"),10),1); render(); break; }
+    case "planEditSplit": {
+      const pe = S._planEdit; if(!pe) break;
+      const i = parseInt(t.getAttribute("data-idx"),10), r = pe.rows[i]; if(!r) break;
+      const whole = Math.round(planAmt(r.amount)*100);
+      const a = Math.ceil(whole/2), b = whole - a;
+      const base = String(r.label||'Payment').replace(/ \(part \d+\)$/,'');
+      r.label = base + " (part 1)"; r.amount = (a/100).toFixed(2);
+      pe.rows.splice(i+1, 0, {label: base + " (part 2)", date: r.date ? isoDate(addDays(new Date(r.date), 7)) : '', amount:(b/100).toFixed(2)});
+      render(); break;
+    }
+    case "planEditCancel": S._planEdit = null; render(); break;
+    case "planEditReset": {
+      const pe = S._planEdit; const q = pe && S.quotes.find(x=>x.id===pe.qid); if(!q) break;
+      pe.rows = standardPlanFor(q).map(p=>({label:p.label, date:p.date, amount:(Math.round((Number(p.amount)||0)*100)/100).toFixed(2)}));
+      render(); break;
+    }
+    case "planEditSave": {
+      const pe = S._planEdit; const q = pe && S.quotes.find(x=>x.id===pe.qid); if(!q) break;
+      if(!planEditState(q, pe).ok){ planEditRefresh(); break; }
+      q.paymentSchedule = pe.rows.map(r=>({label:String(r.label||'').trim()||'Payment', date:r.date, amount:Math.round(planAmt(r.amount)*100)/100}));
+      q.planEdited = true;
+      if(!q.activityLog) q.activityLog = [];
+      q.activityLog.unshift({id:uid(), text:"Payment plan edited", at:new Date().toISOString()});
+      S._planEdit = null;
+      await saveQuote(q); render(); break;
+    }
     case "confirmAccept": {
       const q = S.quotes.find(x=>x.id===S.openQuoteId);
       const startDate = val('acceptStart');
-      if(!startDate){ showAlert("Pick the agreed start date first."); break; }
+      const m = S._modal && S._modal.type==="accept" ? S._modal : null;
+      if(!startDate){
+        if(m){ m.teamId = val('acceptTeam') || m.teamId; m.error = "Pick the agreed start date first."; render(); }
+        else showAlert("Pick the agreed start date first.");
+        break;
+      }
       q.startDate = startDate; q.status = "ongoing";
       q.teamId = val('acceptTeam') || defaultTeamId();
       // A full job occupies the crew by default, so it blocks other job scheduling on its
@@ -10119,12 +10455,14 @@ App.addEventListener("click", async (e)=>{
       const completion = q.scheduledDays.length ? q.scheduledDays[q.scheduledDays.length-1] : startDate;
       q.paymentSchedule = calcPaymentSchedule(q.sections, q.extras, q.totals, startDate, S.settings.weeklyPaymentAmount, q.vatRegistered, completion);
       if(!q.finance) q.finance = createFinanceTracker(q);
+      q.planEdited = false;
+      if(m) S._modal = null;
       await saveQuote(q); S._showAccept=false; render(); break;
     }
     case "editJobSchedule": {
       const q = S.quotes.find(x=>x.id===S.openQuoteId);
       if(!q) break;
-      showForm("Edit schedule", "Re-scheduling walks forward from the start date using only your configured working days, automatically skipping any day already blocked by another job or calendar entry ON THE SAME TEAM.", [
+      showForm("Edit schedule", "Re-scheduling walks forward from the start date using only your configured working days, automatically skipping any day already blocked by another job or calendar entry ON THE SAME TEAM, and any days off already marked for this job." + (q.planEdited ? " Your hand-edited payment plan is kept as it is." : ""), [
         {key:"startDate", label:"Start date", type:"date", required:true, value:q.startDate},
         {key:"teamId", label:"Team / crew", type:"select", options:(S.settings.teams||[]).map(tm=>({value:tm.id,label:tm.name})), value:q.teamId||defaultTeamId()},
         {key:"blocksDay", label:"Block these days off from other job scheduling", type:"checkbox", value:q.calendarBlocksDay!==false},
@@ -10132,9 +10470,9 @@ App.addEventListener("click", async (e)=>{
         q.startDate = values.startDate;
         q.teamId = values.teamId || defaultTeamId();
         q.calendarBlocksDay = !!values.blocksDay;
-        q.scheduledDays = scheduleWorkingDays(values.startDate, q.totals.totalDays, S.settings, blockedDateSet(q.id, null, q.teamId));
+        q.scheduledDays = scheduleWorkingDays(values.startDate, q.totals.totalDays, S.settings, jobBlockedSet(q));
         const completion = q.scheduledDays.length ? q.scheduledDays[q.scheduledDays.length-1] : values.startDate;
-        q.paymentSchedule = calcPaymentSchedule(q.sections, q.extras, q.totals, values.startDate, S.settings.weeklyPaymentAmount, q.vatRegistered, completion);
+        if(!q.planEdited) q.paymentSchedule = calcPaymentSchedule(q.sections, q.extras, q.totals, values.startDate, S.settings.weeklyPaymentAmount, q.vatRegistered, completion);
         await saveQuote(q);
         render();
       }, {confirmLabel:"Save & reschedule"});
@@ -10244,25 +10582,25 @@ App.addEventListener("click", async (e)=>{
     case "addCalendarEntry":
     case "addCalendarEntryForDay": {
       const presetDate = t.getAttribute("data-date") || isoDate(new Date());
-      const presetTeam = S._calTeamFilter || defaultTeamId();
-      showForm("Add calendar entry", "Not linked to any quote or job — for something like an evening appointment, a site visit, a day off, or a job booked outside the app.", [
-        {key:"title", label:"Title", type:"text", required:true, placeholder:"e.g. Evening appointment — Mrs Jones"},
-        {key:"date", label:"Start date", type:"date", required:true, value:presetDate},
-        {key:"teamId", label:"Team / crew", type:"select", options:(S.settings.teams||[]).map(tm=>({value:tm.id,label:tm.name})), value:presetTeam},
-        {key:"isJob", label:"This is a job (spans a number of working days)", type:"checkbox", value:false},
-        {key:"days", label:"Number of working days (only used if the above is ticked)", type:"number", value:1},
-        {key:"blocksDay", label:"Block this day off from other job scheduling for this team", type:"checkbox", value:false},
+      // A day with jobs on it (Oct 2026) first offers a weather / unforeseen day off for each job.
+      const dayJobs = t.getAttribute("data-date") ? jobsOnDay(presetDate, S._calTeamFilter || null) : [];
+      if(dayJobs.length){ S._modal = {type:"dayOptions", date:presetDate, jobs:dayJobs}; render(); break; }
+      openAddEntryForm(presetDate);
+      break;
+    }
+    case "dayAddEntry": { S._modal = null; openAddEntryForm(t.getAttribute("data-date")); break; }
+    case "dayOffForJob": {
+      const m = S._modal; if(!m || m.type!=="dayOptions") break;
+      const kind = t.getAttribute("data-kind"), id = t.getAttribute("data-id"), date = m.date;
+      const job = m.jobs.find(j=>j.kind===kind && j.id===id); if(!job) break;
+      showForm(`Day off — ${job.name}`, `${fmtDate(date)} won't be worked. This day and the rest of the job move back by one working day (skipping days that aren't in your working week or are already booked for this team).`, [
+        {key:"reason", label:"Reason", type:"select", options:[{value:"weather",label:"Weather"},{value:"unforeseen issue",label:"Unforeseen issue"}], value:"weather"},
+        {key:"note", label:"Note (optional)", type:"text", placeholder:"e.g. heavy rain, ground waterlogged"},
       ], async (values)=>{
-        const isJob = !!values.isJob;
-        const teamId = values.teamId || defaultTeamId();
-        const scheduledDays = computeEntrySchedule(values.date, isJob, values.days, S.settings, blockedDateSet(null, null, teamId));
-        const entry = {
-          id:uid(), title:values.title, date:values.date, teamId, isJob, days: isJob ? scheduledDays.length : 1,
-          scheduledDays, blocksDay:!!values.blocksDay, createdAt:new Date().toISOString(),
-        };
-        await saveCalendarEntry(entry);
+        const res = await applyDayOff(kind, id, date, values.reason||"weather", values.note||"");
         render();
-      }, {confirmLabel:"Add entry"});
+        if(res) showAlert(res);
+      }, {confirmLabel:"Mark day off"});
       break;
     }
     case "editCalendarEntry": {
@@ -10278,7 +10616,8 @@ App.addEventListener("click", async (e)=>{
       ], async (values)=>{
         const isJob = !!values.isJob;
         const teamId = values.teamId || defaultTeamId();
-        const scheduledDays = computeEntrySchedule(values.date, isJob, values.days, S.settings, blockedDateSet(null, entry.id, teamId));
+        const blk = blockedDateSet(null, entry.id, teamId); (entry.daysOff||[]).forEach(o=>blk.add(o.date));
+        const scheduledDays = computeEntrySchedule(values.date, isJob, values.days, S.settings, blk);
         await saveCalendarEntry({
           ...entry, title:values.title, date:values.date, teamId, isJob, days: isJob ? scheduledDays.length : 1,
           scheduledDays, blocksDay:!!values.blocksDay,
@@ -10613,6 +10952,16 @@ App.addEventListener("input", (e)=>{
     // No reflow(): nothing else on screen reflects a team's name as you type it.
     const team = (S.settings.teams||[]).find(tm=>tm.id===t.getAttribute('data-team-name'));
     if(team) team.name = t.value;
+  } else if(t.matches('[data-pe]') && S._planEdit){
+    // Payment plan editor: keep the typed values and re-check the total as you type.
+    const r = S._planEdit.rows[parseInt(t.getAttribute('data-pe-i'),10)];
+    if(r) r[t.getAttribute('data-pe')] = t.value;
+    planEditRefresh();
+  } else if(t.matches('[data-team-color]')){
+    // Show the picked colour straight away (saved with the rest of the tab).
+    const id = t.getAttribute('data-team-color');
+    const sw = App.querySelector(`[data-team-swatch="${id}"]`);
+    if(sw){ const team = teamById(id); const keep = team && team.color; if(team){ if(t.value) team.color = t.value; else delete team.color; } sw.style.background = teamColor(id); if(team){ if(keep) team.color = keep; else delete team.color; } }
   } else if(t.matches('[data-team-staff]')){
     // Same reasoning as data-team-name above, but staff is an array: map this input back
     // to its index among that team's staff inputs (DOM order matches array order).
@@ -10733,7 +11082,7 @@ const SECTION_TOURS = {
       body:`<p>Use <b>‹</b> and <b>›</b> to change month, and <b>Today</b> to jump back to now.</p>`},
     {id:"cal-add", go:{screen:"calendar"}, target:'[data-tour="cal-add"]', title:"Adding your own entries",
       body:`<p><b>+ Add entry</b> (or the small <b>+</b> on any day) adds a site visit, a holiday, or a job you didn't quote in the app.</p>
-        <ul><li>Tick <b>This is a job</b> to spread it over several working days.</li><li>Tick <b>Block this day off</b> so no other job gets booked on top of it.</li></ul>`},
+        <ul><li>Tick <b>This is a job</b> to spread it over several working days.</li><li>Tick <b>Block this day off</b> so no other job gets booked on top of it.</li><li>Lost a day to the weather? Tap <b>+</b> on that day and choose <b>Day off</b> for the job — the rest of it moves back a working day.</li></ul>`},
     {id:"cal-legend", go:{screen:"calendar"}, target:'[data-tour="cal-legend"]', title:"Reading the calendar",
       body:`<ul><li>📋 a job booked from a quote — tap it to open the job</li><li>🧰 an entry you added as a job</li><li>🔒 that day is blocked for other bookings</li></ul>
         <p>If you run more than one team, each has its own colour and you can show one team at a time. Shaded days aren't in your working week (set in <b>Materials &amp; settings</b>).</p>`},
@@ -10741,9 +11090,9 @@ const SECTION_TOURS = {
   overview: {screen:"overview", name:"Business overview tour", steps:()=>[
     {id:"ov-figures", go:{screen:"overview"}, target:'[data-tour="ov-figures"]', title:"Your business at a glance",
       body:`<p>Live totals across every job you've won:</p>
-        <ul><li><b>Total profit</b> — what you've made once actual costs are taken off</li><li><b>Owed by customers</b> — still to be paid on your payment plans</li><li><b>Paid so far</b> — payments you've logged</li><li><b>Overdue</b> — payments past their due date</li></ul>`},
+        <ul><li><b>Total profit</b> — what you've made on completed jobs</li><li><b>Owed by customers</b> — still to be paid on your payment plans</li><li><b>Paid so far</b> — payments you've logged</li><li><b>Overdue</b> — payments past their due date</li></ul>`},
     {id:"ov-source", go:{screen:"overview"}, target:'[data-tour="ov-figures"]', title:"Where the numbers come from",
-      body:`<p>When a customer accepts a quote, tap <b>Quote accepted — set up payment plan</b> on it. That job then gets its own <b>finance tracker</b>, where you:</p>
+      body:`<p>When a customer accepts a quote, tap <b>Quote accepted — set up payment plan</b> on it. That job then gets its own <b>Job finances</b> page, where you:</p>
         <ul><li>tick materials off as you order them, with the price you actually paid</li><li>log who was on site each day</li><li>add running costs and hire as the bills come in</li><li>log each payment the customer makes</li></ul>
         <p>Everything here adds up from those trackers, so it's only as up to date as what you log.</p>`},
     {id:"ov-insight", go:{screen:"overview"}, target:'[data-tour="ov-insight"]', title:"Spotting overspending",
@@ -10992,10 +11341,10 @@ function renderHelp(){
     <div class="card">
       <h2 style="margin:0 0 6px;font-size:19px;">Help</h2>
       <div class="hint" style="margin-bottom:14px;">New here, or want a refresher? The tutorial walks you through the app on the real screens in about 2 minutes.</div>
-      <button class="btn btn-primary" data-action="startTour">▶ Replay the tutorial</button>
-      <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px;">
-        <button class="btn btn-ghost btn-sm" data-action="startTour" data-tour-kind="calendar">📅 Calendar tour</button>
-        <button class="btn btn-ghost btn-sm" data-action="startTour" data-tour-kind="overview">📊 Business overview tour</button>
+      <div class="row" style="gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" data-action="startTour" style="flex:0 1 auto;">▶ Replay the tutorial</button>
+        <button class="btn btn-primary" data-action="startTour" data-tour-kind="calendar" style="flex:0 1 auto;">📅 Calendar tour</button>
+        <button class="btn btn-primary" data-action="startTour" data-tour-kind="overview" style="flex:0 1 auto;">📊 Business overview tour</button>
       </div>
     </div>
     ${helpFaq().map(([title, items])=>`

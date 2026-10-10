@@ -7,7 +7,7 @@ const { chromium } = require('playwright');
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', msg => { if (msg.type() === 'error') errors.push('CONSOLE: ' + msg.text()); });
 
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html'));
+  await page.goto('file:///home/claude/build/app.html');
   await page.waitForTimeout(500);
 
   // Onboarding: click through intro screens (btn-primary) until PIN screen
@@ -41,19 +41,19 @@ const { chromium } = require('playwright');
     if (unlockBtn) { await unlockBtn.click(); await page.waitForTimeout(500); }
   }
 
-  await page.screenshot({ path: __dirname+'/vat_home.png' });
+  await page.screenshot({ path: '/tmp/mobiletest/vat_home.png' });
 
   // Navigate to Settings
   const settingsNav = await page.$('button[data-nav="settings"]');
   if (settingsNav) { await settingsNav.click(); await page.waitForTimeout(300); }
   else { console.log('settings nav not found'); }
 
-  await page.screenshot({ path: __dirname+'/vat_settings_default.png' });
+  await page.screenshot({ path: '/tmp/mobiletest/vat_settings_default.png' });
 
   // Go to Pricing tab
   const pricingTab = await page.$('button[data-action="settingsTab"][data-tab="pricing"]');
   if (pricingTab) { await pricingTab.click(); await page.waitForTimeout(300); }
-  await page.screenshot({ path: __dirname+'/vat_pricing_tab.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/vat_pricing_tab.png', fullPage: true });
 
   const expensesVatChecked = await page.$eval('#st_expensesvat', el => el.checked).catch(() => null);
   console.log('expensesIncludeVat checkbox checked by default:', expensesVatChecked);
@@ -61,7 +61,7 @@ const { chromium } = require('playwright');
   // Go to Materials tab
   const materialsTab = await page.$('button[data-action="settingsTab"][data-tab="materials"]');
   if (materialsTab) { await materialsTab.click(); await page.waitForTimeout(300); }
-  await page.screenshot({ path: __dirname+'/vat_materials_tab.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/vat_materials_tab.png', fullPage: true });
 
   const matCheckboxes = await page.$$('[data-matvat]');
   console.log('material vat checkboxes found:', matCheckboxes.length);
@@ -74,7 +74,7 @@ const { chromium } = require('playwright');
     const saveBtn = await page.$('button[data-action="saveMaterialsForm"]');
     if (saveBtn) { await saveBtn.click(); await page.waitForTimeout(400); }
   }
-  await page.screenshot({ path: __dirname+'/vat_materials_after_save.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/vat_materials_after_save.png', fullPage: true });
 
   console.log('JS ERRORS:', errors.length ? errors : 'none');
   await browser.close();

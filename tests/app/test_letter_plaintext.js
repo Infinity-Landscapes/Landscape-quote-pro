@@ -6,13 +6,13 @@ const fs = require('fs');
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
   // The app's code runs inside one closure, so expose what this test needs on a copy.
-  let html = fs.readFileSync(require('path').resolve(__dirname,'../../app/app.html'),'utf8');
+  let html = fs.readFileSync('/home/claude/build/app.html','utf8');
   const k = html.lastIndexOf('\n})();');
   html = html.slice(0,k) + '\nwindow.__T={buildQuoteFromDraft,quoteLetterPlainText,S:()=>S};' + html.slice(k);
-  fs.writeFileSync(__dirname+'/_letter_exposed.html', html);
-  await page.goto('file://'+__dirname+'/_letter_exposed.html');
+  fs.writeFileSync('/tmp/mobiletest/_letter_exposed.html', html);
+  await page.goto('file:///tmp/mobiletest/_letter_exposed.html');
   await page.waitForTimeout(400);
   await page.fill('#f_name', 'Infinity Landscapes and Design');
   for (let i = 0; i < 4; i++) {

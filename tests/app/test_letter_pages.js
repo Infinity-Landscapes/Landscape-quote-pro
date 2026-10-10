@@ -6,18 +6,18 @@ const fs = require('fs');
 const { execSync } = require('child_process');
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-  let html = fs.readFileSync(require('path').resolve(__dirname,'../../app/app.html'),'utf8');
+  let html = fs.readFileSync('/home/claude/build/app.html','utf8');
   const k = html.lastIndexOf('\n})();');
   html = html.slice(0,k) + '\nwindow.__T={captureLetterPages,buildPdfBlobFromElement,ensurePdfLibs,A4_PAGE,S:()=>S};' + html.slice(k);
-  fs.writeFileSync(__dirname+'/_pages_exposed.html', html);
+  fs.writeFileSync('/tmp/mobiletest/_pages_exposed.html', html);
   let pass = true; const check = (l,c)=>{ console.log((c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
   const out = {};
   for (const [label, vp] of [['desktop',{width:1280,height:1000}],['phone',{width:390,height:844}]]){
     const page = await (await browser.newContext({ viewport: vp })).newPage();
     const errors = []; page.on('pageerror', e => errors.push(e.message));
-    await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+    await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
     const wait = ms => page.waitForTimeout(ms);
-    await page.goto('file://'+__dirname+'/_pages_exposed.html'); await wait(400);
+    await page.goto('file:///tmp/mobiletest/_pages_exposed.html'); await wait(400);
     await page.fill('#f_name','Infinity Landscapes and Design');
     for (let i=0;i<3;i++){ await page.click('button[data-action="setupNext"]'); await wait(200); }
     await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');
@@ -36,7 +36,7 @@ const { execSync } = require('child_process');
       await wait(150);
       await page.click('button[data-action="wizNext"]'); await wait(250);
     }
-    await (await page.$('#letterCapture')).screenshot({ path: `${__dirname}/letter_screen_${label}.png` });
+    await (await page.$('#letterCapture')).screenshot({ path: `/tmp/mobiletest/letter_screen_${label}.png` });
     const r = await page.evaluate(async ()=>{
       const T = window.__T; await T.ensurePdfLibs();
       // Count how the blocks landed on pages (layout only, before photographing)
@@ -47,8 +47,8 @@ const { execSync } = require('child_process');
       const buf = Array.from(new Uint8Array(await blob.arrayBuffer()));
       return { n: canvases.length, sizes: canvases.map(c=>c.width+'x'+c.height), pngs, buf, kb: Math.round(blob.size/1024) };
     });
-    fs.writeFileSync(`${__dirname}/letter_pages_${label}.pdf`, Buffer.from(r.buf));
-    r.pngs.forEach((p,i)=>fs.writeFileSync(`${__dirname}/letter_page_${label}_${i+1}.png`, Buffer.from(p.split(',')[1],'base64')));
+    fs.writeFileSync(`/tmp/mobiletest/letter_pages_${label}.pdf`, Buffer.from(r.buf));
+    r.pngs.forEach((p,i)=>fs.writeFileSync(`/tmp/mobiletest/letter_page_${label}_${i+1}.png`, Buffer.from(p.split(',')[1],'base64')));
     console.log(`  ${label}: ${r.n} pages ${r.sizes.join(', ')}; PDF ${r.kb} KB`);
     check(`${label}: every page is exactly A4 (794×1123)`, r.sizes.every(s=>s==='794x1123'));
     check(`${label}: at least 2 pages for this quote`, r.n>=2);
@@ -75,11 +75,11 @@ const { execSync } = require('child_process');
   // ---- another business: their logo only in the header; footer = phone and email only ----
   {
     const page = await (await browser.newContext({ viewport:{width:1280,height:1000} })).newPage();
-    await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+    await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
     const wait = ms => page.waitForTimeout(ms);
-    await page.goto('file://'+__dirname+'/_pages_exposed.html'); await wait(400);
+    await page.goto('file:///tmp/mobiletest/_pages_exposed.html'); await wait(400);
     await page.fill('#f_name','Green Thumb Gardens'); await page.fill('#f_email','hello@greenthumb.test'); await page.fill('#f_phone','01234 567890');
-    await page.setInputFiles('#f_logoFile', __dirname+'/_logo_red.png'); await wait(600);
+    await page.setInputFiles('#f_logoFile', '/tmp/mobiletest/_logo_red.png'); await wait(600);
     for (let i=0;i<3;i++){ if (await page.$('#f_dayrate')) { await page.fill('#f_dayrate','180'); await page.fill('#f_expenses','90'); } await page.click('button[data-action="setupNext"]'); await wait(200); }
     await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');
     await page.click('button[data-action="setupNext"]'); await wait(400);
@@ -96,12 +96,12 @@ const { execSync } = require('child_process');
       const cs = await T.captureLetterPages(document.getElementById('letterCapture'), 1); window.html2canvas = o;
       return {seen, png: cs[0].toDataURL('image/png')};
     });
-    fs.writeFileSync(__dirname+'/letter_page_tenant_1.png', Buffer.from(t.png.split(',')[1],'base64'));
+    fs.writeFileSync('/tmp/mobiletest/letter_page_tenant_1.png', Buffer.from(t.png.split(',')[1],'base64'));
     check('other business: their logo on every page, no Infinity strapline', t.seen.every(p=>p.own && !p.tag));
     check('other business: footer is just phone and email', t.seen.every(p=>/01234 567890/.test(p.foot) && /hello@greenthumb\.test/.test(p.foot) && !/Green Thumb/.test(p.foot)));
     await page.context().close();
   }
-  execSync('pdfinfo '+__dirname+'/letter_pages_desktop.pdf | grep -E "Pages|Page size"', {stdio:'inherit'});
+  execSync('pdfinfo /tmp/mobiletest/letter_pages_desktop.pdf | grep -E "Pages|Page size"', {stdio:'inherit'});
   await browser.close();
   console.log(pass?'ALL CHECKS PASSED':'SOME CHECKS FAILED'); process.exit(pass?0:1);
 })().catch(e=>{ console.error(e); process.exit(1); });

@@ -8,7 +8,7 @@ const { chromium } = require('playwright');
   page.on('console', msg => { if (msg.type() === 'error' && !/net::ERR/.test(msg.text())) errors.push('CONSOLE: ' + msg.text()); });
 
   await page.addInitScript('window.__NO_AUTO_TOUR__ = true;');
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html'));
+  await page.goto('file:///home/claude/build/app.html');
   await page.waitForTimeout(400);
   // Oct 2026: a new business must enter its own rates in setup; Infinity's are restored by name.
   { const n = await page.$('#f_name'); if (n) await n.fill('Infinity Landscapes and Design'); }
@@ -53,7 +53,7 @@ const { chromium } = require('playwright');
   await (await page.$('button[data-action="saveSettingsForm"]')).click();
   await page.waitForTimeout(400);
 
-  await page.screenshot({ path: __dirname+'/settings_saved_state.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/settings_saved_state.png', fullPage: true });
 
   // Return to the quote via the top nav "New quote" tab
   await (await page.$('button[data-nav="newquote"]')).click(); await page.waitForTimeout(400);
@@ -63,7 +63,7 @@ const { chromium } = require('playwright');
   const widthVal = await page.$eval('[data-row="0"] input[data-mf="width"]', el => el.value).catch(()=>'FIELD NOT FOUND (wrong step!)');
   console.log('width value after returning (expect 10):', widthVal);
 
-  await page.screenshot({ path: __dirname+'/after_return_from_settings.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/mobiletest/after_return_from_settings.png', fullPage: true });
 
   console.log('ERRORS:', errors.length ? errors : 'none');
   await browser.close();

@@ -7,12 +7,12 @@
 //  - Help (?) has Replay the tutorial and FAQ sections for account setup, quotes, billing, cancelling
 const { chromium } = require('playwright');
 const fs = require('fs');
-const OUT = require('path').join(__dirname, 'tour_shots');
+const OUT = '/tmp/mobiletest/tour_shots';
 fs.mkdirSync(OUT, {recursive:true});
 
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-  const mockScript = fs.readFileSync(__dirname+'/db_mock.js', 'utf8');
+  const mockScript = fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8');
   const errors = [];
   let pass = true;
   function check(label, cond){ console.log((cond?'PASS':'FAIL')+' - '+label); if(!cond) pass = false; }
@@ -28,7 +28,7 @@ fs.mkdirSync(OUT, {recursive:true});
   }
   const wait = (p, ms=250) => p.waitForTimeout(ms);
   async function setup(page){
-    await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await wait(page, 400);
+    await page.goto('file:///home/claude/build/app.html'); await wait(page, 400);
     await page.fill('#f_name', 'Tour Test Landscapes');
     for (let i=0;i<3;i++){
       if (await page.$('#f_dayrate')) { await page.fill('#f_dayrate','180'); await page.fill('#f_expenses','90'); }

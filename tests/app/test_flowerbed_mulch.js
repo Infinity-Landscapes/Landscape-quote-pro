@@ -7,17 +7,17 @@ const fs = require('fs');
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const errors = [];
   let pass = true; const check = (l,c)=>{ console.log((c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
-  let html = fs.readFileSync(require('path').resolve(__dirname,'../../app/app.html'),'utf8');
+  let html = fs.readFileSync('/home/claude/build/app.html','utf8');
   const k = html.lastIndexOf('\n})();');
   html = html.slice(0,k) + '\nwindow.__T={buildQuoteFromDraft,quoteLetterPlainText,S:()=>S};' + html.slice(k);
-  fs.writeFileSync(__dirname+'/_mulch_exposed.html', html);
+  fs.writeFileSync('/tmp/mobiletest/_mulch_exposed.html', html);
 
   async function run(vp, label){
     const page = await (await browser.newContext({ viewport: vp })).newPage();
     page.on('pageerror', e => errors.push(label+' PAGEERROR: ' + e.message));
-    await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+    await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
     const wait = ms => page.waitForTimeout(ms);
-    await page.goto('file://'+__dirname+'/_mulch_exposed.html'); await wait(400);
+    await page.goto('file:///tmp/mobiletest/_mulch_exposed.html'); await wait(400);
     await page.fill('#f_name', 'Infinity Landscapes and Design');
     for (let i=0;i<3;i++){ await page.click('button[data-action="setupNext"]'); await wait(200); }
     await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');
@@ -73,7 +73,7 @@ const fs = require('fs');
     await page.check('[data-row="0"] input[data-row-check="mulch"]'); await wait(300);
     const noOverflow = await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth + 1);
     check(`${label}: no sideways scrolling`, noOverflow);
-    await page.screenshot({ path: `${__dirname}/flowerbed_mulch_${label}.png`, fullPage: false });
+    await page.screenshot({ path: `/tmp/mobiletest/flowerbed_mulch_${label}.png`, fullPage: false });
     // reload: the draft keeps the choice
     await wait(1500);
     await page.reload(); await wait(500);

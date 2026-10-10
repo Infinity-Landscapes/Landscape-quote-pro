@@ -9,14 +9,14 @@ const fs = require('fs');
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await (await browser.newContext({ viewport:{width:1200,height:1000} })).newPage();
   const errors = []; page.on('pageerror', e => errors.push(e.message));
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
-  let html = fs.readFileSync(require('path').resolve(__dirname,'../../app/app.html'),'utf8');
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
+  let html = fs.readFileSync('/home/claude/build/app.html','utf8');
   const k = html.lastIndexOf('\n})();');
   html = html.slice(0,k) + '\nwindow.__T={SERVICES,ctxFor,calcWithRowChoices,applyCutWastage,priceSection,sectionCopy,S:()=>S};' + html.slice(k);
-  fs.writeFileSync(__dirname+'/_rowmat_exposed.html', html);
+  fs.writeFileSync('/tmp/mobiletest/_rowmat_exposed.html', html);
   let pass = true; const check = (l,c)=>{ console.log((c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
   const wait = ms => page.waitForTimeout(ms);
-  await page.goto('file://'+__dirname+'/_rowmat_exposed.html'); await wait(400);
+  await page.goto('file:///tmp/mobiletest/_rowmat_exposed.html'); await wait(400);
   await page.fill('#f_name','Row Materials Ltd');
   for (let i=0;i<3;i++){ if (await page.$('#f_dayrate')) { await page.fill('#f_dayrate','180'); await page.fill('#f_expenses','90'); } await page.click('button[data-action="setupNext"]'); await wait(200); }
   await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');
@@ -93,7 +93,7 @@ const fs = require('fs');
   await page.fill('[data-row="1"] input[data-mf="width"]','2'); await page.fill('[data-row="1"] input[data-mf="length"]','10'); await wait(300);
   const t = await page.$eval('#app', e=>e.innerText);
   check('materials panel lists both slabs (55 and 22)', /Indian sandstone\s+55\b/.test(t) && /Porcelain grey\s+22\b/.test(t));
-  await page.screenshot({path:__dirname+'/row_materials_paving.png'});
+  await page.screenshot({path:'/tmp/mobiletest/row_materials_paving.png'});
 
   console.log('ERRORS:', errors.length?errors:'none'); if (errors.length) pass=false;
   await browser.close();

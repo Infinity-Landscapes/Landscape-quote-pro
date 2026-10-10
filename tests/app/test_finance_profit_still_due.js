@@ -3,16 +3,16 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 (async () => {
-  let html = fs.readFileSync(require('path').resolve(__dirname,'../../app/app.html'),'utf8');
+  let html = fs.readFileSync('/home/claude/build/app.html','utf8');
   const k = html.lastIndexOf('\n})();');
   html = html.slice(0,k) + '\nwindow.__T={financeActualProfit,financeStillDue,financeTrackerHtml,S:()=>S};' + html.slice(k);
-  fs.writeFileSync(__dirname+'/_fin_exposed.html', html);
+  fs.writeFileSync('/tmp/mobiletest/_fin_exposed.html', html);
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await (await browser.newContext()).newPage();
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   let pass = true; const check = (l,c)=>{ console.log((c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
-  await page.goto('file://'+__dirname+'/_fin_exposed.html'); await page.waitForTimeout(400);
+  await page.goto('file:///tmp/mobiletest/_fin_exposed.html'); await page.waitForTimeout(400);
   const r = await page.evaluate(() => {
     const T = window.__T; T.S().settings.dayRatePerPerson = 150;
     // price £10,000 ex VAT: materials 3,000 (A 2,000 + B 1,000), labour 3,000 (20 person-days), running 1,000, margin 3,000

@@ -8,14 +8,14 @@ const fs = require('fs');
   const page = await (await browser.newContext({ viewport:{width:1100,height:1000} })).newPage();
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
-  let html = fs.readFileSync(require('path').resolve(__dirname,'../../app/app.html'),'utf8');
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
+  let html = fs.readFileSync('/home/claude/build/app.html','utf8');
   const k = html.lastIndexOf('\n})();');
   html = html.slice(0,k) + '\nwindow.__T={SERVICES,ctxFor,calcWithRowChoices,applyCutWastage,S:()=>S};' + html.slice(k);
-  fs.writeFileSync(__dirname+'/_pavwaste_exposed.html', html);
+  fs.writeFileSync('/tmp/mobiletest/_pavwaste_exposed.html', html);
   let pass = true; const check = (l,c)=>{ console.log((c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
   const wait = ms => page.waitForTimeout(ms);
-  await page.goto('file://'+__dirname+'/_pavwaste_exposed.html'); await wait(400);
+  await page.goto('file:///tmp/mobiletest/_pavwaste_exposed.html'); await wait(400);
   await page.fill('#f_name', 'Wastage Test Ltd');
   for (let i=0;i<3;i++){ if (await page.$('#f_dayrate')) { await page.fill('#f_dayrate','180'); await page.fill('#f_expenses','90'); } await page.click('button[data-action="setupNext"]'); await wait(200); }
   await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');

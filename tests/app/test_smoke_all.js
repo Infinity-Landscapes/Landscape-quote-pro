@@ -9,13 +9,13 @@ const fs = require('fs');
   const errors = [];
   for (const vp of [{width:390,height:844,name:'phone'},{width:1280,height:900,name:'desktop'}]) {
     const page = await (await browser.newContext({ viewport:{width:vp.width,height:vp.height}, timezoneId:'Europe/London' })).newPage();
-    await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+    await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
     page.on('pageerror', e => errors.push(`[${vp.name}] PAGEERROR: ${e.message}`));
     page.on('console', m => { if (m.type()==='error' && !/net::ERR|Failed to load resource|fonts\.g/.test(m.text())) errors.push(`[${vp.name}] CONSOLE: ${m.text()}`); });
     const settle = () => page.waitForTimeout(220);
     const click = async sel => { const el = await page.$(sel); if(!el) throw new Error('missing '+sel); await el.click(); await settle(); };
     const overflow = () => page.evaluate(()=>document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
-    await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
+    await page.goto('file:///home/claude/build/app.html'); await page.waitForTimeout(400);
     await page.fill('#f_name','Infinity Landscapes and Design LTD');
     for (let i=0;i<3;i++) await click('button[data-action="setupNext"]');
     await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');
@@ -57,12 +57,16 @@ const fs = require('fs');
     await page.fill('[data-row="0"] input[data-mf="width"]','5'); await page.fill('[data-row="0"] input[data-mf="length"]','6'); await settle();
     for (let i=0;i<4 && !(await page.$('button[data-action="saveSentQuote"]')); i++) await click('button[data-action="wizNext"]');
     await click('button[data-action="saveSentQuote"]');
+    const overflowAt0 = [];
     await click('button[data-action="showAccept"]'); await page.fill('#acceptStart','2026-11-02'); await click('button[data-action="confirmAccept"]');
     const jobText = await page.$eval('#App', e=>e.textContent);
-    check(`[${vp.name}] quote saved, accepted, job page complete`, /ongoing/.test(jobText) && /Job finance tracker/.test(jobText) && /Payments against the plan/.test(jobText) && /Materials to order/.test(jobText));
+    await click('button[data-action="openJobFinances"]');
+    const finText = await page.$eval('#App', e=>e.textContent);
+    check(`[${vp.name}] quote saved, accepted, job page complete`, /ongoing/.test(jobText) && /Job finances/.test(jobText) && /Job finance tracker/.test(finText) && /Payments against the plan/.test(finText) && /Materials to order/.test(finText));
+    if (await overflow()) overflowAt0.push(`job finances page`);
     // ---- every screen and settings tab, light and dark ----
     const screens = [['menu'],['quotes'],['calendar'],['overview'],['settings','services'],['settings','pricing'],['settings','schedule'],['settings','teams'],['settings','materials'],['settings','company'],['settings','letter']];
-    const overflowAt = [];
+    const overflowAt = overflowAt0;
     for (const scheme of ['light','dark']) {
       await page.emulateMedia({ colorScheme: scheme });
       for (const [nav, tab] of screens) {

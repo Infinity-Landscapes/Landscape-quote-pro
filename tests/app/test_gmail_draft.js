@@ -6,7 +6,7 @@ async function run(mode){
   const page = await (await browser.newContext({ viewport: { width: 1100, height: 1000 } })).newPage();
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
   await page.addInitScript(`(()=>{
     window.__MODE__ = ${JSON.stringify(mode)};
     // PDF libraries stubbed so no network is needed.
@@ -42,7 +42,7 @@ async function run(mode){
     };
   })();`);
   let pass = true; const check = (l,c)=>{ console.log(`[${mode}] `+(c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
+  await page.goto('file:///home/claude/build/app.html'); await page.waitForTimeout(400);
   await page.fill('#f_name','Infinity Landscapes and Design');
   for (let i=0;i<3;i++){ await (await page.$('button[data-action="setupNext"]')).click(); await page.waitForTimeout(200); }
   await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');

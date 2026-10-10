@@ -5,16 +5,16 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 (async () => {
-  let html = fs.readFileSync(require('path').resolve(__dirname,'../../app/app.html'),'utf8');
+  let html = fs.readFileSync('/home/claude/build/app.html','utf8');
   const k = html.lastIndexOf('\n})();');
   html = html.slice(0,k) + '\nwindow.__T={calcQuote,extrasBreakdown,extraParts,calcPaymentSchedule,createFinanceTracker,extraSellPrice,ctxFor,S:()=>S};' + html.slice(k);
-  fs.writeFileSync(__dirname+'/_extras_exposed.html', html);
+  fs.writeFileSync('/tmp/mobiletest/_extras_exposed.html', html);
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await (await browser.newContext({timezoneId:'Europe/London'})).newPage();
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   let pass = true; const check = (l,c)=>{ console.log((c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
-  await page.goto('file://'+__dirname+'/_extras_exposed.html'); await page.waitForTimeout(400);
+  await page.goto('file:///tmp/mobiletest/_extras_exposed.html'); await page.waitForTimeout(400);
   const r = await page.evaluate(()=>{
     const T = window.__T; const st = T.S().settings; st.dayRatePerPerson = 150; st.expensesPerDay = 100; st.expensesIncludeVat = false;
     const ctx = Object.assign(T.ctxFor(st, 2), {markupPercent:10, vatRate:0.2});

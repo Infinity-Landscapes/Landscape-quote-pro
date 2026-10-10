@@ -12,8 +12,8 @@ const fs = require('fs');
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const context = await browser.newContext({ viewport: { width: 1200, height: 1400 } });
   const page = await context.newPage();
-  require(__dirname+'/row_helper.js')(page);
-  const mockScript = fs.readFileSync(__dirname+'/db_mock.js', 'utf8');
+  require('/tmp/mobiletest/row_helper.js')(page);
+  const mockScript = fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8');
   await page.addInitScript(mockScript);
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
@@ -45,7 +45,7 @@ const fs = require('fs');
     if (d) { await d.click(); await page.waitForTimeout(150); const ok = await page.$('button[data-action="modalOk"]'); if (ok) { await ok.click(); await page.waitForTimeout(250); } }
   }
 
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html'));
+  await page.goto('file:///home/claude/build/app.html');
   await page.waitForTimeout(400);
   await page.fill('#f_name', 'Infinity Landscapes and Design');
   for (let i=0;i<3;i++){ await (await page.$('button[data-action="setupNext"]')).click(); await page.waitForTimeout(200); }

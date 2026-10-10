@@ -6,8 +6,8 @@ const fs = require('fs');
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await (await browser.newContext({ viewport: { width: 1300, height: 1600 } })).newPage();
-  require(__dirname+'/row_helper.js')(page);
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+  require('/tmp/mobiletest/row_helper.js')(page);
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type()==='error' && !/net::ERR/.test(m.text())) errors.push('CONSOLE: '+m.text()); });
@@ -21,7 +21,7 @@ const fs = require('fs');
   async function addVia(sel, f){ await page.selectOption(sel,'__add_other__'); await settle(); await fillModal(f); }
   async function tick(opt){ await (await page.$(`button[data-action="setOpt"][data-opt="${opt}"][data-val="true"]`)).click(); await settle(); }
 
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html')); await page.waitForTimeout(400);
+  await page.goto('file:///home/claude/build/app.html'); await page.waitForTimeout(400);
   await page.fill('#f_name','Infinity Landscapes and Design');
   for (let i=0;i<3;i++){ await (await page.$('button[data-action="setupNext"]')).click(); await settle(); }
   await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');
@@ -35,7 +35,7 @@ const fs = require('fs');
   // Materials units relabelled to tonne
   await (await page.$('button[data-action="settingsTab"][data-tab="materials"]')).click(); await settle();
   let t = await txt();
-  check('Pea shingle / Limestone labelled in tonnes', /Pea shingle\s*tonne/.test(t) && /Limestone 2-6mm\s*tonne/.test(t) && !/Pea shingle\s*bulk bag/.test(t));
+  check('Pea shingle / Limestone labelled in tonnes', /Pea shingle\s*(?:[^\n]*\n\s*)?tonne/.test(t) && /Limestone 2-6mm\s*(?:[^\n]*\n\s*)?tonne/.test(t) && !/Pea shingle\s*bulk bag/.test(t));
 
   await (await page.$('button[data-nav="newquote"]')).click(); await settle();
   await page.fill('#q_creator','Matt'); await page.fill('#q_cname','Wall rework');

@@ -12,7 +12,7 @@ const fs = require('fs');
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const context = await browser.newContext({ viewport: { width: 1100, height: 1200 } });
   const page = await context.newPage();
-  const mockScript = fs.readFileSync(__dirname+'/db_mock.js', 'utf8');
+  const mockScript = fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8');
   await page.addInitScript(mockScript);
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
@@ -40,7 +40,7 @@ const fs = require('fs');
     await (await page.$('button[data-action="wizNext"]')).click(); await page.waitForTimeout(300); // preview
   }
 
-  await page.goto('file://'+require('path').resolve(__dirname,'../../app/app.html'));
+  await page.goto('file:///home/claude/build/app.html');
   await page.waitForTimeout(400);
   await page.fill('#f_name', 'Infinity Landscapes and Design');
   await (await page.$('button[data-action="setupNext"]')).click(); await page.waitForTimeout(200);
@@ -107,7 +107,10 @@ const fs = require('fs');
   await page.waitForTimeout(300);
   bodyText = await page.$eval('#App', el => el.textContent);
   check('job pill shows "cancelled" after cancelling', /cancelled/.test(bodyText));
-  check('cancelled job still shows its finance tracker (finance data retained)', /Job finance tracker/.test(bodyText));
+  check('cancelled job still offers its job finances (finance data retained)', /Job finances/.test(bodyText) && !!(await page.$('button[data-action="openJobFinances"]')));
+  await (await page.$('button[data-action="openJobFinances"]')).click(); await page.waitForTimeout(200);
+  bodyText = await page.$eval('#App', el => el.textContent);
+  check('cancelled job finances page still shows its finance tracker', /Job finance tracker/.test(bodyText));
 
   // --- Jobs list + filters ---
   await (await page.$('button[data-nav="quotes"]')).click(); await page.waitForTimeout(250);
@@ -142,7 +145,7 @@ const fs = require('fs');
     await overviewJobRow.click();
     await page.waitForTimeout(250);
     bodyText = await page.$eval('#App', el => el.textContent);
-    check('tapping a job in the overview opens the quote/job detail screen', /Job finance tracker/.test(bodyText));
+    check('tapping a job in the overview opens the quote/job detail screen', /Job finances/.test(bodyText) && !!(await page.$('button[data-action="openJobFinances"]')));
   }
 
   // --- Permanent delete on a finished job --- (navigate purely via the UI, via the Jobs list)

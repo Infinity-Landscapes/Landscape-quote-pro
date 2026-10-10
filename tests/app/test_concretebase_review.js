@@ -3,17 +3,17 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 (async () => {
-  let html = fs.readFileSync(require('path').resolve(__dirname,'../../app/app.html'),'utf8');
+  let html = fs.readFileSync('/home/claude/build/app.html','utf8');
   const k = html.lastIndexOf('\n})();');
   html = html.slice(0,k) + '\nwindow.__T={SERVICES,SERVICE_COPY,ctxFor,S:()=>S};' + html.slice(k);
-  fs.writeFileSync(__dirname+'/_cb_exposed.html', html);
+  fs.writeFileSync('/tmp/mobiletest/_cb_exposed.html', html);
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await (await browser.newContext()).newPage();
-  await page.addInitScript(fs.readFileSync(__dirname+'/db_mock.js', 'utf8'));
+  await page.addInitScript(fs.readFileSync('/tmp/mobiletest/db_mock.js', 'utf8'));
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   let pass = true; const check = (l,c)=>{ console.log((c?'PASS':'FAIL')+' - '+l); if(!c) pass=false; };
-  await page.goto('file://'+__dirname+'/_cb_exposed.html'); await page.waitForTimeout(400);
+  await page.goto('file:///tmp/mobiletest/_cb_exposed.html'); await page.waitForTimeout(400);
 
   // ---- Review fixes: legacy rows on revision, priced MOT depth in the letter, wording ----
   const r = await page.evaluate(() => { const T = window.__T;
