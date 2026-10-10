@@ -26,6 +26,9 @@ const FUNCS = [
   { id: 'stripe-admin',    entry: 'admin',    public: false },
 ];
 const SITE = 'https://landscape-quote-pro.web.app';
+// Runs as the Firebase admin account, which has Firestore access (new Google Cloud organisations
+// no longer give the default compute account any).
+const RUNTIME_SA = `firebase-adminsdk-fbsvc@${PROJECT}.iam.gserviceaccount.com`;
 const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
 let client;
 async function call(method, url, data, opts){
@@ -58,9 +61,8 @@ async function prepare(){
     await call('POST', `${SM}/${SECRET}:addVersion`, { payload: { data: Buffer.from('not-set').toString('base64') } });
     console.log('created secret', SECRET, '(placeholder)');
   } else console.log('secret', SECRET, 'already exists');
-  // The functions run as the default compute service account: let it read the key.
-  const num = await projectNumber();
-  const runtimeSA = `serviceAccount:${num}-compute@developer.gserviceaccount.com`;
+  // The functions run as the Firebase admin service account (it can already use Firestore): let it read the key.
+  const runtimeSA = `serviceAccount:${RUNTIME_SA}`;
   const pol = await call('GET', `${SM}/${SECRET}:getIamPolicy`);
   pol.bindings = pol.bindings || [];
   let b = pol.bindings.find(x => x.role === 'roles/secretmanager.secretAccessor');
@@ -88,6 +90,7 @@ async function deploy(){
       name: `projects/${PROJECT}/locations/${REGION}/functions/${f.id}`,
       buildConfig: { runtime: 'nodejs22', entryPoint: f.entry, source: { storageSource: src } },
       serviceConfig: {
+        serviceAccountEmail: RUNTIME_SA,
         availableMemory: '256M', timeoutSeconds: 60, maxInstanceCount: 5, minInstanceCount: 0, ingressSettings: 'ALLOW_ALL',
         allTrafficOnLatestRevision: true,
         secretEnvironmentVariables: [{ key: SECRET, projectId: PROJECT, secret: SECRET, version: 'latest' }],

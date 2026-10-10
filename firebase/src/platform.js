@@ -405,7 +405,13 @@
   }
   function inStoreApp(){ return !!purchases(); }
   // The website sells plans itself (Stripe) once that's switched on in the build.
-  function webSells(){ return !purchases() && window.__WEB_BILLING__ === true; }
+  // ?billingtest=1 turns it on for this browser tab only, to try Stripe's test mode before launch.
+  try { if (params.get("billingtest") === "1") sessionStorage.setItem("lqp_billing_test", "1"); } catch(e) {}
+  function webSells(){
+    if (purchases()) return false;
+    if (window.__WEB_BILLING__ === true) return true;
+    try { return sessionStorage.getItem("lqp_billing_test") === "1"; } catch(e) { return false; }
+  }
   var WEB_SOON = "Paid plans can be bought here very soon. Your free trial carries on as normal — if it runs out before then, email " + SUPPORT_EMAIL + " and we'll extend it.";
   function isAppStoreBilling(store){ return store === "app_store" || store === "play_store"; }
   function storeLabel(store){ return store === "app_store" ? "the App Store (Apple)" : store === "play_store" ? "Google Play" : "the website"; }
