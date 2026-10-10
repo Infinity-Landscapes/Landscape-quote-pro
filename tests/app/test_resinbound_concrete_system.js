@@ -30,7 +30,7 @@ const fs = require('fs');
   function qtyAfter(bodyText, name, unit){
     // Materials table cells are adjacent <td>s with no separating whitespace, so the name and its
     // qty+unit run together in textContent, e.g. "Ballast2 tonne".
-    const re = new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '(\\d+(?:\\.\\d+)?) ' + unit);
+    const re = new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '(?: \\([^)]*\\))?(\\d+(?:\\.\\d+)?) ' + unit);
     const m = bodyText.match(re);
     return m ? m[1] : null;
   }
@@ -47,7 +47,7 @@ const fs = require('fs');
 
   // Oct 2026: Resin bound is only offered to the pre-existing business — simulate it by dropping
   // the extraServices/servicesSeen fields a brand-new business gets, then reloading.
-  await page.evaluate(()=>{ const st = JSON.parse(localStorage.getItem('__mockdb__')); for (const k of Object.keys(st)){ const d = st[k]; if(d && d.materials){ delete d.extraServices; delete d.servicesSeen; } } localStorage.setItem('__mockdb__', JSON.stringify(st)); });
+  await page.evaluate(()=>{ const st = JSON.parse(localStorage.getItem('__mockdb__')); for (const k of Object.keys(st)){ const d = st[k]; if(d && d.materials){ delete d.extraServices; delete d.servicesSeen; delete d.resinSystems; d.brandInfinity = true; if(!d.servicesEnabled.includes('resinbound')) d.servicesEnabled.push('resinbound'); } } localStorage.setItem('__mockdb__', JSON.stringify(st)); });
   await page.reload(); await page.waitForTimeout(500);
   { const pin = await page.$('#loginPin'); if(pin){ await pin.fill('1234'); await (await page.$('button[data-action="login"]')).click(); await page.waitForTimeout(400); } }
 
@@ -65,35 +65,30 @@ const fs = require('fs');
   await page.fill('[data-row="0"] input[data-mf="length"]', '4');
   await page.waitForTimeout(200);
 
-  const systemSelect = await page.$('[data-opt="system"]');
-  check('Resin system select is present', !!systemSelect);
-  check('Resin system defaults to Addagrip Addagrid', (await systemSelect.inputValue()) === 'Addagrip Addagrid');
-
+  // Oct 2026: resin systems are the business's own. The existing business keeps its two systems
+  // (same materials and ratios) as its own, editable in Settings → Pricing → Resin bound.
+  const systemSelect = await page.$('select[data-opt="resinSystem"]');
+  check('Resin system select is present (the business\'s own systems + "+ Add new…")', !!systemSelect);
+  const sysOpts = await page.$$eval('select[data-opt="resinSystem"] option', os=>os.map(o=>o.textContent));
+  check('existing business keeps Addagrip Addagrid and Resin path on concrete as its own systems', sysOpts.includes('Addagrip Addagrid') && sysOpts.includes('Resin path on concrete') && sysOpts.includes('+ Add new…'));
+  check('no old fixed system dropdown on a new quote', !(await page.$('[data-opt="system"]')));
+  await page.selectOption('select[data-opt="resinSystem"]', 'Addagrip Addagrid'); await page.waitForTimeout(200);
   let bodyText = await page.$eval('#App', el => el.textContent);
-  check('default system shows Addagrip Terrabase grid system material', /Addagrip Terrabase grid system/.test(bodyText));
-  check('default system shows Addagrip terrabase UV 30mm driveway kit material', /Addagrip terrabase UV 30mm driveway kit/.test(bodyText));
-  check('default system does NOT show Resin kit (new system only)', !/Resin kit/.test(bodyText));
-  check('default system does NOT show Resin path consumables line', !/Consumables \(resin path\)/.test(bodyText));
-  check('Prep days on default system: 12 m² -> ruq(12/40) = 0.5', prepDaysValue(bodyText) === '0.5');
+  check('Addagrid shows its grid system and driveway kit', /Addagrip Terrabase grid system/.test(bodyText) && /Addagrip terrabase UV 30mm driveway kit/.test(bodyText));
+  check('Addagrid does NOT show Resin kit', !/Resin kit/.test(bodyText));
+  check('Prep days: 12 m² -> ruq(12/40) = 0.5', prepDaysValue(bodyText) === '0.5');
 
-  // Switch to the new system.
-  await page.selectOption('[data-opt="system"]', 'Resin path on concrete');
-  await page.waitForTimeout(200);
+  await page.selectOption('select[data-opt="resinSystem"]', 'Resin path on concrete'); await page.waitForTimeout(200);
   bodyText = await page.$eval('#App', el => el.textContent);
-
-  check('switching removes Addagrip Terrabase grid system material', !/Addagrip Terrabase grid system/.test(bodyText));
-  check('switching removes Addagrip terrabase UV 30mm driveway kit material', !/Addagrip terrabase UV 30mm driveway kit/.test(bodyText));
-  check('switching removes Addagrip anti slip glass material', !/Addagrip anti slip glass/.test(bodyText));
-
-  check('Geotextile membrane: 1m² per m² -> 12', qtyAfter(bodyText, 'Geotextile membrane', 'm²') === '12');
+  check('switching removes the Addagrip lines', !/Addagrip Terrabase grid system/.test(bodyText) && !/Addagrip anti slip glass/.test(bodyText));
+  check('Geotextile membrane: 1 per m² -> 12', qtyAfter(bodyText, 'Geotextile membrane', 'm²') === '12');
   check('Ballast: ru(12/10)=2', qtyAfter(bodyText, 'Ballast', 'tonne') === '2');
   check('Sharp sand: ru(12/10)=2', qtyAfter(bodyText, 'Sharp sand', 'tonne') === '2');
-  check('Cement: ru(12*1.2)=ru(14.4)=15', qtyAfter(bodyText, 'Cement', 'bag') === '15');
+  check('Cement: ru(12 ÷ 0.8333 m² per bag)=15', qtyAfter(bodyText, 'Cement', 'bag') === '15');
   check('Resin kit: ru(12/4)=3', qtyAfter(bodyText, 'Resin kit', 'kit') === '3');
-  check('Resin delivery: ru(3/8)=ru(0.375)=1', qtyAfter(bodyText, 'Resin delivery', 'per 8 kits') === '1');
-  check('Consumables (resin path) line present', /Consumables \(resin path\)/.test(bodyText));
-
-  check('Prep days unaffected by system change: still 0.5', prepDaysValue(bodyText) === '0.5');
+  check('Resin delivery: ru(12/32)=1', qtyAfter(bodyText, 'Resin delivery', 'per 8 kits') === '1');
+  check('Consumables (resin path): once per job', /Consumables \(resin path\)/.test(bodyText));
+  check('Prep days unaffected: still 0.5', prepDaysValue(bodyText) === '0.5');
 
   // Step through whatever remains (waste page — resinbound is waste-eligible — then people,
   // extras) to reach the preview, the same generic approach test_19_services_2.js uses.
@@ -108,9 +103,8 @@ const fs = require('fs');
 
   const previewText = await page.$eval('.card', el => el.textContent).catch(()=>'');
   check('letter mentions excavation to 115mm depth', /115mm/.test(previewText));
-  check('letter mentions geotextile membrane laid for ground stability', /Geotextile membrane laid for ground stability/i.test(previewText));
-  check('letter mentions 100mm solid concrete', /100mm of solid concrete/i.test(previewText));
-  check('letter mentions 15mm resin bound gravel', /15mm of resin bound gravel/i.test(previewText));
+  check('letter names the business\'s resin system', /Sub-base prepared and the Resin path on concrete system laid\./.test(previewText));
+  check('letter: resin mixed and trowelled', /Resin and aggregate mixed on site and trowelled/.test(previewText));
   check('letter does NOT mention the old Addagrip grid method', !/Addagrip grid system/i.test(previewText));
 
   console.log('\nERRORS:', errors.length ? errors : 'none');

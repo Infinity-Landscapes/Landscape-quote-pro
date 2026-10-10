@@ -56,7 +56,7 @@ const fs = require('fs');
   await (await page.$('button[data-nav="settings"]')).click(); await page.waitForTimeout(200);
   await (await page.$('button[data-action="settingsTab"][data-tab="pricing"]')).click(); await page.waitForTimeout(200);
   const val = id => page.$eval(id, el => el.value).catch(()=>null);
-  check('surface build-up defaults to 100', await val('#st_blockSurfaceBuildUp') === '100');
+  check('no surface build-up setting: MOT depth = dig-out − 100mm (50mm bedding + 50mm block)', !(await page.$('#st_blockSurfaceBuildUp')) && /dig-out depth − 100mm/.test(await txt()));
   check('no block wastage field in Settings (it is asked in the quote wizard)', !(await page.$('#st_blockWastage')));
   check('MOT baseline rate defaults to 0.3', await val('#st_blockMotRate') === '0.3');
   check('MOT baseline depth defaults to 150', await val('#st_blockMotDepth') === '150');
@@ -92,7 +92,12 @@ const fs = require('fs');
   check('block quantity = area × 1.10 wastage = 44 m²', t.includes('Test Block44'));
   check('block cost = 44 × £41.67 net = £1,833.33', /1,?833\.33/.test(t));
   check('geotextile uses laid area (40), no wastage', t.includes('Geotextile membrane40'));
-  check('limestone = ROUNDUP(40/10) = 4', t.includes('Limestone 2-6mm4'));
+  check('blocker until a bedding material is chosen', /Select a bedding material/.test(t));
+  await page.selectOption('select[data-opt="bedding"]','__add_other__'); await page.waitForTimeout(200);
+  await page.fill('#mf_name','Granite dust'); await page.fill('#mf_price','60'); await page.fill('#mf_supplier','AWBS');
+  await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
+  t = await txt();
+  check('bedding (granite dust) = ROUNDUP(40/10) = 4 tonnes', t.includes('Granite dust4') && !t.includes('Limestone 2-6mm'));
   check('consumables 1', t.includes('Consumables1'));
 
   // Edging: direct length, tenant-defined style
@@ -131,7 +136,6 @@ const fs = require('fs');
   await discard();
   await (await page.$('button[data-nav="settings"]')).click(); await page.waitForTimeout(200);
   await (await page.$('button[data-action="settingsTab"][data-tab="pricing"]')).click(); await page.waitForTimeout(200);
-  await page.fill('#st_blockSurfaceBuildUp', '50');
   await page.fill('#st_blockConsumables', '2');
   await page.fill('#st_blockEdgingProd', '10');
   await (await page.$('button[data-action="saveSettingsForm"]')).click(); await page.waitForTimeout(250);
@@ -144,8 +148,9 @@ const fs = require('fs');
   await page.fill('[data-opt="wastagePct"]', '20'); await page.dispatchEvent('[data-opt="wastagePct"]','change'); await page.waitForTimeout(200);
   await page.selectOption('[data-row="0"] select[data-mf="blockType"]', 'Test Block'); await page.waitForTimeout(200);
   t = await txt();
-  // MOT depth = 250 − 50 = 200 -> ROUNDUP(40×0.3×200/150) = 16
-  check('surface build-up 50 -> MOT 16 tonnes', t.includes('Type 1 MOT16 tonne'));
+  // MOT depth = 250 − 100 (fixed) = 150 -> ROUNDUP(40×0.3×150/150) = 12
+  check('build-up fixed at 100mm -> MOT 12 tonnes', t.includes('Type 1 MOT12 tonne'));
+  check('bedding remembered from the last block paving quote', await page.$eval('select[data-opt="bedding"]', el => el.value) === 'Granite dust');
   check('wastage 20% -> block 48 m²', t.includes('Test Block48'));
   check('consumables quantity 2', t.includes('Consumables2'));
 

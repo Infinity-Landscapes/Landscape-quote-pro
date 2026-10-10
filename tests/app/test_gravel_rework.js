@@ -69,7 +69,7 @@ const fs = require('fs');
   // Tenant edging style
   await (await page.$('button[data-action="setOpt"][data-opt="edging"][data-val="true"]')).click(); await settle();
   const eOpts = await page.$$eval('select[data-opt="edgingStyle"] option', els=>els.map(e=>e.textContent));
-  check('edging dropdown offers Steel edging and + Add new', eOpts.includes('Steel edging') && eOpts.includes('+ Add new…'));
+  check('edging dropdown offers Welded steel edging and + Add new', eOpts.includes('Welded steel edging') && eOpts.includes('+ Add new…'));
   check('no Metal/Block edging type dropdown', !(await page.$('[data-opt="edgingType"]')));
   check('edging length blank by default', await v('[data-opt="edgingLength"]')==='');
   await page.selectOption('select[data-opt="edgingStyle"]','__add_other__'); await settle();
@@ -112,9 +112,9 @@ const fs = require('fs');
   await page.reload(); await page.waitForTimeout(500); await login();
   await (await page.$('button[data-nav="settings"]')).click(); await settle();
   await (await page.$('button[data-action="settingsTab"][data-tab="pricing"]')).click(); await settle();
-  const seeded = await page.$$('button[data-action="removePavingProduct"][data-libkey="gravelEdgingStyles"]');
+  const shared = await page.evaluate(()=>{ const st = JSON.parse(localStorage.getItem('__mockdb__')); const k = Object.keys(st).find(k=>st[k] && st[k].edgingStyles); return k ? st[k].edgingStyles : []; });
   t = await txt();
-  check('existing business gets Block edging (20/m, £1)', seeded.length===1 && /Block edging/.test(t) && /20\/m/.test(t));
+  check('existing business gets Block edging (20/m, £1) in the one shared edging list', shared.filter(e=>e.name==='Block edging').length===1 && shared.find(e=>e.name==='Block edging').piecesPerMetre===20 && /Edging styles \(one list shared by every service\)/.test(t));
 
   console.log('ERRORS:', errors.length?errors:'none');
   console.log(pass&&!errors.length?'ALL CHECKS PASSED':'SOME CHECKS FAILED');

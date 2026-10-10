@@ -48,7 +48,7 @@ const fs = require('fs');
   check('screw boxes = ROUNDUP(19×6/25) = 5', t.includes('Hex screws5'));
   check('DPM = ROUNDUP(7.1/10) = 1', t.includes('Blackjack DPM1'));
   check('consumables 1', t.includes('Consumables1'));
-  check('labour = 7.1/10 × £150 = £106.50', /106\.50/.test(t));
+  check('labour = 7.1/7.2 × £150 = £147.92', /147\.92/.test(t));
   check('no blockers', !/Needs attention/.test(t));
   await page.fill('[data-row="1"] input[data-mf="height"]','1.9'); await settle();
   check('blocker: wall too tall for stock post', /Wall height needs a longer post than the stock length/.test(await txt()));

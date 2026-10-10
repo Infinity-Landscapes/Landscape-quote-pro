@@ -61,7 +61,7 @@ const fs = require('fs');
   const ed = await page.$('button[data-action="editPavingProduct"][data-libkey="wfFeatures"]');
   check('settings library has ✎ edit buttons', !!ed);
   await ed.click(); await settle();
-  check('settings edit dialog prefilled', /Edit water feature/.test(await txt()) && ['Kaskada Large','Bubbler'].includes(await page.$eval('#mf_name',e=>e.value)));
+  check('settings edit dialog prefilled', /Edit water feature/.test(await txt()) && ['Kaskada Large','Bubbler','Customer-supplied water feature'].includes(await page.$eval('#mf_name',e=>e.value)));
   await page.fill('#mf_price','99'); { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await click('button[data-action="modalOk"]');
   check('settings list shows new price', /£99\.00/.test(await txt()));
 

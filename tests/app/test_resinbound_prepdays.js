@@ -33,7 +33,7 @@ const fs = require('fs');
 
   // Oct 2026: Resin bound is only offered to the pre-existing business — simulate it by dropping
   // the extraServices/servicesSeen fields a brand-new business gets, then reloading.
-  await page.evaluate(()=>{ const st = JSON.parse(localStorage.getItem('__mockdb__')); for (const k of Object.keys(st)){ const d = st[k]; if(d && d.materials){ delete d.extraServices; delete d.servicesSeen; } } localStorage.setItem('__mockdb__', JSON.stringify(st)); });
+  await page.evaluate(()=>{ const st = JSON.parse(localStorage.getItem('__mockdb__')); for (const k of Object.keys(st)){ const d = st[k]; if(d && d.materials){ delete d.extraServices; delete d.servicesSeen; delete d.resinSystems; d.brandInfinity = true; if(!d.servicesEnabled.includes('resinbound')) d.servicesEnabled.push('resinbound'); } } localStorage.setItem('__mockdb__', JSON.stringify(st)); });
   await page.reload(); await page.waitForTimeout(500);
   { const pin = await page.$('#loginPin'); if(pin){ await pin.fill('1234'); await (await page.$('button[data-action="login"]')).click(); await page.waitForTimeout(400); } }
 
@@ -48,6 +48,7 @@ const fs = require('fs');
   // 10 m² -> 10/40 = 0.25 -> exactly a quarter-day, no old "2 day minimum" anymore.
   await page.fill('[data-row="0"] input[data-mf="width"]', '2');
   await page.fill('[data-row="0"] input[data-mf="length"]', '5');
+  await page.selectOption('select[data-opt="resinSystem"]', 'Addagrip Addagrid');
   await page.waitForTimeout(200);
   let bodyText = await page.$eval('#App', el => el.textContent);
   check('10 m²: prep days = 0.25 (1 day per 40m², no more 2-day flat minimum)', prepDaysValue(bodyText) === '0.25');

@@ -27,7 +27,7 @@ const fs = require('fs');
     s.materials = s.materials || {};
     s.materials['Test Slab'] = s.materials['Test Slab'] || {unit:'m²', section:'paving', price:30, supplier:'', vatIncluded:false};
     s.pavingJointingCompounds = [{id:'j', name:'Test Joint', price:20, coverage:10, vatIncluded:false}];
-    s.pavingEdgingStyles = [{id:'e', name:'Test Edge', piecesPerMetre:2, price:3, vatIncluded:false}];
+    s.edgingStyles = [{id:'e', name:'Test Edge', piecesPerMetre:2, price:3, vatIncluded:false}];
     const ctx = T.ctxFor(s, 2), def = T.SERVICES.paving, rows = [{width:w, length:l}];
     const options = Object.assign({style:'Test Slab', digOutDepth:150, jointingCompound:'Test Joint', edging:true, edgingLength:8, edgingStyle:'Test Edge', productivity:6}, extra||{});
     const r = T.applyCutWastage('paving', def, rows, options, T.calcWithRowChoices(def, rows, options, ctx));

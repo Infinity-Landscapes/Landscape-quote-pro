@@ -45,16 +45,16 @@ const fs = require('fs');
   }, [key, opts||{}]);
   const exactly = (r, names) => names.every(n=>r.changed.includes(n)) && r.changed.length===names.length;
   let r;
-  r = await diff('paving', {options:{edging:true, edgingLength:8, edgingStyle:'Sandstone kerb'}, libs:{pavingEdgingStyles:'Sandstone kerb'}});
+  r = await diff('paving', {options:{edging:true, edgingLength:8, edgingStyle:'Sandstone kerb'}, libs:{edgingStyles:'Sandstone kerb'}});
   check('paving: only the slabs go up (not MOT, sand, cement, primer, jointing, stone edging)', exactly(r, ['Cut paving material']) && ['Type 1 MOT','Sharp sand','Cement','Sandstone kerb'].every(n=>r.same.includes(n)));
-  r = await diff('paving', {options:{edging:true, edgingLength:8, edgingStyle:'Treated timber edging'}, libs:{pavingEdgingStyles:'Treated timber edging'}});
+  r = await diff('paving', {options:{edging:true, edgingLength:8, edgingStyle:'Treated timber edging'}, libs:{edgingStyles:'Treated timber edging'}});
   check('paving: timber edging strips are cut too', exactly(r, ['Cut paving material','Treated timber edging']));
   r = await diff('blockpaving');
   check('block paving: only the blocks go up', exactly(r, ['Cut blockpaving material']) && r.same.includes('Type 1 MOT'));
   r = await diff('turf');
   check('turf: turf goes up, topsoil and consumables don\'t', exactly(r, ['Turf']) && r.same.includes('Quality topsoil'));
   r = await diff('artificialturf');
-  check('artificial grass: the grass goes up, not grano, infill, MOT, membrane', exactly(r, ['atTurf item']) && ['atGrano item','atInfill item','Type 1 MOT','Geotextile membrane'].every(n=>r.same.includes(n)));
+  check('artificial grass: the grass goes up, not grano, infill, MOT, membrane', exactly(r, ['atTurf item']) && ['beddingMaterials item','atInfill item','Type 1 MOT','Geotextile membrane'].every(n=>r.same.includes(n)));
   r = await diff('timberdecking');
   check('timber decking: boards and joists go up; posts, sleeves, postcrete, screws don\'t', exactly(r, ['timberDeckBoards item','timberJoists item']) && ['Postcrete','Post saver sleeve','100x100mm Treated timber post'].every(n=>r.same.includes(n)));
   check('timber decking: 56 boards at 10% → 62 (rounded up)', r.a['timberDeckBoards item']===56 && r.b['timberDeckBoards item']===62);
@@ -68,11 +68,11 @@ const fs = require('fs');
     r = await diff('fence', {options:{fenceType:ft}});
     check(`fencing (${ft}): ${cut.join(' + ')} go up; posts, postcrete, rails, fixings don't`, exactly(r, cut) && notCut.every(n=>r.same.includes(n)));
   }
-  r = await diff('gravel', {options:{edging:true, edgingLength:10, edgingStyle:'Treated timber edging'}, libs:{gravelEdgingStyles:'Treated timber edging'}});
+  r = await diff('gravel', {options:{edging:true, edgingLength:10, edgingStyle:'Treated timber edging'}, libs:{edgingStyles:'Treated timber edging'}});
   check('gravel: timber edging goes up; gravel, MOT, membrane don\'t', exactly(r, ['Treated timber edging']));
-  r = await diff('gravel', {options:{edging:true, edgingLength:10, edgingStyle:'Granite sett edging'}, libs:{gravelEdgingStyles:'Granite sett edging'}});
+  r = await diff('gravel', {options:{edging:true, edgingLength:10, edgingStyle:'Granite sett edging'}, libs:{edgingStyles:'Granite sett edging'}});
   check('gravel: non-timber edging isn\'t uplifted (nothing changes)', r.changed.length===0);
-  r = await diff('flowerbeds', {options:{edging:true, length:10, edgingLength:10, edgingStyle:'Composite edging strip'}, libs:{fbEdgingStyles:'Composite edging strip'}});
+  r = await diff('flowerbeds', {options:{edging:true, length:10, edgingLength:10, edgingStyle:'Composite edging strip'}, libs:{edgingStyles:'Composite edging strip'}});
   check('flower beds: composite edging goes up; compost, mulch, membrane don\'t', exactly(r, ['Composite edging strip']));
 
   // ---- Settings has no wastage fields ----

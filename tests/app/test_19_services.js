@@ -55,7 +55,7 @@ const NOT_FOR_NEW = ["resinbound"];
   // Settings > Services should also show exactly the 19 (+ no custom services yet)
   await (await page.$('button[data-nav="settings"]')).click(); await page.waitForTimeout(250);
   const settingsKeys = await page.$$eval('.service-tile[data-action="toggleSettingsService"]', els => els.map(e => e.getAttribute('data-key')));
-  check('Settings > Services offers exactly 16 services', settingsKeys.length === N);
+  check('Settings > Services offers the 16 plus Resin bound (switched off until the business sets up a resin system)', settingsKeys.length === N+1 && settingsKeys.includes('resinbound'));
   check('Settings > Services has none of the retired legacy keys', RETIRED.every(k => !settingsKeys.includes(k)));
 
   // Build a quote exercising: paving (October 2026: renamed "Patio" -> "Paving"),
@@ -75,7 +75,7 @@ const NOT_FOR_NEW = ["resinbound"];
   check('new "Timber Decking" / "Composite Decking" labels present', tileLabels.includes('Timber Decking') && tileLabels.includes('Composite Decking'));
   check('single "Fencing" service label present', tileLabels.includes('Fencing') && !tileLabels.includes('Close-Board Timber Fencing'));
   check('renamed "Block Retaining Wall" label present', tileLabels.includes('Block Retaining Wall'));
-  check('new "Water Features" / "Steel Edging" / "Flower Beds" labels present', ['Water Features','Steel Edging','Flower Beds'].every(l => tileLabels.includes(l)));
+  check('new "Water Features" / "Welded Steel Edging" / "Flower Beds" labels present', ['Water Features','Welded Steel Edging','Flower Beds'].every(l => tileLabels.includes(l)));
 
   await (await page.$('[data-action="toggleQuoteService"][data-key="timberdecking"]')).click();
   await page.waitForTimeout(100);

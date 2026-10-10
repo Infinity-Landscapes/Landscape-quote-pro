@@ -29,7 +29,7 @@ const fs = require('fs');
 
   await (await page.$('button[data-nav="settings"]')).click(); await settle();
   await (await page.$('button[data-action="settingsTab"][data-tab="pricing"]')).click(); await settle();
-  const defs = {'#st_bwBaseArea':'10','#st_bwBaseDepth':'100','#st_bwBallast':'1','#st_bwSharpSand':'1','#st_bwCement':'12','#st_bwRebarLines':'2','#st_bwRebarLap':'300','#st_bwBlocksPerM2':'10','#st_bwWallThk':'100','#st_bwOverhang':'50','#st_bwFinishProd':'10','#st_bwConsumables':'1'};
+  const defs = {'#st_bwBaseArea':'10','#st_bwBaseDepth':'100','#st_bwBallast':'1','#st_bwSharpSand':'1','#st_bwCement':'12','#st_bwRebarLines':'2','#st_bwRebarLap':'300','#st_bwBlocksPerM2':'10','#st_bwFinishProd':'10','#st_bwConsumables':'1'};
   for (const [id,d] of Object.entries(defs)) check(`default ${id} = ${d}`, await v(id)===d);
   check('waste table: Block Retaining Wall shows per-row footing depth, no depth input', !(await page.$('input[data-digdepth="brickwall"]')));
   // Materials units relabelled to tonne
@@ -76,14 +76,16 @@ const fs = require('fs');
   check('wall ties 2 with face skin, £0 blocks', t.includes('Wall ties2') && /Wall ties have no price/.test(t));
 
   await tick('rebar');
-  await addVia('select[data-opt="rebarProduct"]', {name:'T12 bar', price:8, lengthMm:6000});
-  check('rebar = (ROUNDUP(10000/5700) + ROUNDUP(5000/5700)) × 2 = 6', (await txt()).includes('T12 bar6'));
+  await addVia('select[data-opt="rebarProduct"]', {name:'A142 mesh', price:30, widthMm:2400, lengthMm:4800});
+  check('rebar mesh (shared with Concrete base) = ROUNDUP(7.5 m² footing ÷ 11.52 m² sheet) = 1', (await txt()).includes('A142 mesh1'));
+  check('the same mesh is in the Concrete base mesh list', await page.evaluate(()=>{ const s=JSON.parse(localStorage.getItem('__mockdb__')); const k=Object.keys(s).find(k=>s[k]&&s[k].cbMesh); return !!k && s[k].cbMesh.some(m=>m.name==='A142 mesh'); }));
+  check('no "Compost needed?" option', !(await page.$('[data-opt="compost"]')) && !/Compost needed/.test(await txt()));
 
   await tick('coping');
   await addVia('select[data-opt="copingProduct"]', {name:'Coping stone', price:20, copingPricedPer:'m2'});
   t = await txt();
-  // width = 100 + 102 + 2×50 = 302mm -> ROUNDUP(14 × 0.302) = 5 m²
-  check('per-m² coping = ROUNDUP(14m × 302mm) = 5', t.includes('Coping stone5'));
+  // wall length × footing width = 10×0.45 + 4×0.6 = 6.9 -> 7 m²
+  check('per-m² coping = wall length × footing width = ROUNDUP(6.9) = 7', t.includes('Coping stone7'));
   // labour = (12/2.7 + 14/10) × 150 = £876.67
   check('labour includes finishing only with coping (£876.67)', /876\.67/.test(t));
 

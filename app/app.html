@@ -637,7 +637,7 @@ const COPING_SLAB_PREFIX = "slab:";
 // Fencing (see SERVICES.fence). A type's own option keys are stored on the job as "t_<key>".
 const FENCE_TYPES_BUILTIN = [
   {id:"closeboard", builtin:true, name:"Close-board", heightMm:1800, postSpacingMm:3000, stockLengthMm:2400,
-    postMaterial:"100x100 treated timber fence post", postKind:"timber", productivity:5,
+    postMaterial:"100x100 treated timber fence post", postKind:"timber", productivity:8,
     options:[],
     lines:[
       {material:"Arris rail", basis:"bay", amount:3, per:1},
@@ -659,7 +659,7 @@ const FENCE_TYPES_BUILTIN = [
       {text:"Finished with a capping rail"},
     ]},
   {id:"panel", builtin:true, name:"Panel", heightMm:1800, postSpacingMm:1800, stockLengthMm:2400,
-    postMaterial:"100x100 treated timber fence post", postKind:"timber", productivity:8.3,
+    postMaterial:"100x100 treated timber fence post", postKind:"timber", productivity:10,
     options:[{key:"gravelBoard", label:"Gravel board needed?", type:"yesno", default:true}],
     lines:[
       {material:"Lap panel", basis:"bay", amount:1, per:1},
@@ -757,14 +757,31 @@ paving: { label:"Paving", group:"Hard landscaping", unitLabel:"Area", cols:["des
       addLabel:"jointing compound", addFields:["price","coverage"],
       hint:"Pick one you've already added, or add a new one — it's saved to your Paving settings for future quotes too."},
     {key:"covers",label:"Recessed manhole covers?",type:"yesno",default:false},
+    {key:"coverProduct",label:"Manhole cover",type:"select",source:"pavingCovers",default:"",showIf:"covers",placeholder:"Select a manhole cover…",
+      sourceLabel:e=>`${e.name} — £${(Number(e.price)||0).toFixed(2)} + £${(Number(e.labourPrice)||0).toFixed(2)} fitting`,
+      addLabel:"manhole cover", addFields:["price","labourPrice"], hint:"Each cover carries its own material price and fitting (labour) price."},
     {key:"coverCount",label:"Number of covers",type:"number",default:1,showIf:"covers"},
     {key:"steps",label:"Steps?",type:"yesno",default:false},
     {key:"stepRows",label:"Steps",type:"steplist",showIf:"steps"},
     {key:"stepsSlab",label:"Slab for the step treads",type:"select",options:[],default:"",customizable:"paving",showIf:"steps",placeholder:"Same slab as the first area",
       hint:"Leave it on the first area's slab, or pick a different one for the steps."},
+    {key:"stepsBuild",label:"Steps built in",type:"select",options:["Block","Concrete"],default:"Block",showIf:"steps",
+      hint:"Block: risers built like a Block Retaining Wall. Concrete: the steps cast in concrete like a Concrete base."},
+    {key:"stepsInside",label:"Riser blocks / bricks",type:"select",source:"brickwallFaceProducts",default:"Concrete blocks",placeholder:"Select the riser blocks…",
+      extraOptions:[{value:"Concrete blocks",label:"Concrete blocks (default)"}], showIf:o=>!!o.steps && o.stepsBuild!=="Concrete",
+      addLabel:"wall skin product", addFields:["price","facePricedPer","piecesPerM2","thicknessMm"], hint:"The same wall skin list as Block Retaining Wall."},
+    {key:"stepsReadyMix",label:"Ready-mix concrete for the steps?",type:"yesno",default:false,showIf:o=>!!o.steps && o.stepsBuild==="Concrete"},
+    {key:"stepsReadyMixProduct",label:"Ready-mix (£ per m³)",type:"select",source:"cbReadyMix",default:"",placeholder:"Select a ready-mix…",
+      showIf:o=>!!o.steps && o.stepsBuild==="Concrete" && !!o.stepsReadyMix, addLabel:"ready-mix (price per m³)", addFields:["price"]},
+    {key:"stepsShuttering",label:"Shuttering for the steps (£ per board)",type:"select",source:"cbShuttering",default:"",placeholder:"No shuttering / select…",
+      showIf:o=>!!o.steps && o.stepsBuild==="Concrete", addLabel:"shuttering board", addFields:["price","lengthMm"],
+      hint:"Boards = ROUNDUP(riser run ÷ board length) × boards high. The same shuttering list as Concrete base."},
+    {key:"stepsFace",label:"Face skin on the risers?",type:"yesno",default:false,showIf:"steps"},
+    {key:"stepsFaceProduct",label:"Face skin product",type:"select",source:"brickwallFaceProducts",default:"",placeholder:"Select a face product…",
+      showIf:o=>!!o.steps && !!o.stepsFace, addLabel:"wall skin product", addFields:["price","facePricedPer","piecesPerM2","thicknessMm"]},
     {key:"edging",label:"Edging needed?",type:"yesno",default:false},
     {key:"edgingLength",label:"Edging length (m)",type:"number",default:0,showIf:"edging"},
-    {key:"edgingStyle",label:"Edging style",type:"select",source:"pavingEdgingStyles",default:"",showIf:"edging",placeholder:"Select an edging style…",
+    {key:"edgingStyle",label:"Edging style",type:"select",source:"edgingStyles",default:"",showIf:"edging",placeholder:"Select an edging style…",
       addLabel:"edging style", addFields:["piecesPerMetre","price"],
       hint:"Pick one you've already added, or add a new one — it's saved to your Paving settings for future quotes too."},
     {key:"edgingProductivity",label:"Edging productivity (m/day/person)",type:"number",default:12,showIf:"edging",hint:"How much edging ONE PERSON lays per day — override for this job if needed."},
@@ -805,6 +822,8 @@ paving: { label:"Paving", group:"Hard landscaping", unitLabel:"Area", cols:["des
     const esQty = es ? edgingLen*(Number(es.piecesPerMetre)||0) : 0;
     const esPrice = es ? ctx.netPrice(es.price, es.vatIncluded) : 0;
     const primerCoverage = ctx.pavingPrimerCoverage||20;
+    const cover = opt.covers && opt.coverProduct ? (ctx.pavingCovers||[]).find(x=>x.name===opt.coverProduct) : null;
+    const coverN = opt.covers ? Math.max(0, Math.round(Number(opt.coverCount)||0)) : 0;
     // Slabs = the measured area; the quote's own "Wastage for cuts" question adds extra slabs on top
     // (see applyCutWastage) — never to sub-base, sand, cement, primer or jointing compound.
     const slabQty = area;
@@ -818,7 +837,11 @@ paving: { label:"Paving", group:"Hard landscaping", unitLabel:"Area", cols:["des
       [opt.jointingCompound||'', jcQty, opt.jointingCompound? jcPrice:0, '', 'unit'],
       [es? opt.edgingStyle:'', esQty, es? esPrice:0, '', 'each'],
       ["Patio cleaner", ru(area/20)],
-      ["Recessed manhole cover", opt.covers? (Number(opt.coverCount)||0):0],
+      // A cover from the business's own list: material + its fitting price. A quote saved before the
+      // list existed keeps the old single "Recessed manhole cover" material.
+      ...(opt.coverProduct===undefined ? [["Recessed manhole cover", opt.covers? (Number(opt.coverCount)||0):0]]
+        : (cover && coverN>0 ? [[cover.name, coverN, ctx.netPrice(cover.price, cover.vatIncluded), '', 'each'],
+            [cover.name+' – fitting', coverN, Number(cover.labourPrice)||0, '', 'each', 'labour']] : [])),
       ["Consumables", area>0?1:0],
     ];
     const plant = [["Plate Compactor",1,days],["Cement Mixer",1,days]];
@@ -828,6 +851,7 @@ paving: { label:"Paving", group:"Hard landscaping", unitLabel:"Area", cols:["des
       if(!jc) blockers.push("Select a jointing compound");
       else if(!(jc.coverage>0)) blockers.push(`The jointing compound "${jc.name}" needs a coverage figure`);
       if(opt.edging && edgingLen>0 && !es) blockers.push("Select an edging style for the edging length entered");
+      if(opt.covers && opt.coverProduct!==undefined && coverN>0 && !cover) blockers.push("Select a manhole cover");
     }
     return {area, days, personDays, digOutDepth, blockers, materials:mats, plant, keyFigures:[["Total area",area.toFixed(2)+" m²"],["Days required",days]]};
   },
@@ -850,28 +874,58 @@ paving: { label:"Paving", group:"Hard landscaping", unitLabel:"Area", cols:["des
       if(ex) ex[1] = (Number(ex[1])||0) + Number(line[1]); else raw.materials.splice(raw.materials.length-1, 0, line.slice());
     };
     (tread.materials||[]).filter(m=>keep.has(m[0])).forEach(merge);
-    // Risers: concrete blocks and mortar, exactly as the Block Retaining Wall works them out.
     const W = st.riser;
-    const sand = ru(W/14);
-    merge(["Concrete blocks", ru(W*(Number(ctx.brickwallBlocksPerM2)||10))]);
-    merge(["Building sand", sand]);
-    merge(["Cement", 6*sand]);
-    merge(["Feb", ru(W/10)]);
     const wallProd = (S.settings && S.settings.productivity && Number(S.settings.productivity.brickwall)) || 2.7;
-    const stepDays = (tread.personDays||0) + W/wallProd;
+    const skinLib = ctx.brickwallFaceProducts || [];
+    const skinLine = (prod, area) => [prod.name, prod.facePricedPer==="m2" ? r6(area) : ru(area*(Number(prod.piecesPerM2)||0)), ctx.netPrice(prod.price, prod.vatIncluded), '', prod.facePricedPer==="m2" ? 'm²' : 'each'];
+    const skinOk = (prod, what) => { if(!prod) return `Select the ${what} for the steps`; if(prod.facePricedPer!=="m2" && !(Number(prod.piecesPerM2)>0)) return `The ${what} for the steps needs a pieces-per-m² figure`; if(!(Number(prod.price)>0)) return `The ${what} for the steps can't be £0`; return null; };
+    raw.blockers = (raw.blockers||[]).slice();
+    const face = opt.stepsFace ? skinLib.find(x=>x.name===opt.stepsFaceProduct) || null : null;
+    if(opt.stepsFace){ const e = skinOk(face, 'face skin product'); if(e) raw.blockers.push(e); else merge(skinLine(face, W)); }
+    let stepDays = (tread.personDays||0);
+    if(opt.stepsBuild==="Concrete"){
+      // Cast in concrete like a Concrete base: the steps' volume, mixed on site or ready-mix.
+      const V = st.volume;
+      if(opt.stepsReadyMix){
+        const rm = (ctx.cbReadyMix||[]).find(x=>x.name===opt.stepsReadyMixProduct);
+        if(!rm) raw.blockers.push("Select a ready-mix for the steps"); else merge([rm.name, ru(V*2)/2, ctx.netPrice(rm.price, rm.vatIncluded), '', 'm³']);
+      } else {
+        const baseVol = (Number(ctx.cbBaseArea)||10)*((Number(ctx.cbBaseDepth)||100)/1000);
+        const scale = baseVol>0 ? V/baseVol : 0;
+        merge(["Sharp sand", ru(scale*(Number(ctx.cbSharpSand)||1))]); merge(["Ballast", ru(scale*(Number(ctx.cbBallast)||1))]); merge(["Cement", ru(scale*(Number(ctx.cbCement)||12))]);
+      }
+      if(opt.stepsShuttering){
+        const sh = (ctx.cbShuttering||[]).find(x=>x.name===opt.stepsShuttering);
+        if(!sh) raw.blockers.push("Select the shuttering for the steps");
+        else if(!(Number(sh.lengthMm)>0)) raw.blockers.push(`The shuttering "${sh.name}" needs a board length (mm)`);
+        else merge([sh.name, ru(r6(st.run*1000)/Number(sh.lengthMm)) * ru(st.maxH/(Number(ctx.cbBoardHeight)||150)), ctx.netPrice(sh.price, sh.vatIncluded), '', 'board']);
+      }
+      if(face){ const sand = ru(W/14); merge(["Building sand", sand]); merge(["Cement", 6*sand]); merge(["Feb", ru(W/10)]); }
+      stepDays += W/wallProd + (face ? W/wallProd : 0);
+    } else {
+      // Risers built like a Block Retaining Wall: the riser blocks (concrete blocks unless another
+      // wall skin product is picked) and mortar; a face skin adds a second skin's mortar and wall ties.
+      const insideName = opt.stepsInside || "Concrete blocks";
+      if(insideName==="Concrete blocks") merge(["Concrete blocks", ru(W*(Number(ctx.brickwallBlocksPerM2)||10))]);
+      else { const ip = skinLib.find(x=>x.name===insideName) || null; const e = skinOk(ip, 'riser blocks or bricks'); if(e) raw.blockers.push(e); else merge(skinLine(ip, W)); }
+      const skins = face ? 2 : 1;
+      const sand = ru(W/14)*skins;
+      merge(["Building sand", sand]); merge(["Cement", 6*sand]); merge(["Feb", ru(W/10)*skins]);
+      if(face) merge(["Wall ties", ru(W/10)]);
+      stepDays += W/wallProd;
+    }
     raw.personDays = (raw.personDays||0) + stepDays;
     raw.days = ruq(raw.personDays/(ctx.peopleOnSite||1));
     (raw.plant||[]).forEach(p=>{ if(p[3]!=='flat') p[2] = raw.days; });
     if(raw.wasteArea==null) raw.wasteArea = raw.area;
     raw.area = (raw.area||0) + st.tread;
-    raw.blockers = (raw.blockers||[]).slice();
     if(!slab) raw.blockers.push("Select a slab for the step treads");
     raw.keyFigures = [["Total area", raw.area.toFixed(2)+" m²"], ["Steps", `${st.count} (${st.tread.toFixed(2)} m² of treads)`], ["Days required", raw.days]];
     return raw;
   }},
 
 gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Area", cols:["desc","width","length","digOutDepth"],
-  cut:{edging:['edgingStyle']},
+  cut:{options:['gridProduct'], edging:['edgingStyle']},
   colLabels:["Description","Width (m)","Length (m)","Dig-out depth (mm)"],
   // Each area picks its own gravel type (materials-list pick, priced per tonne). A new line starts
   // with the type of the line above. Quotes saved before this used one type for the whole job
@@ -885,17 +939,21 @@ gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Are
       hint:"Pick a gravel you've already added, or add a new one (price per tonne) — it's saved to your materials for future quotes too."},
     {key:"gravelDepth",label:"Gravel depth (mm)",type:"number",default:50,
       hint:"Depth of the finished gravel layer. The Type 1 MOT depth on each row is that row's dig-out depth minus this — a row dug out only as deep as the gravel needs no Type 1 MOT (and only one membrane)."},
+    {key:"grids",label:"Gravel grids?",type:"yesno",default:false},
+    {key:"gridProduct",label:"Gravel grid (£ per m²)",type:"select",source:"gravelGrids",default:"",showIf:"grids",placeholder:"Select a gravel grid…",
+      sourceLabel:e=>`${e.name} — £${(Number(e.price)||0).toFixed(2)} per m²`, addLabel:"gravel grid (price per m²)", addFields:["price"],
+      hint:"Laid under the gravel across every area; quantity = the area, plus the Wastage for cuts % below."},
     {key:"edging",label:"Edging needed?",type:"yesno",default:false},
-    {key:"edgingStyle",label:"Edging style",type:"select",source:"gravelEdgingStyles",extraOptions:[{value:GRAVEL_STEEL_EDGING,label:"Steel edging"}],
+    {key:"edgingStyle",label:"Edging style",type:"select",source:"edgingStyles",extraOptions:[{value:GRAVEL_STEEL_EDGING,label:"Welded steel edging"}],
       default:"",showIf:"edging",placeholder:"Select an edging style…", addLabel:"edging style", addFields:["piecesPerMetre","price"],
-      hint:"Pick an edging style you've added, add a new one, or choose Steel edging — that adds the Steel Edging service to this quote, where you enter its length."},
+      hint:"Pick an edging style you've added, add a new one, or choose Welded steel edging — that adds the Welded Steel Edging service to this quote, where you enter its length."},
     {key:"edgingLength",label:"Edging length (m)",type:"number",default:"",placeholder:"Total edging length",
       showIf:o=>!!o.edging && o.edgingStyle!==GRAVEL_STEEL_EDGING},
     {key:"edgingProductivity",label:"Edging productivity (m/day/person)",type:"number",default:12,
       showIf:o=>!!o.edging && o.edgingStyle!==GRAVEL_STEEL_EDGING, hint:"How much edging ONE PERSON lays per day — override for this job if needed."},
     {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:16.7,hint:"How much ONE PERSON lays per day — override for this job if needed."},
-    {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0, showIf:o=>!!o.edging && o.edgingStyle!==GRAVEL_STEEL_EDGING,
-      hint:"Extra timber or composite edging strips for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
+    {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0, showIf:o=>!!o.grids || (!!o.edging && o.edgingStyle!==GRAVEL_STEEL_EDGING),
+      hint:"Extra gravel grids, and timber or composite edging strips, for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
   ],
   calc(rows, opt, ctx){
     // Per row in whole mm (r6/ru round to 6dp first). Gravel and MOT tonnages are summed across
@@ -907,7 +965,7 @@ gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Are
     // A row saved before the rework has no digOutDepth of its own — fall back to that job's old
     // single dig-out option (or 150).
     const legacyDepth = Number(opt.digOutDepth)>0 ? Number(opt.digOutDepth) : 150;
-    let area=0, motT=0, volumeM3=0, membrane=0; const depths=[];
+    let area=0, motT=0, volumeM3=0, membrane=0, dugArea=0; const depths=[];
     // Gravel tonnes per type (each area has its own type), each total rounded up once.
     const gravelByType = {}; const typeOrder = [];
     rows.forEach((r,ri)=>{
@@ -915,7 +973,7 @@ gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Are
       if(!(wm*lm>0)) return;
       const a = r6(wm*lm);
       const d = r.digOutDepth===undefined ? legacyDepth : (Number(r.digOutDepth)||0);
-      area += a; depths.push(d); volumeM3 += a*(d/1000);
+      area += a; depths.push(d); volumeM3 += a*(d/1000); if(d>0) dugArea += a;
       const type = r.gravelType || opt.style || '';
       if(!type) blockers.push(`Select a gravel type for line ${ri+1}${(r.desc||'').trim()?` (${r.desc.trim()})`:''}`);
       else { if(!(type in gravelByType)){ gravelByType[type] = 0; typeOrder.push(type); } gravelByType[type] += (a/cov)*(gravelDepth/base); }
@@ -925,7 +983,8 @@ gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Are
       membrane += a * (d > gravelDepth ? 2 : 1);
     });
     const hasArea = area>0;
-    if(depths.some(d=>gravelDepth>d)) blockers.push(`Gravel depth (${gravelDepth}mm) can't be more than a row's dig-out depth — dig out at least as deep as the gravel`);
+    // A 0mm dig-out is a top dressing on the existing ground (no excavation, no MOT, no muck-away).
+    if(depths.some(d=>d>0 && gravelDepth>d)) blockers.push(`Gravel depth (${gravelDepth}mm) can't be more than a row's dig-out depth — dig out at least as deep as the gravel`);
     if(hasArea) typeOrder.forEach(t=>{ if(!(ctx.price(t)>0)) blockers.push(`The price of "${t}" can't be £0`); });
     // Edging: a tenant-built style is priced here; Steel edging is priced by its own section.
     const steel = !!opt.edging && opt.edgingStyle===GRAVEL_STEEL_EDGING;
@@ -933,7 +992,7 @@ gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Are
     const es = (opt.edging && !steel && opt.edgingStyle) ? (ctx.gravelEdgingStyles||[]).find(x=>x.name===opt.edgingStyle) : null;
     const edgingLen = (opt.edging && !steel) ? (Number(opt.edgingLength)||0) : 0;
     if(opt.edging && !steel && !legacyEdging && hasArea){
-      if(!es) blockers.push("Select an edging style (or Steel edging)");
+      if(!es) blockers.push("Select an edging style (or Welded steel edging)");
       else if(!(edgingLen>0)) blockers.push("Enter the edging length (m)");
       else if(!(Number(es.piecesPerMetre)>0)) blockers.push("The edging style's pieces per metre must be greater than 0");
       else if(!(Number(es.price)>0)) blockers.push("The edging style price can't be £0");
@@ -944,16 +1003,20 @@ gravel: { label:"Gravel areas & paths", group:"Hard landscaping", unitLabel:"Are
     const edgingLine = es ? [opt.edgingStyle, esQty, ctx.netPrice(es.price, es.vatIncluded), '', 'each']
       : legacyEdging ? (opt.edgingType==="Block edging" ? ["Edging blocks", ru(20*edgingLen)] : ["Edging for gravel", edgingLen])
       : ['', 0];
+    const grid = opt.grids ? (ctx.gravelGrids||[]).find(x=>x.name===opt.gridProduct) : null;
+    if(opt.grids && hasArea){ if(!grid) blockers.push("Select a gravel grid"); else if(!(Number(grid.price)>0)) blockers.push("The gravel grid price can't be £0"); }
     const mats = [
       ["Geotextile membrane", membrane],
       ["Type 1 MOT", ru(motT)],
+      grid ? [grid.name, r6(area), ctx.netPrice(grid.price, grid.vatIncluded), '', 'm²'] : ['', 0],
       ...typeOrder.map(t=>[t, ru(gravelByType[t])]),
       edgingLine,
       ["Consumables", hasArea ? (ctx.gravelConsumablesQty!=null ? Number(ctx.gravelConsumablesQty) : 1) : 0],
     ];
     const plant = [["Plate Compactor",1,days]];
-    const digOutDepth = hasArea ? (volumeM3/area)*1000 : 0;
-    return {area, days, personDays, digOutDepth, blockers, materials:mats, plant, keyFigures:[["Total area",area.toFixed(2)+" m²"],["Days required",days]]};
+    // Only dug-out areas feed the waste pool (a top-dressed area has nothing to take away).
+    const digOutDepth = dugArea>0 ? (volumeM3/dugArea)*1000 : 0;
+    return {area, wasteArea: dugArea, days, personDays, digOutDepth, blockers, materials:mats, plant, keyFigures:[["Total area",area.toFixed(2)+" m²"],["Days required",days]]};
   }},
 
 fencing: { label:"Fencing", group:"Hard landscaping", unitLabel:"Length", cols:["desc","length"],
@@ -1087,13 +1150,16 @@ blockpaving: { label:"Block paving", group:"Hard landscaping", unitLabel:"Area",
     // see ctxFor and the "Block paving" card in Settings → Pricing.
     {key:"style",label:"Block style",type:"select",options:[],default:"",customizable:"block",
       hint:"Pick a block you've already added, or add a new one — it's saved to your materials for future quotes too."},
+    {key:"bedding",label:"Bedding material (£ per tonne)",type:"select",source:"beddingMaterials",default:"",placeholder:"Select a bedding material…",
+      addLabel:"bedding material (price per tonne)", addFields:["price"],
+      hint:"The 50mm laying course under the blocks — e.g. sharp sand, limestone chip 0–6mm or granite dust. One list shared with Artificial turf."},
     {key:"jointingCompound",label:"Jointing compound",type:"select",source:"blockJointingCompounds",default:"",placeholder:"Select a jointing compound…",
       addLabel:"jointing compound", addFields:["price","coverage"], addFieldDefaults:{coverage:8},
       hint:"Pick one you've already added, or add a new one — it's saved to your Block paving settings for future quotes too."},
     // No "edging needed?" gate — a blank length (the default) simply means no edging, and the old
     // automatic perimeter calculation is gone entirely; the user enters however much they need.
     {key:"edgingLength",label:"Edging length (m)",type:"number",default:"",placeholder:"Leave blank for no edging"},
-    {key:"edgingStyle",label:"Edging style",type:"select",source:"blockEdgingStyles",default:"",placeholder:"Select an edging style…",
+    {key:"edgingStyle",label:"Edging style",type:"select",source:"edgingStyles",default:"",placeholder:"Select an edging style…",
       addLabel:"edging style", addFields:["piecesPerMetre","price"],
       hint:"Pick one you've already added, or add a new one — it's saved to your Block paving settings for future quotes too."},
     {key:"edgingProductivity",label:"Edging productivity (m/day/person)",type:"number",default:12,hint:"How much edging ONE PERSON lays per day — override for this job if needed."},
@@ -1129,7 +1195,8 @@ blockpaving: { label:"Block paving", group:"Hard landscaping", unitLabel:"Area",
     // 150mm MOT depth — both the baseline rate and baseline depth are editable settings, so at the
     // defaults (250mm dig-out, 100mm surface build-up -> 150mm MOT depth) 40m² still needs
     // ROUNDUP(40×0.3×(150/150)) = 12 tonnes.
-    const surfaceBuildUp = ctx.blockPavingSurfaceBuildUp!=null ? Number(ctx.blockPavingSurfaceBuildUp) : 100;
+    // Fixed: 50mm bedding + 50mm block, whatever the bedding material.
+    const surfaceBuildUp = 100;
     const motBaselineRate = ctx.blockPavingMotBaselineRate!=null ? Number(ctx.blockPavingMotBaselineRate) : 0.3;
     const motBaselineDepth = ctx.blockPavingMotBaselineDepth!=null ? Number(ctx.blockPavingMotBaselineDepth) : 150;
     const motDepth = Math.max(0, digOutDepth - surfaceBuildUp);
@@ -1151,25 +1218,36 @@ blockpaving: { label:"Block paving", group:"Hard landscaping", unitLabel:"Area",
     const esQty = es ? edgingLen*(Number(es.piecesPerMetre)||0) : 0;
     const esPrice = es ? ctx.netPrice(es.price, es.vatIncluded) : 0;
     const consumablesQty = ctx.blockPavingConsumablesQty!=null ? Number(ctx.blockPavingConsumablesQty) : 1;
+    const bed = opt.bedding ? (ctx.beddingMaterials||[]).find(x=>x.name===opt.bedding) : null;
+    const blockers = [];
+    if(area>0 && opt.bedding!==undefined){ if(!bed) blockers.push("Select a bedding material"); else if(!(Number(bed.price)>0)) blockers.push("The bedding material price can't be £0"); }
     const mats = [
       ["Geotextile membrane", area],
       ["Type 1 MOT", motQty],
       ["Sharp sand", sand],
       ["Cement", sand],
-      ["Limestone 2-6mm", ru(area/10)],
+      // Bedding: 50mm laying course (area ÷ 10 tonnes). A quote saved before the choice existed keeps limestone.
+      opt.bedding===undefined ? ["Limestone 2-6mm", ru(area/10)]
+        : (bed ? [bed.name, area>0 ? ru(area/10) : 0, ctx.netPrice(bed.price, bed.vatIncluded), '', 'tonne'] : ['', 0]),
       [opt.style||'', opt.style? blockQty:0],
       [opt.jointingCompound||'', jcQty, opt.jointingCompound? jcPrice:0, '', 'unit'],
       [es? opt.edgingStyle:'', esQty, es? esPrice:0, '', 'each'],
       ["Consumables", area>0? consumablesQty:0],
     ];
     const plant = [["Plate Compactor",1,days],["Cement Mixer",1,days]];
-    return {area, days, personDays, digOutDepth, motDepth, materials:mats, plant, keyFigures:[["Total area",area.toFixed(2)+" m²"],["Avg dig-out depth",digOutDepth.toFixed(0)+" mm"]]};
+    return {area, days, personDays, digOutDepth, motDepth, blockers, materials:mats, plant, keyFigures:[["Total area",area.toFixed(2)+" m²"],["Avg dig-out depth",digOutDepth.toFixed(0)+" mm"]]};
   }},
 
 resinbound: { label:"Resin bound", group:"Hard landscaping", unitLabel:"Area", cols:["desc","width","length"],
   colLabels:["Description","Width (m)","Length (m)"],
   options:[
-    {key:"system",label:"Resin system",type:"select",options:["Addagrip Addagrid","Resin path on concrete"],default:"Addagrip Addagrid",hint:"Addagrip Addagrid is the standard grid-and-resin driveway build. Resin path on concrete is a simpler site-mixed concrete base with resin kits poured over the top."},
+    // October 2026: resin systems are the business's own (name + materials, each with a cost and an
+    // m² coverage, or once per job) — set up during first-time setup or in Settings. A quote saved
+    // before this used one of two built-in systems (options.system) and still prices that way.
+    {key:"resinSystem",label:"Resin system",type:"select",source:"resinSystems",default:"",placeholder:"Select a resin system…",
+      addAction:"resinSystemBuilder", addOptionLabel:"+ Add new…", showIf:o=>o.system===undefined || o.resinSystem!==undefined,
+      hint:"Your resin systems and their materials are in Settings → Pricing → Resin bound."},
+    {key:"system",label:"Resin system",type:"select",options:["Addagrip Addagrid","Resin path on concrete"],showIf:o=>o.resinSystem===undefined,hint:"Addagrip Addagrid is the standard grid-and-resin driveway build. Resin path on concrete is a simpler site-mixed concrete base with resin kits poured over the top."},
     {key:"digOutDepth",label:"Dig-out depth (mm)",type:"number",default:115,
       hint:"How deep the sub-base/ground is excavated (115mm matches the resin-path-on-concrete build) — feeds the shared Waste removal & site clearance totals."},
     {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:5,hint:"How much ONE PERSON lays per day — override for this job if needed."},
@@ -1184,6 +1262,23 @@ resinbound: { label:"Resin bound", group:"Hard landscaping", unitLabel:"Area", c
     // onto labour cost (see priceSection's extraLabourDays) regardless of crew size, same as before.
     const prepDays = area<=0 ? 0 : ruq(area/40);
     let mats;
+    const blockers = [];
+    if(opt.resinSystem!==undefined){
+      // The business's own system: each material = ROUNDUP(area ÷ its coverage), or once per job.
+      const sys = (ctx.resinSystems||[]).find(x=>x.name===opt.resinSystem);
+      if(!sys){ if(area>0) blockers.push("Select a resin system"); mats = []; }
+      else {
+        mats = (sys.lines||[]).filter(l=>l && l.material).map(l=>{
+          const cov = Number(l.coverage)||0;
+          if(area>0 && !l.perJob && !(cov>0)) blockers.push(`"${l.material}" in ${sys.name} needs an m² coverage`);
+          const qty = area>0 ? (l.perJob ? 1 : (cov>0 ? ru(area/cov) : 0)) : 0;
+          return [l.material, qty, ctx.netPrice(Number(l.price)||0, sys.vatIncluded!==false), l.supplier||'', l.unit||'unit'];
+        });
+      }
+      const plant = [["Plate Compactor",1,days],["Resin mixer",1,days]];
+      const digOutDepth = Number(opt.digOutDepth)||0;
+      return {area, days, personDays, digOutDepth, extraLabourDays:prepDays, blockers, materials:mats, plant, keyFigures:[["Total area",area.toFixed(2)+" m²"],["Prep days",prepDays]]};
+    }
     if(opt.system==="Resin path on concrete"){
       // Simpler build: geotextile membrane laid for ground stability (1m² per m²), then a
       // site-mixed concrete base (1 bag ballast + 1 bag sharp sand per 10m², 1.2 bags of cement
@@ -1232,18 +1327,22 @@ artificialturf: { label:"Artificial turf", group:"Planting & beds", unitLabel:"A
     {key:"turfProduct",label:"Artificial turf (£ per m²)",type:"select",source:"atTurf",default:"",placeholder:"Select a turf…",
       sourceLabel:e=>`${e.name} — £${(Number(e.price)||0).toFixed(2)} per m²`, addLabel:"artificial turf (price per m²)", addFields:["price"],
       hint:"Quantity = the area, plus the Wastage for cuts % below."},
-    {key:"grano",label:"Grano dust (£ per tonne)",type:"select",source:"atGrano",default:"",placeholder:"Select a grano dust…",
-      addLabel:"grano dust (price per tonne)", addFields:["price"]},
+    {key:"grano",label:"Bedding material (£ per tonne)",type:"select",source:"beddingMaterials",default:"",placeholder:"Select a bedding material…",
+      addLabel:"bedding material (price per tonne)", addFields:["price"],
+      hint:"The laying course under the turf — e.g. grano dust, limestone chippings or sharp sand. One list shared with Block paving."},
     {key:"infill",label:"Infill sand (£ per bag)",type:"select",source:"atInfill",default:"",placeholder:"Select an infill sand…",
       addLabel:"infill sand (price per bag)", addFields:["price"]},
-    {key:"edgingStyle",label:"Edging style",type:"select",source:"atEdgingStyles",extraOptions:[{value:GRAVEL_STEEL_EDGING,label:"Steel edging"}],
+    {key:"edgingStyle",label:"Edging style",type:"select",source:"edgingStyles",extraOptions:[{value:GRAVEL_STEEL_EDGING,label:"Welded steel edging"}],
       default:"",placeholder:"No edging / select a style…", addLabel:"edging style", addFields:["piecesPerMetre","price"],
-      hint:"A non-steel edging is set in a concrete edge restraint. Steel edging adds the Steel Edging service, where you enter its length."},
+      hint:"A non-steel edging is set in a concrete edge restraint. Welded steel edging adds the Welded Steel Edging service, where you enter its length."},
     {key:"edgingLength",label:"Edging length (m)",type:"number",default:"",placeholder:"Blank = no edging",
       showIf:o=>o.edgingStyle!==GRAVEL_STEEL_EDGING},
-    {key:"seamTape",label:"Adhesive seam tape (£ per roll)",type:"select",source:"atSeamTape",default:"",placeholder:"Select a seam tape…",
-      showIf:o=>o.edgingStyle!==GRAVEL_STEEL_EDGING && Number(o.edgingLength)>0,
-      addLabel:"seam tape (price per roll)", addFields:["price"], hint:"Rolls = ROUNDUP(edging length ÷ the roll length in Settings)."},
+    {key:"joins",label:"Are there any joins?",type:"yesno",default:false},
+    {key:"joinCount",label:"Number of joins",type:"number",default:1,showIf:"joins",hint:"Each join adds a quarter of a day's labour."},
+    {key:"joinLength",label:"Total join length (m)",type:"number",default:"",showIf:"joins"},
+    {key:"seamTape",label:"Jointing tape (£ per roll)",type:"select",source:"atSeamTape",default:"",placeholder:"Select a jointing tape…",
+      showIf:"joins", addLabel:"jointing tape", addFields:["price","rollLengthM"], addFieldDefaults:{rollLengthM:20},
+      hint:"Rolls = ROUNDUP(join length ÷ the tape's roll length)."},
     {key:"edgingProductivity",label:"Edging productivity (m/day/person)",type:"number",default:12,
       showIf:o=>o.edgingStyle!==GRAVEL_STEEL_EDGING && Number(o.edgingLength)>0, hint:"How much edging ONE PERSON lays per day — override for this job if needed."},
     {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:5,hint:"How much ONE PERSON lays per day — override for this job if needed."},
@@ -1277,20 +1376,29 @@ artificialturf: { label:"Artificial turf", group:"Planting & beds", unitLabel:"A
     });
     const has = area>0;
     const find = (lib, name) => name ? (ctx[lib]||[]).find(x=>x.name===name) : null;
-    const turf = find('atTurf', opt.turfProduct), grano = find('atGrano', opt.grano), infill = find('atInfill', opt.infill);
+    const turf = find('atTurf', opt.turfProduct), grano = find('beddingMaterials', opt.grano) || find('atGrano', opt.grano), infill = find('atInfill', opt.infill);
     const steel = opt.edgingStyle===GRAVEL_STEEL_EDGING;
     const es = steel ? null : find('atEdgingStyles', opt.edgingStyle);
     const edgingLen = steel ? 0 : (Number(opt.edgingLength)||0);
     const concrete = !!es && edgingLen>0;
-    const tape = edgingLen>0 ? find('atSeamTape', opt.seamTape) : null;
+    // Jointing tape is for the joins between rolls. A quote saved before the joins question priced
+    // the tape on the edging length instead — that stays as it was.
+    const legacyTape = opt.joins===undefined;
+    const joinLen = legacyTape ? edgingLen : (opt.joins ? (Number(opt.joinLength)||0) : 0);
+    const joinCount = (!legacyTape && opt.joins) ? Math.max(0, Math.floor(Number(opt.joinCount)||0)) : 0;
+    const tape = joinLen>0 ? find('atSeamTape', opt.seamTape) : null;
     if(has){
       if(!turf) blockers.push("Select an artificial turf");
-      if(!grano) blockers.push("Select a grano dust");
+      if(!grano) blockers.push("Select a bedding material");
       if(!infill) blockers.push("Select an infill sand");
       if(edgingLen>0){
         if(!es) blockers.push("Select an edging style for the edging length entered");
         else if(!(Number(es.piecesPerMetre)>0)) blockers.push("The edging style's pieces per metre must be greater than 0");
-        if(!tape) blockers.push("Select an adhesive seam tape");
+        if(legacyTape && !tape) blockers.push("Select an adhesive seam tape");
+      }
+      if(!legacyTape && opt.joins){
+        if(!(joinLen>0)) blockers.push("Enter the total join length");
+        else if(!tape) blockers.push("Select a jointing tape");
       }
     }
     const lib = (prod, qty, unit) => [prod.name, qty, ctx.netPrice(prod.price, prod.vatIncluded), '', unit];
@@ -1298,7 +1406,7 @@ artificialturf: { label:"Artificial turf", group:"Planting & beds", unitLabel:"A
     if(grano) mats.push(lib(grano, has ? ru(area/10) : 0, 'tonne'));
     if(turf) mats.push(lib(turf, has ? ru(area) : 0, 'm²'));   // + the quote's "Wastage for cuts"
     if(infill) mats.push(lib(infill, has ? ru(area/(Number(ctx.atInfillCoverage)||5)) : 0, 'bag'));
-    if(tape) mats.push(lib(tape, ru(edgingLen/(Number(ctx.atSeamTapeRollLength)||20)), 'roll'));
+    if(tape) mats.push(lib(tape, ru(joinLen/(Number(tape.rollLengthM)||Number(ctx.atSeamTapeRollLength)||20)), 'roll'));
     if(concrete){
       const ss = ru(edgingLen/10), bl = ru(edgingLen/10);
       mats.push(lib(es, ru(edgingLen*(Number(es.piecesPerMetre)||0)), 'each'));
@@ -1306,7 +1414,7 @@ artificialturf: { label:"Artificial turf", group:"Planting & beds", unitLabel:"A
     }
     mats.push(["Consumables", has ? (ctx.atConsumablesQty!=null ? Number(ctx.atConsumablesQty) : 1) : 0]);
     if(has) bldZeroPriceBlockers(mats, [], ctx).forEach(x=>blockers.push(x));
-    const personDays = area/(Number(opt.productivity)||5) + (concrete ? edgingLen/(Number(opt.edgingProductivity)||12) : 0);
+    const personDays = area/(Number(opt.productivity)||5) + (concrete ? edgingLen/(Number(opt.edgingProductivity)||12) : 0) + 0.25*joinCount;
     const days = ruq(personDays/(ctx.peopleOnSite||1));
     const plant = [["Plate Compactor",1,days]];
     if(concrete) plant.push(["Cement Mixer",1,days]);
@@ -1321,12 +1429,18 @@ concretebase: { label:"Concrete base", group:"Hard landscaping", unitLabel:"Area
   // depth setting; each row can be mixed on site or ready-mix, with or without mesh (rows render
   // as cards — see concreteRowHtml). See calc().
   rowHtml:(r,i,o)=>concreteRowHtml(r,i,o),
+  // Concrete thickness is its own figure on each base (not dig-out − MOT), so a base can be built
+  // up above the ground as well as dug down.
+  rowDefaults:{thickness:100},
   options:[
+    {key:"mot",label:"Type 1 MOT sub-base?",type:"yesno",default:true,
+      hint:"No = the concrete goes straight onto the compacted ground (no MOT). The MOT depth is set in Settings → Pricing → Concrete base."},
     {key:"shutteringProduct",label:"Shuttering (£ per board)",type:"select",source:"cbShuttering",default:"",placeholder:"Select shuttering…",
       sourceLabel:e=>`${e.name} — ${Number(e.lengthMm)||0}mm board`, addLabel:"shuttering board", addFields:["price","lengthMm"]},
     {key:"shutteringLength",label:"Shuttering length (m)",type:"number",default:"",placeholder:"Blank = no shuttering",
       hint:"Boards = ROUNDUP(length ÷ board length) × boards high (concrete depth ÷ board height, rounded up)."},
-    {key:"screwProduct",label:"Screws (£ per box)",type:"select",source:"cbScrews",default:"",placeholder:"Select screws…",addLabel:"screws (price per box)",addFields:["price"]},
+    {key:"screwProduct",label:"Screws for the shuttering (£ per box)",type:"select",source:"cbScrews",default:"",placeholder:"Select screws…",addLabel:"screws (price per box)",addFields:["price"],
+      showIf:o=>Number(o.shutteringLength)>0, hint:"Boxes per job come from Settings → Pricing → Concrete base (a set number, not worked out from the length)."},
     {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:5,hint:"How much ONE PERSON lays per day — override for this job if needed."},
   ],
   calc(rows, opt, ctx){
@@ -1342,7 +1456,8 @@ concretebase: { label:"Concrete base", group:"Hard landscaping", unitLabel:"Area
         plant:[["Plate Compactor",1,days],["Cement Mixer",1,days]], keyFigures:[["Total area",area.toFixed(2)+" m²"],["Edge length",edge.toFixed(2)+" m"]]};
     }
     const blockers = [];
-    const motDepth = ctx.cbMotDepth!=null ? Number(ctx.cbMotDepth) : 100;
+    const motSetting = ctx.cbMotDepth!=null ? Number(ctx.cbMotDepth) : 100;
+    const motDepth = opt.mot===false ? 0 : motSetting;
     const motRate = ctx.cbMotRate!=null ? Number(ctx.cbMotRate) : 0.3;
     const motBase = Number(ctx.cbMotBaselineDepth)||150;
     const find = (lib, name) => name ? (ctx[lib]||[]).find(x=>x.name===name) : null;
@@ -1353,11 +1468,19 @@ concretebase: { label:"Concrete base", group:"Hard landscaping", unitLabel:"Area
       if(!(wm*lm>0)) return;
       const label = `Row ${ri+1}${(r.desc||'').trim()?` (${r.desc.trim()})`:''}`;
       const a = r6((r6(wm*1000)*r6(lm*1000))/1e6);
-      const D = cbRowDig(r, opt, motDepth);
+      const D = cbRowDig(r, opt, motSetting);
       area += a; digVol += a*(D/1000);
       motT += a*motRate*(motDepth/motBase);
-      if(D<=motDepth){ blockers.push(`${label}: the dig-out depth (${D}mm) must be deeper than the ${motDepth}mm MOT depth`); return; }
-      const cd = D - motDepth;
+      let cd;
+      if(r.thickness!==undefined){
+        // Its own concrete thickness: dig-out can be anything (0 = built up on the ground).
+        cd = Number(r.thickness)||0;
+        if(!(cd>0)){ blockers.push(`${label}: enter the concrete thickness`); return; }
+      } else {
+        // Saved before thickness was its own figure: concrete = dig-out − MOT.
+        if(D<=motDepth){ blockers.push(`${label}: the dig-out depth (${D}mm) must be deeper than the ${motDepth}mm MOT depth`); return; }
+        cd = D - motDepth;
+      }
       maxConc = Math.max(maxConc, cd);
       const vol = a*(cd/1000);
       if(r.readyMix){
@@ -1397,9 +1520,10 @@ concretebase: { label:"Concrete base", group:"Hard landscaping", unitLabel:"Area
         mats.push(lib(sh, ru(r6(shutLen*1000)/Number(sh.lengthMm))*high, 'board'));
       }
     }
-    if(has){
+    // Screws hold the shuttering together, so they're only needed with shuttering.
+    if(has && shutLen>0){
       const sc = find('cbScrews', opt.screwProduct);
-      if(!sc) blockers.push("Select the screws");
+      if(!sc) blockers.push("Select the screws for the shuttering");
       else mats.push(lib(sc, ctx.cbScrewsQty!=null ? Number(ctx.cbScrewsQty) : 1, 'box'));
     }
     mats.push(["Consumables", has ? (ctx.cbConsumablesQty!=null ? Number(ctx.cbConsumablesQty) : 1) : 0]);
@@ -1428,16 +1552,14 @@ brickwall: { label:"Block Retaining Wall", group:"Walls", unitLabel:"Area", cols
       addLabel:"wall skin product", addFields:["price","facePricedPer","piecesPerM2","thicknessMm"],
       hint:"Pick a product you've added, or add a new one — priced per piece (with pieces per m²) or per m², plus its thickness for the coping width. Shared with the inside skin list."},
     {key:"rebar",label:"Rebar in footing?",type:"yesno",default:false},
-    {key:"rebarProduct",label:"Rebar",type:"select",source:"brickwallRebar",default:"",showIf:"rebar",placeholder:"Select a rebar…",
-      addLabel:"rebar", addFields:["price","lengthMm"],
-      hint:"Pick a rebar you've added, or add a new one (price per bar and bar length in mm)."},
+    {key:"rebarProduct",label:"Rebar mesh (£ per sheet)",type:"select",source:"cbMesh",default:"",showIf:"rebar",placeholder:"Select a rebar mesh…",
+      addLabel:"rebar mesh", addFields:["price","widthMm","lengthMm"],
+      hint:"The same rebar mesh list as Concrete base. Sheets = ROUNDUP(footing area ÷ sheet area)."},
     {key:"coping",label:"Coping?",type:"yesno",default:false},
     {key:"copingProduct",label:"Coping",type:"select",source:"brickwallCopings",default:"",showIf:"coping",placeholder:"Select a coping…",
       extraOptions:()=>((S.settings.customStyleOptions && S.settings.customStyleOptions.paving)||[]).map(n=>({value:COPING_SLAB_PREFIX+n, label:n+" (paving slab, per m²)"})),
       addLabel:"coping", addFields:["price","copingPricedPer"],
       hint:"Pick one of your paving slab types or a coping product, or add a new coping (per metre or per m²). Per-m² coping is sized from the wall thickness, face skin and overhang."},
-    {key:"compost",label:"Compost needed?",type:"yesno",default:false},
-    {key:"compostArea",label:"Compost area (m²)",type:"number",default:0,showIf:"compost"},
     {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:2.7,hint:"How much wall area ONE PERSON builds per day — override for this job if needed."},
   ],
   calc(rows, opt, ctx){
@@ -1446,12 +1568,16 @@ brickwall: { label:"Block Retaining Wall", group:"Walls", unitLabel:"Area", cols
     const blockers = [];
     const rebarLines = Number(ctx.brickwallRebarLines)||0;
     const lap = Number(ctx.brickwallRebarLap)||0;
-    const rebar = opt.rebar && opt.rebarProduct ? (ctx.brickwallRebar||[]).find(x=>x.name===opt.rebarProduct) : null;
+    const meshProd = opt.rebar && opt.rebarProduct ? (ctx.cbMesh||[]).find(x=>x.name===opt.rebarProduct) : null;
+    const rebar = opt.rebar && opt.rebarProduct && !meshProd ? (ctx.brickwallRebar||[]).find(x=>x.name===opt.rebarProduct) : null;
     const barLen = rebar ? (Number(rebar.lengthMm)||0) : 0;
-    let wallArea=0, wallLen=0, footArea=0, footVol=0, rebarQty=0; const widths=[], depths=[];
+    const sheetArea = meshProd ? ((Number(meshProd.widthMm)||0)*(Number(meshProd.lengthMm)||0))/1e6 : 0;
+    let wallArea=0, wallLen=0, footArea=0, footVol=0, rebarQty=0, copingArea=0; const widths=[], depths=[];
     rows.forEach(r=>{
       const lm = Number(r.length)||0, hm = Number(r.height)||0;
       wallArea += lm*hm; wallLen += lm;
+      // Per-m² coping (e.g. paving slabs) is sized wall length × footing width.
+      copingArea += lm * ((r.footingWidth===undefined ? 450 : (Number(r.footingWidth)||0))/1000);
       const flm = (r.footingLength===undefined || r.footingLength==='') ? lm : (Number(r.footingLength)||0);
       const fw = r.footingWidth===undefined ? 450 : (Number(r.footingWidth)||0);
       const fd = r.footingDepth===undefined ? 300 : (Number(r.footingDepth)||0);
@@ -1494,12 +1620,8 @@ brickwall: { label:"Block Retaining Wall", group:"Walls", unitLabel:"Area", cols
       const slabName = isSlab ? cp.slice(COPING_SLAB_PREFIX.length) : '';
       const lib = !isSlab && cp ? (ctx.brickwallCopings||[]).find(x=>x.name===cp) : null;
       const perM2 = isSlab || (lib && lib.copingPricedPer==="m2");
-      const faceThk = opt.faceSkin ? (face && face.thicknessMm!=null && face.thicknessMm!=='' ? Number(face.thicknessMm) : null) : 0;
-      const firstThk = firstProd && firstProd.thicknessMm!=null && firstProd.thicknessMm!=='' ? Number(firstProd.thicknessMm) : (Number(ctx.brickwallWallThickness)||0);
-      const widthMm = firstThk + (faceThk||0) + 2*(Number(ctx.brickwallCopingOverhang)||0);
-      const qty = perM2 ? ru(wallLen*widthMm/1000) : wallLen;
+      const qty = perM2 ? ru(r6(copingArea)) : wallLen;
       if(!isSlab && !lib) copingErr = "Select a coping";
-      else if(perM2 && opt.faceSkin && face && faceThk==null) copingErr = "Add a thickness to the face product — it's needed for the coping width";
       else if(isSlab){ if(!(ctx.price(slabName)>0)) copingErr = "The coping price can't be £0"; copingLine = [slabName, qty]; }
       else { if(!(Number(lib.price)>0)) copingErr = "The coping price can't be £0"; copingLine = [cp, qty, ctx.netPrice(lib.price, lib.vatIncluded), '', perM2?'m²':'m']; }
     }
@@ -1517,7 +1639,11 @@ brickwall: { label:"Block Retaining Wall", group:"Walls", unitLabel:"Area", cols
         if(wallTies>0 && !(ctx.price("Wall ties")>0)) blockers.push("Wall ties have no price — enter one in Materials");
       }
       if(opt.rebar){
-        if(!rebar) blockers.push("Select a rebar");
+        if(meshProd){
+          if(!(sheetArea>0)) blockers.push(`The mesh "${meshProd.name}" needs a sheet width and length`);
+          else if(!(Number(meshProd.price)>0)) blockers.push("The rebar mesh price can't be £0");
+        }
+        else if(!rebar) blockers.push("Select a rebar mesh");
         else if(!(barLen-lap>0)) blockers.push("The rebar's bar length must be longer than the lap allowance");
         else if(!(Number(rebar.price)>0)) blockers.push("The rebar price can't be £0");
       }
@@ -1535,12 +1661,12 @@ brickwall: { label:"Block Retaining Wall", group:"Walls", unitLabel:"Area", cols
       Object.assign(firstIsBlocks ? ["Concrete blocks", blocks] : (firstProd ? [firstName, firstQty, ctx.netPrice(firstProd.price, firstProd.vatIncluded), '', firstProd.facePricedPer==="m2"?'m²':'each'] : ['', 0]), {notRowChoice:true}),
       face ? [opt.faceProduct, faceQty, ctx.netPrice(face.price, face.vatIncluded), '', face.facePricedPer==="m2"?'m²':'each'] : ['', 0],
       ["Wall ties", wallTies],
-      rebar ? [opt.rebarProduct, rebarQty, ctx.netPrice(rebar.price, rebar.vatIncluded), '', 'each'] : ['', 0],
+      meshProd ? [meshProd.name, sheetArea>0 ? ru(footArea/sheetArea) : 0, ctx.netPrice(meshProd.price, meshProd.vatIncluded), '', 'sheet']
+        : rebar ? [opt.rebarProduct, rebarQty, ctx.netPrice(rebar.price, rebar.vatIncluded), '', 'each'] : ['', 0],
       ["Blackjack DPM", ru(wallArea/10)],
       ["Pea shingle", peaShingle],
       ["Geotextile membrane", ru(wallArea)],
       copingLine,
-      ["Multi purpose peat free compost", opt.compost ? ru((Number(opt.compostArea)||0)/5) : 0],
       ["Consumables", hasWall ? (ctx.brickwallConsumablesQty!=null ? Number(ctx.brickwallConsumablesQty) : 1) : 0],
     ];
     const plant = [["Plate Compactor",1,days],["Cement Mixer",1,days]];
@@ -1562,7 +1688,7 @@ sleeperwall: { label:"Sleeper retaining wall", group:"Walls", unitLabel:"Area", 
     {key:"screws",label:"Screws",type:"select",source:"sleeperScrews",default:"",placeholder:"Select a screw…",
       addLabel:"screw", addFields:["price","screwsPerBox"],
       hint:"Pick a screw you've added, or add a new one (price per box and screws per box)."},
-    {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:10,hint:"How much wall area ONE PERSON builds per day — override for this job if needed."},
+    {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:7.2,hint:"How much wall area ONE PERSON builds per day — override for this job if needed."},
   ],
   calc(rows, opt, ctx){
     // Whole mm per row (r6/ru/rd round to 6dp first).
@@ -1714,12 +1840,13 @@ pergola: { label:"Pergola", group:"Features", unitLabel:"Area", cols:["desc","le
     {key:"dpmProduct",label:"Blackjack DPM (£ per tin)",type:"select",source:"pgDpm",default:"",placeholder:"Select a DPM…",addLabel:"DPM (price per tin)",addFields:["price"]},
     {key:"screwProduct",label:"Screws (£ per box)",type:"select",source:"pgScrews",default:"",placeholder:"Select screws…",addLabel:"screws (price per box)",addFields:["price"]},
     {key:"roof",label:"Roof?",type:"yesno",default:false},
-    {key:"osbProduct",label:"OSB board (£ per board)",type:"select",source:"pgOsb",default:"",showIf:"roof",placeholder:"Select an OSB board…",addLabel:"OSB board (price per board)",addFields:["price"]},
+    {key:"osbProduct",label:"Roofing board (£ per board)",type:"select",source:"pgOsb",default:"",showIf:"roof",placeholder:"Select a roofing board…",addLabel:"roofing board (price per board)",addFields:["price"],
+      hint:"Always included with a roof — pick one of your roofing boards (e.g. OSB, ply) or add a new one."},
     {key:"coveringProduct",label:"Roof covering",type:"select",source:"pgCoverings",default:"",showIf:"roof",placeholder:"Select a roof covering…",
       sourceLabel:e=>`${e.name} — ${Number(e.coverageM2)||0}m² per unit`, addLabel:"roof covering",addFields:["price","coverageM2"]},
-    {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:16.7,hint:"How much ONE PERSON builds per day — override for this job if needed."},
+    {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:9,hint:"How much ONE PERSON builds per day — override for this job if needed."},
     {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0,
-      hint:"Extra posts, joists and OSB boards for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
+      hint:"Extra posts, joists and roofing boards for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
   ],
   calc(rows, opt, ctx){
     // A quote saved before the rework (old fixed post list) prices the old way.
@@ -1776,7 +1903,7 @@ pergola: { label:"Pergola", group:"Features", unitLabel:"Area", cols:["desc","le
     if(screw) mats.push(lib(screw, has ? ru(area/(Number(ctx.pgScrewCoverage)||10)) : 0, 'box'));
     if(opt.roof && has){
       const osb = find('pgOsb', opt.osbProduct), cov = find('pgCoverings', opt.coveringProduct);
-      if(!osb) blockers.push("Select an OSB board for the roof");
+      if(!osb) blockers.push("Select a roofing board for the roof");
       else mats.push(lib(osb, ru(area/(Number(ctx.pgOsbCoverage)||2)), 'board'));
       if(!cov) blockers.push("Select a roof covering");
       else if(!(Number(cov.coverageM2)>0)) blockers.push(`The roof covering "${cov.name}" needs a coverage (m² per unit)`);
@@ -1860,7 +1987,7 @@ compositedecking: { label:"Composite Decking", group:"Hard landscaping", unitLab
     {key:"fasciaBoard",label:"Fascia board",type:"select",source:"compositeFasciaBoards",default:"",showIf:"fascia",placeholder:"Select a fascia board…",
       addLabel:"fascia board", addFields:["price","lengthMm","widthMm"],
       hint:"Pick one you've already added, or add a new one (price per board, plus its length and width in mm)."},
-    {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:2.7,hint:"How much decking ONE PERSON builds per day — override for this job if needed."},
+    {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:6,hint:"How much decking ONE PERSON builds per day — override for this job if needed."},
     {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0,
       hint:"Extra deck boards, joists and fascia boards for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
   ],
@@ -1985,7 +2112,7 @@ timberdecking: { label:"Timber Decking", group:"Hard landscaping", unitLabel:"Ar
     {key:"screws",label:"Decking screws",type:"select",source:"compositeDeckScrews",default:"",placeholder:"Select a decking screw…",
       addLabel:"decking screw", addFields:["price","screwsPerBox"], addFieldDefaults:{screwsPerBox:100},
       hint:"Pick a screw product you've already added, or add a new one (price per box and screws per box) — shared with Composite decking."},
-    {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:2.7,hint:"How much decking ONE PERSON builds per day — override for this job if needed."},
+    {key:"productivity",label:"Productivity (m²/day/person)",type:"number",default:6,hint:"How much decking ONE PERSON builds per day — override for this job if needed."},
     {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0,
       hint:"Extra deck boards and joists for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
   ],
@@ -2091,7 +2218,10 @@ fence: { label:"Fencing", group:"Fencing", unitLabel:"Length", cols:["desc","len
       hint:"Charged per metre of fence at the 'Remove old fence' rate in Materials. If the old fence needs taking away, add a skip on the Waste step."},
     {key:"gate",label:"Gate?",type:"yesno",default:false},
     {key:"gateCount",label:"Number of gates",type:"number",default:1,showIf:"gate"},
-    {key:"gatePrice",label:"Gate price for this job (£ each inc VAT, optional)",type:"number",default:"",showIf:"gate",placeholder:"Blank = the Gate price in Materials"},
+    {key:"gateType",label:"Gate type",type:"select",source:"fenceGates",default:"",showIf:"gate",placeholder:"Select a gate type…",
+      sourceLabel:e=>`${e.name} — £${(Number(e.price)||0).toFixed(2)}`, addLabel:"gate type", addFields:["price"],
+      hint:"Pick a gate you've saved, or add a new one with its name or style, price and supplier."},
+    {key:"gatePrice",label:"Gate price for this job (£ each inc VAT, optional)",type:"number",default:"",showIf:o=>!!o.gate && o.gateType===undefined,placeholder:"Blank = the Gate price in Materials"},
     {key:"productivity",label:"Productivity (m/day/person)",type:"number",default:"",hint:"Starts at the fence type's own rate — override for this job if needed."},
     {key:"wastagePct",label:"Wastage for cuts (%)",type:"number",default:0,
       hint:"Extra fence panels, fence boards and gravel boards for cuts and offcuts, rounded up — e.g. 10% turns 100 into 110. Nothing else is affected. Leave at 0 for none."},
@@ -2142,7 +2272,13 @@ fence: { label:"Fencing", group:"Fencing", unitLabel:"Length", cols:["desc","len
     (ft.lines||[]).forEach(l=>{ if(l && l.material) mats.push([l.material, bldOnlyIfOk(l,optView) ? bldLineQty(l,c) : 0]); });
     if(opt.removeOld) mats.push(["Remove old fence", len]);
     const gates = opt.gate ? Math.max(0, Math.round(Number(opt.gateCount)||0)) : 0;
-    if(gates>0) mats.push(Number(opt.gatePrice)>0 ? ["Gate", gates, ctx.netPrice(Number(opt.gatePrice), true), ''] : ["Gate", gates]);
+    if(gates>0){
+      if(opt.gateType!==undefined){
+        const gt = (ctx.fenceGates||[]).find(x=>x.name===opt.gateType);
+        if(!gt){ if(has) blockers.push("Select a gate type"); }
+        else mats.push([gt.name, gates, ctx.netPrice(gt.price, gt.vatIncluded), gt.supplier||'', 'each']);
+      } else mats.push(Number(opt.gatePrice)>0 ? ["Gate", gates, ctx.netPrice(Number(opt.gatePrice), true), ''] : ["Gate", gates]);
+    }
     mats.push(["Consumables", has ? (ctx.fenceConsumablesQty!=null ? Number(ctx.fenceConsumablesQty) : 1) : 0]);
     const productivity = Number(opt.productivity) || Number(ft.productivity) || 1;
     const personDays = len/productivity;
@@ -2251,7 +2387,7 @@ waterfeatures: { label:"Water Features", group:"Features", unitLabel:"Count", co
   rowDefaults:{pebbleBags:1},
   rowHtml:(r,i)=>waterFeatureRowHtml(r,i),
   options:[
-    {key:"productivity",label:"Productivity (features/day/person)",type:"number",default:0.7,hint:"How many water features ONE PERSON installs per day — override for this job if needed."},
+    {key:"productivity",label:"Productivity (features/day/person)",type:"number",default:0.5,hint:"How many water features ONE PERSON installs per day — override for this job if needed."},
   ],
   calc(rows, opt, ctx){
     const blockers = [];
@@ -2313,7 +2449,7 @@ waterfeatures: { label:"Water Features", group:"Features", unitLabel:"Count", co
       keyFigures:[["Number of features",count],["Days required",days]]};
   }},
 
-steeledging: { label:"Steel Edging", group:"Hard landscaping", unitLabel:"Length", cols:["desc","length"],
+steeledging: { label:"Welded Steel Edging", group:"Hard landscaping", unitLabel:"Length", cols:["desc","length"],
   rowSelects:[{field:"steelType", label:"Steel edging (£ per metre)", optKey:"steelProduct", source:"steelEdgingProducts", placeholder:"Select steel edging…"}],
   colLabels:["Description","Length (m)"],
   options:[
@@ -2386,9 +2522,9 @@ flowerbeds: { label:"Flower Beds", group:"Planting & beds", unitLabel:"Area", co
     // fbMulchDepth mm (50) is bark mulch, the rest of each row's dig-out is compost. Edging styles are tenant-built, or "Steel edging"
     // which hands the edging run to the Steel Edging service (as Gravel does). See calc().
     {key:"plantingNow",label:"Planting straight away?",type:"yesno",default:false},
-    {key:"edgingStyle",label:"Edging style",type:"select",source:"fbEdgingStyles",extraOptions:[{value:GRAVEL_STEEL_EDGING,label:"Steel edging"}],
+    {key:"edgingStyle",label:"Edging style",type:"select",source:"edgingStyles",extraOptions:[{value:GRAVEL_STEEL_EDGING,label:"Welded steel edging"}],
       default:"",placeholder:"No edging / select a style…", addLabel:"edging style", addFields:["piecesPerMetre","price"],
-      hint:"Leave the edging length blank for no edging. Steel edging adds the Steel Edging service to this quote, where you enter its length."},
+      hint:"Leave the edging length blank for no edging. Welded steel edging adds the Welded Steel Edging service to this quote, where you enter its length."},
     {key:"edgingLength",label:"Edging length (m)",type:"number",default:"",placeholder:"Blank = no edging",
       showIf:o=>o.edgingStyle!==GRAVEL_STEEL_EDGING},
     {key:"edgingProductivity",label:"Edging productivity (m/day/person)",type:"number",default:12,
@@ -2461,7 +2597,12 @@ flowerbeds: { label:"Flower Beds", group:"Planting & beds", unitLabel:"Area", co
 function pavingStepsLetterLine(o){
   if(!o || !o.steps) return [];
   const t = pavingStepTotals(o); if(!(t.count>0)) return [];
-  return [`${t.count} step${t.count===1?'':'s'} built with concrete block risers set in mortar, with treads finished in ${o.stepsSlab ? esc(o.stepsSlab) : 'the same paving'} to match.`];
+  const treads = `with treads finished in ${o.stepsSlab ? esc(o.stepsSlab) : 'the same paving'} to match`;
+  const face = o.stepsFace && o.stepsFaceProduct ? esc(o.stepsFaceProduct) : '';
+  const n = `${t.count} step${t.count===1?'':'s'}`;
+  if(o.stepsBuild==="Concrete") return [`${n} formed in concrete${face?` and faced in ${face}`:''}, ${treads}.`];
+  const inside = o.stepsInside && o.stepsInside!=="Concrete blocks" ? esc(o.stepsInside) : 'concrete block';
+  return [`${n} built with ${inside} risers set in mortar${face?`, faced in ${face}`:''}, ${treads}.`];
 }
 /* Narrative copy used to build the quote letter, in the voice of the existing template */
 const SERVICE_COPY = {
@@ -2474,7 +2615,9 @@ const SERVICE_COPY = {
     const legacy = Number(o.digOutDepth)>0 ? Number(o.digOutDepth) : 150;
     const ds = (s.rows||[]).filter(r=>(Number(r.width)||0)*(Number(r.length)||0)>0).map(r=>r.digOutDepth===undefined ? legacy : Math.round(Number(r.digOutDepth)||0));
     const mn = ds.length ? Math.min(...ds) : legacy, mx = ds.length ? Math.max(...ds) : legacy;
-    const dig = mn===mx ? `to a depth of ${mn}mm` : `to depths of ${mn}–${mx}mm`;
+    const dug = ds.length ? ds.filter(d=>d>0) : [legacy];
+    const dmn = dug.length ? Math.min(...dug) : 0, dmx = dug.length ? Math.max(...dug) : 0;
+    const dig = dmn===dmx ? `to a depth of ${dmn}mm` : `to depths of ${dmn}–${dmx}mm`;
     // Type 1 MOT only where an area is dug out deeper than the gravel.
     const areas = (s.rows||[]).filter(r=>(Number(r.width)||0)*(Number(r.length)||0)>0);
     const motDs = ds.length ? ds.filter(d=>d>gd) : (legacy>gd ? [legacy] : []);
@@ -2487,7 +2630,12 @@ const SERVICE_COPY = {
     const types = [...new Set(areas.map(typeOf).filter(Boolean))];
     const finish = types.length<=1 ? `Finished with ${gd}mm of ${esc(types[0]||o.style||'')}.`
       : `Finished with ${gd}mm of gravel: ${areas.map((r,i)=>`${esc((r.desc||'').trim()||('area '+(i+1)))} in ${esc(typeOf(r))}`).join(', ')}.`;
-    return [`Area excavated ${dig} and the subsoil compacted.`, o.edging ? `Edge restraints installed around the perimeter.` : ``, `Geotextile membrane laid to the excavation.`,
+    const topNames = areas.map((r,i)=>ds[i]===0 ? esc((r.desc||'').trim()||('area '+(i+1))) : null).filter(Boolean);
+    const allTop = ds.length && !dug.length;
+    return [allTop ? `Existing ground levelled and prepared for a top dressing — no excavation.` : `Area excavated ${dig} and the subsoil compacted.`,
+      (!allTop && topNames.length) ? `${topNames.join(', ')} laid directly on the existing ground as a top dressing, with no excavation.` : ``,
+      o.edging ? `Edge restraints installed around the perimeter.` : ``, allTop ? `Geotextile membrane laid over the existing ground.` : `Geotextile membrane laid to the excavation.`,
+      o.grids ? `Gravel grids laid and locked together across the area to stabilise the gravel.` : ``,
       motDs.length ? `A ${mot} compacted Type 1 MOT sub-base installed${someWithout?` (${motNames})`:''}.` : ``,
       motDs.length ? `A second geotextile membrane laid over the sub-base to prevent migration.` : ``, finish].filter(Boolean);
   },
@@ -2504,10 +2652,11 @@ const SERVICE_COPY = {
     const lines = [varied ? `Area excavated to depths of ${Math.min(...rowDepths)}–${Math.max(...rowDepths)}mm (${avg}mm on average) depending on the area.` : `Area excavated to a depth of ${avg}mm.`];
     if(Number(o.edgingLength)>0) lines.push(`Edge restraints installed along ${Number(o.edgingLength)}m of the paved area.`);
     if(mot>0) lines.push(`A ${mot}${varied?'mm average':'mm'} compacted Type 1 MOT sub-base laid.`);
-    lines.push(`A 50mm sharp sand laying course screeded level.`,`${esc(o.style)} laid in the agreed bond pattern with 2–5mm joints.`,`Compacted with a plate compactor.`,`Joints filled with ${o.jointingCompound?esc(o.jointingCompound):'a suitable jointing compound'} and compacted again.`);
+    lines.push(`A 50mm ${o.bedding ? esc(o.bedding) : (o.bedding===undefined ? 'sharp sand' : 'bedding')} laying course screeded level.`,`${esc(o.style)} laid in the agreed bond pattern with 2–5mm joints.`,`Compacted with a plate compactor.`,`Joints filled with ${o.jointingCompound?esc(o.jointingCompound):'a suitable jointing compound'} and compacted again.`);
     return lines;
   },
-  resinbound: (o)=> o.system==="Resin path on concrete" ? [`Area excavated to a depth of 115mm.`,`Geotextile membrane laid for ground stability.`,`100mm of solid concrete laid.`,`15mm of resin bound gravel installed.`] : [`Sub-base excavated and compacted, typically Type 3 MOT.`,`Addagrip grid system laid over the compacted sub-base.`,`Grid filled and screeded with 2–6mm crushed limestone, level with the top of the grid cells.`,`Resin and aggregate mixed on site for the wearing course.`,`Resin bound mix trowelled over the surface to a smooth, compacted, level finish.`],
+  resinbound: (o)=> o.resinSystem!==undefined ? [`Area excavated to a depth of ${Number(o.digOutDepth)||0}mm and the ground compacted.`, `Sub-base prepared and the ${o.resinSystem ? esc(o.resinSystem) : 'resin bound'} system laid.`, `Resin and aggregate mixed on site and trowelled to a smooth, compacted, level finish.`]
+    : o.system==="Resin path on concrete" ? [`Area excavated to a depth of 115mm.`,`Geotextile membrane laid for ground stability.`,`100mm of solid concrete laid.`,`15mm of resin bound gravel installed.`] : [`Sub-base excavated and compacted, typically Type 3 MOT.`,`Addagrip grid system laid over the compacted sub-base.`,`Grid filled and screeded with 2–6mm crushed limestone, level with the top of the grid cells.`,`Resin and aggregate mixed on site for the wearing course.`,`Resin bound mix trowelled over the surface to a smooth, compacted, level finish.`],
   concretebase: (o, s)=>{
     const rows = ((s && s.rows)||[]).filter(r=>(Number(r.width)||0)*(Number(r.length)||0)>0);
     if(o.depth!==undefined && !rows.some(r=>r.digOutDepth!==undefined))
@@ -2516,15 +2665,23 @@ const SERVICE_COPY = {
     const mot = s && s.motDepth!=null ? Number(s.motDepth) : (S.settings.cbMotDepth!=null ? Number(S.settings.cbMotDepth) : 100);
     const all = (s && s.rows) || [];
     const name = r => esc((r.desc||'').trim() || ('base '+(all.indexOf(r)+1)));
-    const cds = rows.map(r=>Math.max(0, cbRowDig(r, o, mot) - mot));
+    const motUsed = o.mot===false ? 0 : mot;
+    const cds = rows.map(r=>r.thickness!==undefined ? Math.round(Number(r.thickness)||0) : Math.max(0, cbRowDig(r, o, mot) - mot));
+    const digs = rows.map(r=>cbRowDig(r, o, mot));
+    const above = rows.map((r,i)=>r.thickness!==undefined ? Math.max(0, motUsed + cds[i] - digs[i]) : 0);
     const same = cds.length && cds.every(d=>d===cds[0]);
     const pour = !cds.length ? `Concrete poured, levelled and tamped.` : same ? `Concrete poured to a depth of ${cds[0]}mm, levelled and tamped.`
       : `Concrete poured to depths of ${rows.map((r,i)=>`${name(r)} ${cds[i]}mm`).join(', ')}, levelled and tamped.`;
     const meshRows = rows.filter(r=>r.rebar!==false);
     const meshLine = !meshRows.length ? `` : meshRows.length===rows.length ? `Reinforcement mesh laid, supported clear of the ground so it sits within the slab.`
       : `Reinforcement mesh laid in ${meshRows.map(name).join(', ')}, supported clear of the ground so it sits within the slab.`;
-    return [`Area excavated, removing plant matter, debris and topsoil, and the subgrade compacted.`, mot>0 ? `Compacted hardcore sub-base installed, typically Type 1 MOT, to a depth of ${mot}mm.` : `Compacted hardcore sub-base installed, typically Type 1 MOT.`,
-      Number(o.shutteringLength)>0 ? `Formwork installed around the edges to the required height.` : ``, meshLine, pour, `Concrete left to cure fully before use.`].filter(Boolean);
+    const noDig = digs.length && digs.every(d=>d===0);
+    const raised = rows.filter((r,i)=>above[i]>0);
+    return [noDig ? `Ground cleared of plant matter and debris and the subgrade compacted (no excavation).` : `Area excavated, removing plant matter, debris and topsoil, and the subgrade compacted.`,
+      o.mot===false ? `` : mot>0 ? `Compacted hardcore sub-base installed, typically Type 1 MOT, to a depth of ${mot}mm.` : `Compacted hardcore sub-base installed, typically Type 1 MOT.`,
+      Number(o.shutteringLength)>0 ? `Formwork installed around the edges to the required height.` : ``, meshLine, pour,
+      raised.length ? `${raised.length===rows.length ? 'The base' : raised.map(name).join(', ')} built up ${(()=>{ const v=[...new Set(rows.map((r,i)=>above[i]).filter(x=>x>0))]; return v.length===1 ? v[0]+'mm' : 'as required'; })()} above the existing ground level.` : ``,
+      `Concrete left to cure fully before use.`].filter(Boolean);
   },
   // Legacy — kept unchanged so previously-saved quotes still render correctly; superseded
   // by compositedecking / timberdecking below for new quotes.
@@ -2544,8 +2701,7 @@ const SERVICE_COPY = {
       `Damp-proof membrane applied to the back face of the blockwork.`,
       `Wall backfilled with pea shingle to roughly a third of its height, separated from the retained soil with a geotextile membrane.`,
       o.faceSkin && faceName ? `Wall faced in ${esc(faceName)}.` : ``,
-      o.coping ? `Finished with coping along the top.` : ``,
-      o.compost ? `Bed backfilled with fresh compost on completion.` : ``].filter(Boolean);
+      o.coping ? `Finished with coping along the top.` : ``].filter(Boolean);
   },
   sleeperwall: ()=>[`Post holes dug individually and posts set using postcrete.`,`Back and bottom of each sleeper treated with Blackjack DPM.`,`Sleepers fixed horizontally against the posts, stacked course by course and secured with long screws.`],
   // Legacy — kept unchanged; superseded by flowerbeds below for new quotes.
@@ -2568,7 +2724,8 @@ const SERVICE_COPY = {
       : `Compacted Type 1 MOT sub-base installed: ${rows.map((r,i)=>`${name(r,i)} ${Math.max(0,depths[i]-bu)}mm`).join(', ')} deep.`;
     const concrete = !!o.edgingStyle && o.edgingStyle!==GRAVEL_STEEL_EDGING && Number(o.edgingLength)>0;
     return [dig, concrete ? `Edge restraint installed around the perimeter, set in concrete.` : ``, `Geotextile membrane laid to suppress weed growth.`, mot,
-      `Grano dust laying course installed to approximately 25mm and screeded flat.`, `Artificial turf rolled out, trimmed to fit, with seams joined using adhesive tape.`,
+      `${o.grano ? esc(o.grano) : 'Grano dust'} laying course installed to approximately 25mm and screeded flat.`,
+      (o.joins===undefined || o.joins) ? `Artificial turf rolled out, trimmed to fit, with seams joined using ${o.joins ? 'jointing' : 'adhesive'} tape.` : `Artificial turf rolled out and trimmed to fit.`,
       concrete ? `Edges glued to the concrete edge restraint, pile brushed and infill sand added.` : `Edges trimmed to fit, pile brushed and infill sand added.`].filter(Boolean);
   },
   pond: (o, s)=>[`Pond excavated in stages — a shallow marginal shelf around 20–30cm deep, then a deeper central zone to at least 60cm, with sloping sides.`,`Base and sides cleared of sharp stones and roots.`,`Geotextile underlay laid over the full excavation, overlapping joints and pressed into the shelves.`,`Liner draped over the pond and eased into the contours without stretching, with a generous overlap at the edges.`,`Filled with water gradually while the liner is settled into place.`,`Edges trimmed and secured once full.`,`Pump and filter installed and commissioned.`, (((s&&s.rows)||[]).some(r=>r.electrics && (Number(r.length)||0)*(Number(r.width)||0)>0)) ? `The pond requires a power connection — a price for this will be provided separately by an independent electrician.` : '', o.bridge?`Bridge installed across the pond.`:''].filter(Boolean),
@@ -2576,7 +2733,7 @@ const SERVICE_COPY = {
     const legacy = o.postProduct===undefined && o.post!==undefined;
     const postName = legacy ? o.post : o.postProduct;
     const lines = [`Post positions marked out and footing holes dug for each post.`,`Posts treated with Blackjack DPM before installation.`,`${esc(postName||'')} posts set in postcrete footings, checked for level and plumb.`,`Main beams fixed across the tops of the posts once cured.`,`Rafters added across the beams at even spacing.`];
-    if(!legacy && o.roof){ lines.push(`Roof deck of OSB board fixed across the rafters.`); if(o.coveringProduct) lines.push(`Roof finished with ${esc(o.coveringProduct)}.`); }
+    if(!legacy && o.roof){ lines.push(`Roof deck of ${o.osbProduct ? esc(o.osbProduct) : 'roofing board'} fixed across the rafters.`); if(o.coveringProduct) lines.push(`Roof finished with ${esc(o.coveringProduct)}.`); }
     return lines;
   },
 
@@ -2590,7 +2747,7 @@ const SERVICE_COPY = {
     (ft.options||[]).forEach(x=>{ if(x && x.key && optView["t_"+x.key]===undefined) optView["t_"+x.key] = x.type==="number" ? x.default : !!x.default; });
     const lines = bldLetterLines(ft.letter, optView, {inGround: S.settings.compositePostInGroundDepth!=null ? S.settings.compositePostInGroundDepth : 600, height: ft.heightMm, length: (Number(s && s.area)||0).toFixed(2)});
     const n = o.gate ? Math.max(0, Math.round(Number(o.gateCount)||0)) : 0;
-    if(n>0) lines.push(`${n} matching gate${n>1?'s':''} installed.`);
+    if(n>0) lines.push(o.gateType ? `${n} gate${n>1?'s':''} installed (${esc(o.gateType)}).` : `${n} matching gate${n>1?'s':''} installed.`);
     return lines;
   },
   closeboardfencing: (o)=>[`Existing fence line cleared${o.removeOld?' and old fencing removed and disposed of':''}.`,`Fence line marked out and post holes dug to 600mm.`,`Posts treated with a post-saver sleeve and set in postcrete, checked for level and plumb.`,`Arris rails fixed between the posts.`,`Gravel board fitted at the base to keep the feather-edge boards clear of the ground.`,`Feather-edge boards nailed vertically to the rails, overlapping each board by around 25mm.`,`Finished with a capping rail along the top.`, o.gate ? `${o.gateCount} matching gate${o.gateCount>1?'s':''} installed.`:``].filter(Boolean),
@@ -2679,7 +2836,7 @@ function qtyText(area, unit){
    panel, never on the letter the customer sees). Plant/hire (e.g. digger, grab) isn't a
    "material" so it's deliberately left out — only s.materials, never s.plant. */
 function sectionMaterialsList(s){
-  return (s.materials||[]).map(m=>({name:m.name, qty:m.qty, unit:m.unit}));
+  return (s.materials||[]).filter(m=>!m.labour).map(m=>({name:m.name, qty:m.qty, unit:m.unit}));
 }
 // The quote letter's one materials list: every material across all the quote's services, in the
 // order they first appear. The same material (same name and unit) used by more than one service
@@ -2715,6 +2872,29 @@ function quoteMaterialsList(q){
    A quote saved before the question existed uses the business's last-used figure. */
 const CUT_EDGING_RE = /timber|composite|wood/i;
 let _wastageSaveTimer = null;
+/* Values a business types or picks on a quote become its starting values next time (per service):
+   product choices, depths, productivity rates and the like. Job-specific sizes and counts (edging
+   length, number of gates, join length, steps…) are never carried over. */
+const NOT_REMEMBERED = /(Length|Count|Run|Area|Rows)$|^(wastagePct|gatePrice|coverCount)$/;
+let _optDefaultsTimer = null;
+function rememberOption(key, optKey, value){
+  if(!key || key==="waste" || !optKey || NOT_REMEMBERED.test(optKey)) return;
+  if(value===undefined || value===null || value==="" || String(value).indexOf("__")===0) return;
+  const def = SERVICES[key]; if(!def) return;
+  const o = (def.options||[]).find(x=>x.key===optKey); if(!o || (o.type!=="number" && o.type!=="select")) return;
+  if(o.type==="number"){ const n = Number(value); if(!isFinite(n) || n<0) return; value = n; }
+  const depthOptKey = DEPTH_OPTION_KEY[key] || "digOutDepth";
+  if(optKey==="productivity"){ if(!(value>0)) return; S.settings.productivity = S.settings.productivity||{}; S.settings.productivity[key] = value; }
+  else if(optKey==="edgingProductivity" && EDGING_PRODUCTIVITY_SETTINGS_KEY[key]){ if(!(value>0)) return; S.settings.productivity = S.settings.productivity||{}; S.settings.productivity[EDGING_PRODUCTIVITY_SETTINGS_KEY[key]] = value; }
+  else if(optKey===depthOptKey && o.type==="number"){ S.settings.digOutDepthDefaults = S.settings.digOutDepthDefaults||{}; S.settings.digOutDepthDefaults[key] = value; }
+  else { S.settings.optionDefaults = S.settings.optionDefaults||{}; (S.settings.optionDefaults[key] = S.settings.optionDefaults[key]||{})[optKey] = value; }
+  clearTimeout(_optDefaultsTimer);
+  _optDefaultsTimer = setTimeout(()=>{ if(S.settings.onboarded) saveSettings({optionDefaults: S.settings.optionDefaults||{}, productivity: S.settings.productivity, digOutDepthDefaults: S.settings.digOutDepthDefaults||{}}); }, 900);
+}
+function rememberedOption(key, optKey){
+  const d = S.settings && S.settings.optionDefaults && S.settings.optionDefaults[key];
+  return d && d[optKey]!==undefined && !NOT_REMEMBERED.test(optKey) ? d[optKey] : undefined;
+}
 function rememberWastage(key, value){
   const n = parseFloat(value); if(isNaN(n) || n<0) return;
   if(!S.settings.wastageDefaults) S.settings.wastageDefaults = {};
@@ -2758,14 +2938,15 @@ function rowChoiceGroups(def, rows, options){
 }
 // Paving steps: tread area (m²), riser wall area (m²) and how many steps, from the step list.
 function pavingStepTotals(opt){
-  let tread = 0, riser = 0, count = 0;
+  let tread = 0, riser = 0, count = 0, volume = 0, run = 0, maxH = 0;
   ((opt && opt.stepRows) || []).forEach(sr=>{
     const w = Number(sr.width)||0, dp = Number(sr.depth)||0, h = (Number(sr.heightMm)||0)/1000;
     const n = (sr.qty===undefined || sr.qty==='') ? 1 : Math.max(0, Math.floor(Number(sr.qty)||0));
     if(!(w>0 && dp>0 && n>0)) return;
     tread += r6(w*dp)*n; riser += r6((w + 2*dp)*h)*n; count += n;
+    volume += r6(w*dp*h)*n; run += r6(w + 2*dp)*n; maxH = Math.max(maxH, h*1000);
   });
-  return {tread: r6(tread), riser: r6(riser), count};
+  return {tread: r6(tread), riser: r6(riser), count, volume: r6(volume), run: r6(run), maxH};
 }
 function calcWithRowChoices(def, rows, options, ctx){
   const raw = calcWithRowChoicesCore(def, rows, options, ctx);
@@ -2846,11 +3027,13 @@ function priceSection(key, rows, options, ctx, notes){
     // explicit-price line instead of the 'each' fallback — used by Paving's tenant-built
     // product libraries (jointing compound, edging style), which are priced per-job via
     // explicitPrice but still measured in unit/each like any shared material.
-    .map(([name,qty,explicitPrice,supplier,explicitUnit])=>{
+    .map(([name,qty,explicitPrice,supplier,explicitUnit,kind])=>{
       const hasExplicitPrice = explicitPrice!=null;
       const price = hasExplicitPrice ? (Number(explicitPrice)||0) : ctx.price(name);
       const unit = hasExplicitPrice ? (explicitUnit||'each') : ctx.unit(name);
-      return {name, unit, qty: Math.round(qty*100)/100, price, cost: Math.round(qty*price*100)/100, supplier: hasExplicitPrice ? (supplier||'') : undefined, _explicit: hasExplicitPrice};
+      const out = {name, unit, qty: Math.round(qty*100)/100, price, cost: Math.round(qty*price*100)/100, supplier: hasExplicitPrice ? (supplier||'') : undefined, _explicit: hasExplicitPrice};
+      if(kind==='labour') out.labour = true;   // a fitting/labour charge: priced, but not a material to list or order
+      return out;
     });
   // Safety net for every service: any material or plant line in use at £0 blocks finalising
   // (services that already name the problem their own way aren't repeated).
@@ -2913,7 +3096,9 @@ const SERVICE_ORDER = ["turf","paving","blockpaving","compositedecking","timberd
 // Built-in services that aren't part of the standard catalogue a new business starts with — only
 // a business that has them listed in settings.extraServices sees them (the pre-existing business
 // keeps Resin bound; see loadAll). Everything else in SERVICE_ORDER is available to everyone.
-const TENANT_ONLY_SERVICES = new Set(["resinbound"]);
+// October 2026: Resin bound is open to every business now that each sets up its own resin system
+// (first-time setup asks "Do you offer resin bound paving?"), so nothing is tenant-only any more.
+const TENANT_ONLY_SERVICES = new Set([]);
 function availableServiceKeys(settings){
   const extra = (settings && settings.extraServices) || [];
   return SERVICE_ORDER.filter(k=>!TENANT_ONLY_SERVICES.has(k) || extra.includes(k));
@@ -3627,7 +3812,7 @@ function financeOverdue(q){
 function jobOrderGroups(q){
   const lines = {};
   (q.sections||[]).forEach(s=>(s.materials||[]).forEach(m=>{
-    if(!m.name || !(Number(m.qty)>0)) return;
+    if(!m.name || !(Number(m.qty)>0) || m.labour) return;
     const k = m.name+'|'+(m.unit||'');
     const sup = (m.supplier||'').trim() || ((S.settings.materials[m.name]||{}).supplier||'').trim() || 'No supplier set';
     const L = lines[k] || (lines[k] = {name:m.name, unit:m.unit||'', qty:0, cost:0, supplier:sup});
@@ -3870,7 +4055,8 @@ function defaultSettings(){
       vatNo:"",
       bankName:"", sortCode:"", accountNumber:"",
     },
-    servicesEnabled: SERVICE_ORDER.filter(k=>!TENANT_ONLY_SERVICES.has(k)),
+    // Resin bound starts off: first-time setup asks "Do you offer resin bound paving?".
+    servicesEnabled: SERVICE_ORDER.filter(k=>!TENANT_ONLY_SERVICES.has(k) && k!=="resinbound"),
     // October 2026: Resin bound is no longer a standard service for new businesses (see
     // TENANT_ONLY_SERVICES); a brand-new business starts with none of the extras.
     extraServices: [],
@@ -3919,10 +4105,10 @@ function defaultSettings(){
     // (the "people on site" field defaults to 3), so a 3-person crew sees the same real-world
     // days as before; adjust them here if your crews are typically a different size.
     productivity: {
-      turf:16.7, paving:6, blockpaving:5, compositedecking:2.7, timberdecking:2.7, gravel:16.7,
-      brickwall:2.7, sleeperwall:10, closeboardfencing:5, timberpanelfencing:8.3, compositefencing:6.7,
-      waterfeatures:0.7, pond:16.7, resinbound:5, steeledging:10, flowerbeds:6.7, artificialturf:5,
-      pergola:16.7, concretebase:5,
+      turf:16.7, paving:6, blockpaving:5, compositedecking:6, timberdecking:6, gravel:16.7,
+      brickwall:2.7, sleeperwall:7.2, closeboardfencing:5, timberpanelfencing:8.3, compositefencing:6.7,
+      waterfeatures:0.5, pond:16.7, resinbound:5, steeledging:10, flowerbeds:6.7, artificialturf:5,
+      pergola:9, concretebase:5,
       // Paving's and Block paving's second labour rate — edging, laid separately from the main
       // area (see SERVICES.paving.calc/SERVICES.blockpaving.calc) — each gets its own
       // settings-level override, same as every other service's main productivity above.
@@ -4009,7 +4195,13 @@ function defaultSettings(){
     gravelMotCoverage: 5,        // m² per tonne of Type 1 MOT at the baseline MOT depth
     gravelMotBaselineDepth: 100, // mm
     gravelConsumablesQty: 1,
-    gravelEdgingStyles: [],      // [{id, name, piecesPerMetre, price, vatIncluded}] — price per piece
+    gravelEdgingStyles: [],      // retired: edging styles are one shared list (edgingStyles)
+    edgingStyles: [],            // [{id, name, piecesPerMetre, price, vatIncluded}] — one list for every service's edging
+    beddingMaterials: [],        // [{id, name, price, vatIncluded}] — price per tonne; Block paving + Artificial turf laying course
+    pavingCovers: [],            // [{id, name, price, labourPrice, vatIncluded}] — recessed manhole covers (material + fitting)
+    resinSystems: [],            // [{id, name, vatIncluded, lines:[{material, unit, price, coverage (m² per unit), perJob, supplier}]}]
+    fenceGates: [], fencePanels: [], // [{id, name, price, supplier, vatIncluded}] — gate types / fence panels
+    gravelGrids: [{id:"gg_toolstation", name:"Gravel grid 590 × 390mm (pack of 5)", price:31.72, supplier:"Toolstation", vatIncluded:true}], // price per m² (£36.49 ÷ 1.15 m²)
     gravelEdgingSeeded: true,    // new tenants start flagged: no edging style (see loadAll)
     // Block Retaining Wall (October 2026). Footing concrete scales from a baseline slab
     // (area × depth) needing the baseline ballast / sharp sand / cement below. See
@@ -4198,13 +4390,16 @@ function ctxFor(settings, peopleOnSite){
     // SERVICES.paving.calc. netPrice exposes the same Inc-VAT stripping every other price in the
     // app gets, for a library entry's own vatIncluded flag.
     pavingJointingCompounds: settings.pavingJointingCompounds || [],
-    pavingEdgingStyles: settings.pavingEdgingStyles || [],
+    // One edging style list for every service (each service's own key points at it).
+    edgingStyles: settings.edgingStyles || [], pavingEdgingStyles: settings.edgingStyles || [],
+    beddingMaterials: settings.beddingMaterials || [], gravelGrids: settings.gravelGrids || [], pavingCovers: settings.pavingCovers || [], resinSystems: settings.resinSystems || [],
+    fenceGates: settings.fenceGates || [], fencePanels: settings.fencePanels || [],
     pavingPrimerCoverage: settings.pavingPrimerCoverage!=null ? settings.pavingPrimerCoverage : 20,
     pavingWastagePercent: settings.pavingWastagePercent!=null ? settings.pavingWastagePercent : 10,
     // Block paving's own tenant-built product libraries (Settings → Pricing → Block paving) and
     // editable sub-base/wastage/consumables settings — see SERVICES.blockpaving.calc.
     blockJointingCompounds: settings.blockJointingCompounds || [],
-    blockEdgingStyles: settings.blockEdgingStyles || [],
+    blockEdgingStyles: settings.edgingStyles || [],
     blockPavingSurfaceBuildUp: settings.blockPavingSurfaceBuildUp!=null ? settings.blockPavingSurfaceBuildUp : 100,
     blockPavingMotBaselineRate: settings.blockPavingMotBaselineRate!=null ? settings.blockPavingMotBaselineRate : 0.3,
     blockPavingMotBaselineDepth: settings.blockPavingMotBaselineDepth!=null ? settings.blockPavingMotBaselineDepth : 150,
@@ -4238,7 +4433,7 @@ function ctxFor(settings, peopleOnSite){
     gravelMotCoverage: settings.gravelMotCoverage!=null ? settings.gravelMotCoverage : 5,
     gravelMotBaselineDepth: settings.gravelMotBaselineDepth!=null ? settings.gravelMotBaselineDepth : 100,
     gravelConsumablesQty: settings.gravelConsumablesQty!=null ? settings.gravelConsumablesQty : 1,
-    gravelEdgingStyles: settings.gravelEdgingStyles || [],
+    gravelEdgingStyles: settings.edgingStyles || [],
     brickwallFootingBaseArea: settings.brickwallFootingBaseArea!=null ? settings.brickwallFootingBaseArea : 10,
     brickwallFootingBaseDepth: settings.brickwallFootingBaseDepth!=null ? settings.brickwallFootingBaseDepth : 100,
     brickwallFootingBallast: settings.brickwallFootingBallast!=null ? settings.brickwallFootingBallast : 1,
@@ -4273,12 +4468,12 @@ function ctxFor(settings, peopleOnSite){
     steelStakeSpacing: settings.steelStakeSpacing!=null ? settings.steelStakeSpacing : 500,
     steelStakeLength: settings.steelStakeLength!=null ? settings.steelStakeLength : 500,
     steelConsumablesQty: settings.steelConsumablesQty!=null ? settings.steelConsumablesQty : 1,
-    fbCompost: settings.fbCompost || [], fbMulch: settings.fbMulch || [], fbEdgingStyles: settings.fbEdgingStyles || [],
+    fbCompost: settings.fbCompost || [], fbMulch: settings.fbMulch || [], fbEdgingStyles: settings.edgingStyles || [],
     fbMulchCoverage: settings.fbMulchCoverage!=null ? settings.fbMulchCoverage : 5,
     fbBagVolume: settings.fbBagVolume!=null ? settings.fbBagVolume : 0.5,
     fbMulchDepth: settings.fbMulchDepth!=null ? settings.fbMulchDepth : 50,
     fbConsumablesQty: settings.fbConsumablesQty!=null ? settings.fbConsumablesQty : 1,
-    atTurf: settings.atTurf || [], atGrano: settings.atGrano || [], atSeamTape: settings.atSeamTape || [], atInfill: settings.atInfill || [], atEdgingStyles: settings.atEdgingStyles || [],
+    atTurf: settings.atTurf || [], atGrano: settings.atGrano || [], atSeamTape: settings.atSeamTape || [], atInfill: settings.atInfill || [], atEdgingStyles: settings.edgingStyles || [],
     atSurfaceBuildUp: settings.atSurfaceBuildUp!=null ? settings.atSurfaceBuildUp : 25,
     atMotRate: settings.atMotRate!=null ? settings.atMotRate : 0.3,
     atMotBaselineDepth: settings.atMotBaselineDepth!=null ? settings.atMotBaselineDepth : 150,
@@ -4477,6 +4672,63 @@ async function loadAll(){
     timberScrewsPerCrossing:2, timberConsumablesQty:1,
     gravelCoverage:10, gravelBaselineDepth:50, gravelMotCoverage:5, gravelMotBaselineDepth:100, gravelConsumablesQty:1}).forEach(([k,v])=>{ if(settings[k]==null) settings[k]=v; });
   if(!Array.isArray(settings.gravelEdgingStyles)) settings.gravelEdgingStyles = [];
+  // Edging styles: one shared list for every service. Fold any per-service lists into it once.
+  if(!Array.isArray(settings.edgingStyles)){
+    settings.edgingStyles = [];
+    ['pavingEdgingStyles','blockEdgingStyles','gravelEdgingStyles','atEdgingStyles','fbEdgingStyles'].forEach(k=>{
+      (settings[k]||[]).forEach(e=>{ if(e && e.name && !settings.edgingStyles.some(x=>x.name===e.name)) settings.edgingStyles.push(e); });
+    });
+    Object.values(settings.materials||{}).forEach(m=>{ if(m && /^(paving|block|gravel|at|fb)EdgingStyles$/.test(m.lib||'')) m.lib = 'edgingStyles'; });
+    settings._sharedListsNew = true;
+  }
+  // Bedding (laying course) materials: one list shared by Block paving and Artificial turf. A
+  // business set up before this keeps its grano dust products plus the limestone and sharp sand
+  // it was already priced on.
+  if(!Array.isArray(settings.beddingMaterials)){
+    settings.beddingMaterials = [];
+    (settings.atGrano||[]).forEach(e=>{ if(e && e.name && !settings.beddingMaterials.some(x=>x.name===e.name)) settings.beddingMaterials.push(e); });
+    if(settings.onboarded) ["Limestone 2-6mm","Sharp sand"].forEach(n=>{ const m = settings.materials && settings.materials[n];
+      if(m && Number(m.price)>0 && !settings.beddingMaterials.some(x=>x.name===n)) settings.beddingMaterials.push({id:uid(), name:n, price:Number(m.price), supplier:m.supplier||'', vatIncluded:m.vatIncluded!==false}); });
+    Object.values(settings.materials||{}).forEach(m=>{ if(m && m.lib==='atGrano') m.lib = 'beddingMaterials'; });
+    settings._sharedListsNew = true;
+  }
+  // Manhole covers, gate types and fence panels: tenant lists. A business set up before them keeps
+  // what it was already priced on (its manhole cover, gate and lap panel prices).
+  [['pavingCovers','Recessed manhole cover',{labourPrice:0}],['fenceGates','Gate',{}],['fencePanels','Lap panel',{}]].forEach(([k,mat,extra])=>{
+    if(Array.isArray(settings[k])) return;
+    settings[k] = [];
+    const m = settings.materials && settings.materials[mat];
+    if(settings.onboarded && m && Number(m.price)>0) settings[k].push(Object.assign({id:uid(), name:mat, price:Number(m.price), supplier:m.supplier||'', vatIncluded:m.vatIncluded!==false}, extra));
+    settings._sharedListsNew = true;
+  });
+  // Pre-filled Panel fence type: its lap panel line is its "panel".
+  (settings.fenceTypes||[]).forEach(ft=>{ if(ft && ft.panel===undefined && ft.id==="panel" && (ft.lines||[]).some(l=>l.material==="Lap panel")) ft.panel = "Lap panel"; });
+  // Water features: a built-in "customer-supplied" choice (£50 to start, editable like any product).
+  if(!settings._wfCustomerSeeded){
+    if(!Array.isArray(settings.wfFeatures)) settings.wfFeatures = [];
+    if(!settings.wfFeatures.some(x=>x.id==="wf_customer")) settings.wfFeatures.unshift({id:"wf_customer", name:"Customer-supplied water feature", price:50, supplier:"Customer", vatIncluded:true, builtin:true});
+    settings._wfCustomerSeeded = true; settings._sharedListsNew = true;
+  }
+  // Resin bound: the business that priced the two built-in systems keeps them as its own systems.
+  if(!Array.isArray(settings.resinSystems)){
+    settings.resinSystems = [];
+    if(settings.brandInfinity){
+      const pr = n => { const m = settings.materials && settings.materials[n]; return m ? {price:Number(m.price)||0, supplier:m.supplier||'', unit:m.unit||'unit'} : {price:0, supplier:'', unit:'unit'}; };
+      const L = (n, coverage, perJob) => Object.assign({material:n, coverage, perJob:!!perJob}, pr(n));
+      settings.resinSystems.push({id:"rs_addagrid", name:"Addagrip Addagrid", vatIncluded:true, lines:[
+        L("Addagrip geofabric membrane",50), L("Type 3 MOT",3.333), L("Addagrip Terrabase grid system",25), L("Limestone 2-6mm",10),
+        L("Addagrip anti slip glass",30), L("Addagrip Catalyst",0,true), L("Addagrip terrabase UV 30mm driveway kit",1.9),
+        L("Delivery – Addagrip Terrabase UV 30mm kit",19), L("Consumables",0,true)]});
+      settings.resinSystems.push({id:"rs_path", name:"Resin path on concrete", vatIncluded:true, lines:[
+        L("Geotextile membrane",1), L("Ballast",10), L("Sharp sand",10), L("Cement",0.8333), L("Resin kit",4), L("Resin delivery",32), L("Consumables (resin path)",0,true)]});
+    }
+    settings._sharedListsNew = true;
+  }
+  // Gravel grids: every business starts with a reference grid it can edit or remove.
+  if(!Array.isArray(settings.gravelGrids)){
+    settings.gravelGrids = [{id:"gg_toolstation", name:"Gravel grid 590 × 390mm (pack of 5)", price:31.72, supplier:"Toolstation", vatIncluded:true}];
+    settings._sharedListsNew = true;
+  }
   Object.entries({brickwallFootingBaseArea:10, brickwallFootingBaseDepth:100, brickwallFootingBallast:1, brickwallFootingSharpSand:1, brickwallFootingCement:12, brickwallRebarLines:2, brickwallRebarLap:300, brickwallBlocksPerM2:10, brickwallWallThickness:100, brickwallCopingOverhang:50, brickwallFinishingProductivity:10, brickwallConsumablesQty:1}).forEach(([k,v])=>{ if(settings[k]==null) settings[k]=v; });
   ['brickwallFaceProducts','brickwallRebar','brickwallCopings','sleeperProducts','sleeperScrews'].forEach(k=>{ if(!Array.isArray(settings[k])) settings[k] = []; });
   Object.entries({sleeperPostSpacing:1200, sleeperScrewsPerSleeper:6, sleeperConsumablesQty:1}).forEach(([k,v])=>{ if(settings[k]==null) settings[k]=v; });
@@ -4596,10 +4848,10 @@ async function loadAll(){
   // Gravel's edging style is tenant-defined with no default — the pre-existing business keeps its
   // block edging ('Block edging', 20 pieces per metre, £1 inc VAT per piece), seeded once here.
   if(!settings.gravelEdgingSeeded){
-    if(!Array.isArray(settings.gravelEdgingStyles)) settings.gravelEdgingStyles = [];
-    if(!settings.gravelEdgingStyles.length) settings.gravelEdgingStyles.push({id:uid(), name:"Block edging", piecesPerMetre:20, price:1, vatIncluded:true});
+    if(!Array.isArray(settings.edgingStyles)) settings.edgingStyles = [];
+    if(!settings.edgingStyles.some(x=>x.name==="Block edging")) settings.edgingStyles.push({id:uid(), name:"Block edging", piecesPerMetre:20, price:1, vatIncluded:true});
     settings.gravelEdgingSeeded = true;
-    await saveSettings({gravelEdgingStyles: settings.gravelEdgingStyles, gravelEdgingSeeded: true});
+    await saveSettings({edgingStyles: settings.edgingStyles, gravelEdgingSeeded: true});
   }
   // Sleeper Retaining Wall: the pre-existing business keeps its own sleeper (£9 inc VAT, 2400 ×
   // 200mm) and screw (Box of 150mm hex head timber screws, £24.84 inc VAT, 25 per box), seeded once.
@@ -4634,6 +4886,14 @@ async function loadAll(){
   // merge in productivity defaults for anyone with settings saved before this feature existed
   // (or a new service added since) — never overwrites an already-set, now-per-person rate above
   Object.entries(defaultSettings().productivity).forEach(([k,v])=>{ if(settings.productivity[k]==null) settings.productivity[k]=v; });
+  // October 2026 service review: new default rates. Anyone still on the untouched old default moves
+  // to the new one (a rate the business set itself is kept). Fencing's two pre-filled types too.
+  if(!settings._prodReview1026){
+    const moved = {compositedecking:[2.7,6], timberdecking:[2.7,6], sleeperwall:[10,7.2], pergola:[16.7,9], waterfeatures:[0.7,0.5]};
+    Object.entries(moved).forEach(([k,[oldV,newV]])=>{ if(settings.productivity[k]==null || Number(settings.productivity[k])===oldV) settings.productivity[k] = newV; });
+    (settings.fenceTypes||[]).forEach(ft=>{ if(ft && ft.id==="closeboard" && Number(ft.productivity)===5) ft.productivity = 8; if(ft && ft.id==="panel" && Number(ft.productivity)===8.3) ft.productivity = 10; });
+    settings._prodReview1026 = true; settings._prodReviewUnsaved = true;
+  }
   // October 2026: clearance labour's default productivity changed from 23.3 to 20 m²/day/person
   // (see calcWasteRemoval) — nudge anyone still sitting on the untouched old default forward
   // too, but leave alone anyone who's already set their own rate.
@@ -4677,7 +4937,8 @@ async function loadAll(){
   let seenChanged = false;
   avail.forEach(k=>{
     if(!settings.servicesSeen.includes(k)){
-      if(!settings.servicesEnabled.includes(k)) settings.servicesEnabled.push(k);
+      // Resin bound is never switched on by itself — it needs the business's own resin system.
+      if(k!=="resinbound" && !settings.servicesEnabled.includes(k)) settings.servicesEnabled.push(k);
       settings.servicesSeen.push(k); seenChanged = true;
     }
   });
@@ -4728,6 +4989,11 @@ async function loadAll(){
   // no team at all, silently stopping them from blocking (or being blocked by) anything, which
   // would let a brand-new job double-book straight over an old one. A quote that hasn't been
   // accepted yet (no scheduledDays) doesn't need one — it gets a team when it's accepted.
+  if(S.settings._prodReviewUnsaved){ delete S.settings._prodReviewUnsaved; if(S.settings.onboarded) await saveSettings({productivity: S.settings.productivity, fenceTypes: S.settings.fenceTypes, _prodReview1026: true}); }
+  if(S.settings._sharedListsNew){ delete S.settings._sharedListsNew;
+    const shared = ['edgingStyles','beddingMaterials','gravelGrids','pavingCovers','fenceGates','fencePanels','wfFeatures','resinSystems'];
+    try{ shared.filter(k=>k!=='resinSystems').forEach(k=>(S.settings[k]||[]).forEach(e=>{ if(e && e.name) mirrorProductToMaterials(k, e); })); }catch(e){}
+    if(S.settings.onboarded) await saveSettings(Object.assign({materials: S.settings.materials, fenceTypes: S.settings.fenceTypes, _wfCustomerSeeded: true}, Object.fromEntries(shared.map(k=>[k, S.settings[k]])))); }
   if(S.settings._skinListsMerged){ delete S.settings._skinListsMerged; await saveSettings({brickwallFaceProducts: S.settings.brickwallFaceProducts, brickwallFirstSkinProducts: [], materials: S.settings.materials}); }
   if(S.settings._brandFlagNew){ delete S.settings._brandFlagNew; if(S.settings.onboarded) await saveSettings({brandInfinity: S.settings.brandInfinity}); }
   // This business's own logo (kept in its own document) and colours.
@@ -4926,6 +5192,8 @@ function ensureSectionState(key){
         opts[o.key] = S.settings.productivity[EDGING_PRODUCTIVITY_SETTINGS_KEY[key]];
       } else if(o.key==="wastagePct"){
         opts[o.key] = quoteWastagePct(key, {});   // the business's last-used figure (0 to start)
+      } else if(rememberedOption(key, o.key)!==undefined){
+        opts[o.key] = rememberedOption(key, o.key);   // what the business used last time
       } else {
         opts[o.key] = o.default;
       }
@@ -5253,13 +5521,23 @@ function renderSetup(){
     <h2 style="margin:6px 0 4px;">Which services do you quote for?</h2>
     <div class="hint" style="margin-bottom:16px;">Untick anything you don't offer. You can change this any time in Materials &amp; settings, and add your own services there too.</div>
     <div class="row" style="gap:8px;">
-      ${availableServiceKeys(s).map(k=>{
+      ${availableServiceKeys(s).filter(k=>k!=="resinbound").map(k=>{
         const on = s.servicesEnabled.includes(k);
         return `<div class="service-tile ${on?'on':''}" data-action="toggleSetupService" data-key="${k}" style="min-width:220px;">
           <span class="t">${SERVICES[k].label}</span><span class="toggle ${on?'on':''}"></span>
         </div>`;
       }).join('')}
-    </div>`;
+    </div>
+    ${(()=>{ const yes = s.servicesEnabled.includes("resinbound");
+      return `<div class="card" style="margin-top:16px;padding:14px 16px;" data-tour="setup-resin">
+        <div style="font-weight:800;margin-bottom:8px;">Do you offer resin bound paving?</div>
+        <div class="row" style="gap:8px;">
+          <div class="service-tile ${yes?'on':''}" data-action="setupResin" data-val="true" style="min-width:140px;"><span class="t">Yes</span><span class="toggle ${yes?'on':''}"></span></div>
+          <div class="service-tile ${!yes?'on':''}" data-action="setupResin" data-val="false" style="min-width:140px;"><span class="t">No</span><span class="toggle ${!yes?'on':''}"></span></div>
+        </div>
+        ${yes ? `<div class="hint" style="margin:10px 0 0;">Name your resin system and list its materials — each with what it costs you, the area it covers and the supplier. You can add more systems later in Materials &amp; settings → Pricing.</div>${resinSystemsListHtml()}` : ''}
+      </div>`; })()}
+    ${S.err?`<div class="msg msg-err" style="margin-top:12px;">${esc(S.err)}</div>`:''}`;
   } else if(st===3){
     const wd = workingDaysOf(s);
     const DAY_OPTS = [[1,"Mon"],[2,"Tue"],[3,"Wed"],[4,"Thu"],[5,"Fri"],[6,"Sat"],[0,"Sun"]];
@@ -5367,6 +5645,10 @@ function chk(id){ const e=document.getElementById(id); return e ? !!e.checked : 
 async function setupNext(){
   const st = S._setupStep||1;
   setupCollect(st);
+  if(st===2){
+    if(S.settings.servicesEnabled.includes("resinbound") && !(S.settings.resinSystems||[]).length){ S.err = "Add your resin system (its name and materials), or answer No to resin bound paving."; renderSetup(); return; }
+    S.err = "";
+  }
   if(st===3){
     if(!(S.settings.dayRatePerPerson>0) || !(S.settings.expensesPerDay>0)){ S.err = "Enter your day rate per person and your daily running costs — every quote is priced from them."; renderSetup(); return; }
     S.err = "";
@@ -6884,10 +7166,13 @@ function concreteRowHtml(r, i, opts){
   return `<div class="card" data-row="${i}" style="padding:10px 12px;margin-bottom:8px;">
     <div class="row" style="gap:8px;align-items:end;">
       <div class="field" style="flex:2 1 150px;margin:0;"><label>Description</label><input type="text" data-mf="desc" value="${esc(r.desc)}" placeholder="e.g. Shed base"></div>
-      ${num('width','Width (m)','0')}${num('length','Length (m)','0')}${num('digOutDepth','Dig-out depth (mm)','200')}
+      ${num('width','Width (m)','0')}${num('length','Length (m)','0')}${num('digOutDepth','Dig-out depth (mm)','200')}${r.thickness!==undefined ? num('thickness','Concrete thickness (mm)','100') : ''}
       <button class="icon-btn" data-action="delMeasRow" data-row="${i}" title="Remove">✕</button>
     </div>
-    ${D>0 ? `<div class="hint" style="margin-top:4px;">${D>mot ? `${mot}mm MOT + ${D-mot}mm concrete.` : `Must be deeper than the ${mot}mm MOT depth.`}</div>` : ''}
+    ${(()=>{ if(r.thickness===undefined) return D>0 ? `<div class="hint" style="margin-top:4px;">${D>mot ? `${mot}mm MOT + ${D-mot}mm concrete.` : `Must be deeper than the ${mot}mm MOT depth.`}</div>` : '';
+      const m = opts && opts.mot===false ? 0 : mot, c = Number(r.thickness)||0; if(!(c>0)) return '';
+      const above = m + c - D;
+      return `<div class="hint" style="margin-top:4px;">${m>0?`${m}mm MOT + `:''}${c}mm concrete${above>0 ? ` — ${above}mm built up above the ground` : above<0 ? ` — finishes ${-above}mm below ground level` : ''}.</div>`; })()}
     <div class="row" style="gap:12px;margin-top:8px;align-items:end;flex-wrap:wrap;">
       ${wfTick(i,'readyMix','Ready-mix concrete?',!!r.readyMix)}
       ${r.readyMix ? `<div class="field" style="flex:1 1 200px;margin:0;"><label>Ready-mix (£ per m³)</label>${wfRowSelect('readyMixProduct', i, r.readyMixProduct, 'cbReadyMix', 'ready-mix (price per m³)', ['price'], 'Select a ready-mix…')}</div>` : ''}
@@ -7165,6 +7450,14 @@ function serviceBuilderHtml(b){
       <div class="field"><label>Post price £ (if new)</label><input id="svcPostPrice" type="text" inputmode="decimal" value="${esc(b.postPrice)}" placeholder="0.00"></div>
       <div class="field"><label>Post supplier (if new)</label><input id="svcPostSupplier" type="text" value="${esc(b.postSupplier||'')}" placeholder="e.g. Travis Perkins"></div>
     </div>
+    <div class="row">
+      <div class="field" style="flex:2 1 220px;"><label>Panel</label><select id="svcPanel">
+        <option value="" ${!b.panel?'selected':''}>No panel (boards and rails only)</option>
+        ${(S.settings.fencePanels||[]).map(p=>`<option value="${esc(p.name)}" ${b.panel===p.name?'selected':''}>${esc(p.name)} — £${(Number(p.price)||0).toFixed(2)}${p.supplier?' ('+esc(p.supplier)+')':''}</option>`).join('')}
+        ${b.panel && !(S.settings.fencePanels||[]).some(p=>p.name===b.panel) ? `<option value="${esc(b.panel)}" selected>${esc(b.panel)}</option>` : ''}
+        <option value="__add_other__">+ Add new…</option>
+      </select><div class="hint">One panel per bay (between two posts). "+ Add new…" saves a panel with its name, price and supplier.</div></div>
+    </div>
     <label style="margin:10px 0 6px;display:block;">Post type</label>
     <div class="row" style="gap:8px;">
       ${[["timber","Timber","Adds a post saver sleeve per post"],["composite","Composite","No sleeve"]].map(([k,l,sub])=>`<div class="service-tile ${b.postKind===k?'on':''}" data-action="setSvcPostKind" data-val="${k}" style="min-width:200px;"><div><div class="t">${l}</div><div class="s">${sub}</div></div><span class="toggle ${b.postKind===k?'on':''}"></span></div>`).join('')}
@@ -7301,7 +7594,8 @@ function serviceBuilderHtml(b){
     <div class="card" style="padding:14px 16px;">
       <div class="totals-line"><span>Name</span><span class="num">${esc(b.name)}</span></div>
       ${isFence ? `<div class="totals-line"><span>Height / post spacing / stock post</span><span class="num">${esc(b.heightMm)}mm / ${esc(b.postSpacingMm)}mm / ${esc(b.stockLengthMm)}mm</span></div>
-      <div class="totals-line"><span>Post</span><span class="num">${esc(b.postMaterial)} (${b.postKind==="composite"?'composite':'timber'})</span></div>`
+      <div class="totals-line"><span>Post</span><span class="num">${esc(b.postMaterial)} (${b.postKind==="composite"?'composite':'timber'})</span></div>
+      ${b.panel ? `<div class="totals-line"><span>Panel</span><span class="num">${esc(b.panel)} — one per bay</span></div>` : ''}`
       : `<div class="totals-line"><span>Measured by</span><span class="num">${esc(mt?mt.label:'')}</span></div>
       <div class="totals-line"><span>Waste removal</span><span class="num">${wasteSummary}</span></div>`}
       <div class="totals-line"><span>Starting productivity</span><span class="num">${esc(b.productivity)||'1'} ${unitSuffix}/day/person</span></div>
@@ -7331,6 +7625,7 @@ function readSvcBuilderStep(b){
     if(b.mode==="fence"){
       b.heightMm = val('svcFenceHeight'); b.postSpacingMm = val('svcPostSpacing'); b.stockLengthMm = val('svcStockLength');
       b.postMaterial = val('svcPostMaterial'); b.postPrice = val('svcPostPrice'); b.postSupplier = val('svcPostSupplier');
+      const pv = val('svcPanel'); if(pv!=="__add_other__") b.panel = pv;
     }
     const opts = [];
     App.querySelectorAll('[data-svcoptrow]').forEach(rowEl=>{
@@ -7438,9 +7733,11 @@ function openServiceBuilder(mode, editKey, extra){
   if(mode==="fence" && editKey){
     const ft = fenceTypeById(editKey);
     if(ft){
+      // The panel is picked from its own dropdown, so its line isn't repeated in the materials list.
+      const otherLines = (ft.lines||[]).filter(l=>!(ft.panel && l.material===ft.panel && l.basis==='bay'));
       Object.assign(b, {name:ft.name, heightMm:String(ft.heightMm), postSpacingMm:String(ft.postSpacingMm), stockLengthMm:String(ft.stockLengthMm),
-        postMaterial:ft.postMaterial||'', postKind:ft.postKind||'timber', productivity:String(ft.productivity||''),
-        options:deepClone(ft.options||[]), materials:(ft.lines||[]).length ? ft.lines.map(toRow) : [bldBlankMaterial()],
+        postMaterial:ft.postMaterial||'', postKind:ft.postKind||'timber', productivity:String(ft.productivity||''), panel:ft.panel||'',
+        options:deepClone(ft.options||[]), materials:otherLines.length ? otherLines.map(toRow) : [bldBlankMaterial()],
         plant:(ft.plant||[]).map(p=>({name:p.name, price:""})), letter:deepClone(ft.letter||[])});
     }
   }
@@ -7473,6 +7770,8 @@ const PAVING_LIB_FIELD_META = {
   // in the add dialog; `required:false` lets it be left blank (validated at quote time instead).
   facePricedPer: {label:"Priced", type:"select", options:[{value:"piece",label:"Per piece"},{value:"m2",label:"Per m²"}], fmt:v=>v==="m2"?"per m²":"per piece"},
   piecesPerM2: {label:"Pieces per m² (per-piece products only)", required:false, fmt:v=>v!=null&&v!==''?(Number(v)||0)+"/m²":"—"},
+  labourPrice: {label:"Fitting / labour price (£ each)", fmt:v=>'£'+(Number(v)||0).toFixed(2)+' fitting'},
+  rollLengthM: {label:"Roll length (m)", fmt:v=>(Number(v)||0)+" m per roll"},
   thicknessMm: {label:"Thickness (mm)", required:false, fmt:v=>v!=null&&v!==''?(Number(v)||0)+"mm thick":"no thickness"},
   copingPricedPer: {label:"Priced", type:"select", options:[{value:"m",label:"Per metre"},{value:"m2",label:"Per m²"}], fmt:v=>v==="m2"?"per m²":"per metre"},
 };
@@ -7668,9 +7967,10 @@ function renderSettings(){
       <div class="field"><label>Edging productivity (m/day/person)</label><input id="st_gravelEdgingProd" type="text" inputmode="decimal" value="${s.productivity && s.productivity.gravelEdging!=null ? s.productivity.gravelEdging : 12}"></div>
     </div>
     ${customStyleOptionsListHtml("gravel","Gravel types","gravel type")}
-    ${pavingProductLibraryHtml("gravelEdgingStyles","Edging styles","edging style",["piecesPerMetre","price"])}
+    ${pavingProductLibraryHtml("gravelGrids","Gravel grids (price per m²)","gravel grid (price per m²)",["price"])}
+    ${pavingProductLibraryHtml("edgingStyles","Edging styles (one list shared by every service)","edging style",["piecesPerMetre","price"])}
     <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Block Retaining Wall</div>
-    <div class="hint" style="margin-bottom:10px;">Footing concrete scales from the baseline below: the job's total footing volume ÷ (baseline area × baseline depth) × the baseline ballast, sharp sand and cement. Sharp sand is the shared "Sharp sand" material also used by Paving and Block paving. Coping width for per-m² copings = wall thickness + face skin thickness + 2 × overhang. Face products, rebar and copings have no built-in default — add them from their dropdowns on a quote or here. Paving slab types also appear in the coping list. A quote can't be finalised with a £0 price on sharp sand, pea shingle, wall ties (when used), the face product, rebar or coping.</div>
+    <div class="hint" style="margin-bottom:10px;">Footing concrete scales from the baseline below: the job's total footing volume ÷ (baseline area × baseline depth) × the baseline ballast, sharp sand and cement. Sharp sand is the shared "Sharp sand" material also used by Paving and Block paving. Per-m² coping (e.g. paving slabs) = wall length × footing width. Face products, rebar mesh (shared with Concrete base) and copings have no built-in default — add them from their dropdowns on a quote or here. Paving slab types also appear in the coping list. A quote can't be finalised with a £0 price on sharp sand, pea shingle, wall ties (when used), the face product, rebar or coping.</div>
     <div class="row">
       <div class="field"><label>Footing baseline area (m²)</label><input id="st_bwBaseArea" type="text" inputmode="decimal" value="${s.brickwallFootingBaseArea!=null?s.brickwallFootingBaseArea:10}"></div>
       <div class="field"><label>Footing baseline depth (mm)</label><input id="st_bwBaseDepth" type="text" inputmode="decimal" value="${s.brickwallFootingBaseDepth!=null?s.brickwallFootingBaseDepth:100}"></div>
@@ -7686,15 +7986,13 @@ function renderSettings(){
       <div class="field"><label>Concrete blocks per m²</label><input id="st_bwBlocksPerM2" type="text" inputmode="decimal" value="${s.brickwallBlocksPerM2!=null?s.brickwallBlocksPerM2:10}"></div>
     </div>
     <div class="row">
-      <div class="field"><label>Wall thickness (mm)</label><input id="st_bwWallThk" type="text" inputmode="decimal" value="${s.brickwallWallThickness!=null?s.brickwallWallThickness:100}"></div>
-      <div class="field"><label>Coping overhang each side (mm)</label><input id="st_bwOverhang" type="text" inputmode="decimal" value="${s.brickwallCopingOverhang!=null?s.brickwallCopingOverhang:50}"></div>
       <div class="field"><label>Finishing productivity (m/day/person)</label><input id="st_bwFinishProd" type="text" inputmode="decimal" value="${s.brickwallFinishingProductivity!=null?s.brickwallFinishingProductivity:10}"></div>
     </div>
     <div class="row">
       <div class="field"><label>Consumables quantity (per job)</label><input id="st_bwConsumables" type="text" inputmode="decimal" value="${s.brickwallConsumablesQty!=null?s.brickwallConsumablesQty:1}"></div>
     </div>
     ${pavingProductLibraryHtml("brickwallFaceProducts","Wall skin products (inside and face skin)","wall skin product",["price","facePricedPer","piecesPerM2","thicknessMm"])}
-    ${pavingProductLibraryHtml("brickwallRebar","Rebar","rebar",["price","lengthMm"])}
+    ${pavingProductLibraryHtml("cbMesh","Rebar mesh (shared with Concrete base)","rebar mesh",["price","widthMm","lengthMm"])}
     ${pavingProductLibraryHtml("brickwallCopings","Coping products","coping",["price","copingPricedPer"])}
     <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Sleeper retaining wall</div>
     <div class="hint" style="margin-bottom:10px;">Posts per run = ROUNDUP(length ÷ post spacing) + 1, cut from stock posts at in-ground depth + the tallest row's height. Stock post length, in-ground depth and postcrete bags per post are shared with Timber decking (same 100x100mm post) — change them in the Composite/Timber decking cards. Sleepers and screws have no built-in default — add them from their dropdowns on a quote or here. A quote can't be finalised with a £0 sleeper, screw, post, postcrete or Blackjack DPM price.</div>
@@ -7706,7 +8004,7 @@ function renderSettings(){
     ${pavingProductLibraryHtml("sleeperProducts","Sleepers","sleeper",["price","lengthMm","heightMm"])}
     ${pavingProductLibraryHtml("sleeperScrews","Screws","screw",["price","screwsPerBox"])}
     <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Fencing</div>
-    <div class="hint" style="margin-bottom:10px;">Each fence type is a full builder entry — height, post spacing, stock post, post material, materials and their quantity rules, plant, options and letter wording. Every type also gets posts per run (with an end post), postcrete (the shared bags-per-post setting), a post saver sleeve per timber post, and the common Remove old fence (the "Remove old fence" rate per metre in Materials), Gate (the "Gate" price in Materials, overridable per job) and consumables options. Post cut length = the shared in-ground depth + the fence height. A quote can't be finalised while any line it uses has a £0 price or plant rate.</div>
+    <div class="hint" style="margin-bottom:10px;">Each fence type is a full builder entry — height, post spacing, stock post, post material, materials and their quantity rules, plant, options and letter wording. Every type also gets posts per run (with an end post), postcrete (the shared bags-per-post setting), a post saver sleeve per timber post, and the common Remove old fence (the "Remove old fence" rate per metre in Materials), Gate (pick a gate type from your list below) and consumables options. A fence type can have a panel (one per bay) picked from your fence panels. Post cut length = the shared in-ground depth + the fence height. A quote can't be finalised while any line it uses has a £0 price or plant rate.</div>
     <div class="card" style="padding:14px 16px;margin:10px 0;">
       <div style="font-weight:800;font-size:13px;margin-bottom:8px;">Fence types</div>
       <div class="stack" style="gap:6px;margin-bottom:10px;">
@@ -7719,6 +8017,8 @@ function renderSettings(){
       </div>
       <button type="button" class="btn btn-ghost btn-sm" data-action="addFenceType">+ Add fence type</button>
     </div>
+    ${pavingProductLibraryHtml("fencePanels","Fence panels (price each — picked in a fence type)","fence panel",["price"])}
+    ${pavingProductLibraryHtml("fenceGates","Gate types (price each)","gate type",["price"])}
     <div class="row">
       <div class="field"><label>Fencing consumables quantity (per job)</label><input id="st_fenceConsumables" type="text" inputmode="decimal" value="${s.fenceConsumablesQty!=null?s.fenceConsumablesQty:1}"></div>
     </div>
@@ -7741,7 +8041,10 @@ function renderSettings(){
     ${pavingProductLibraryHtml("pondPumps","Pumps","pump",["price"])}
     ${pavingProductLibraryHtml("pondFilters","Filters","filter",["price"])}
     ${pavingProductLibraryHtml("pondBridges","Bridges","bridge",["price"])}
-    <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Steel edging</div>
+    <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Resin bound</div>
+    <div class="hint" style="margin-bottom:10px;">Each resin system is your own: its name and every material it uses, with what it costs you, the area one unit covers (m²) or once per job, and the supplier. On a quote, each material = ROUNDUP(area ÷ coverage).</div>
+    ${resinSystemsListHtml()}
+    <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Welded steel edging</div>
     <div class="hint" style="margin-bottom:10px;">Steel edging products are priced <strong>per metre</strong> (put the thickness, height or material in the name). Stakes per run = ROUNDUP(run length ÷ stake spacing) + 1; each rebar bar is cut into ROUNDDOWN(bar length ÷ stake length) stakes; bars = ROUNDUP(total stakes ÷ stakes per bar). The welder's daily rate is in Materials. A quote can't be finalised with a £0 steel, rebar, consumables or welder price.</div>
     <div class="row">
       <div class="field"><label>Stake spacing (mm)</label><input id="st_steelSpacing" type="text" inputmode="decimal" value="${s.steelStakeSpacing!=null?s.steelStakeSpacing:500}"></div>
@@ -7758,7 +8061,7 @@ function renderSettings(){
       <div class="field"><label>Consumables quantity (per job)</label><input id="st_fbConsumables" type="text" inputmode="decimal" value="${s.fbConsumablesQty!=null?s.fbConsumablesQty:1}"></div>
       <div class="field"><label>Edging productivity (m/day/person)</label><input id="st_fbEdgingProd" type="text" inputmode="decimal" value="${s.productivity && s.productivity.flowerbedsEdging!=null ? s.productivity.flowerbedsEdging : 12}"></div>
     </div>
-    ${pavingProductLibraryHtml("fbEdgingStyles","Edging styles","edging style",["piecesPerMetre","price"])}
+    ${pavingProductLibraryHtml("edgingStyles","Edging styles (one list shared by every service)","edging style",["piecesPerMetre","price"])}
     <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Artificial turf</div>
     <div class="hint" style="margin-bottom:10px;">Type 1 MOT = ROUNDUP(Σ row area × baseline rate × ((dig-out − surface build-up) ÷ baseline depth)). Turf = ROUNDUP(area), plus the "Wastage for cuts" % asked on the quote. Infill bags = ROUNDUP(area ÷ coverage). Seam tape rolls = ROUNDUP(edging length ÷ roll length). Edge restraint concrete (sand/ballast/cement) and the cement mixer only apply with a non-steel edging length. The default dig-out depth per row is in the Waste &amp; spoil table above. A quote can't be finalised while any material in use has a £0 price.</div>
     <div class="row">
@@ -7775,10 +8078,10 @@ function renderSettings(){
       <div class="field"><label>Edging productivity (m/day/person)</label><input id="st_atEdgingProd" type="text" inputmode="decimal" value="${s.productivity && s.productivity.artificialturfEdging!=null ? s.productivity.artificialturfEdging : 12}"></div>
     </div>
     ${pavingProductLibraryHtml("atTurf","Artificial turf (price per m²)","artificial turf (price per m²)",["price"])}
-    ${pavingProductLibraryHtml("atGrano","Grano dust (price per tonne)","grano dust (price per tonne)",["price"])}
-    ${pavingProductLibraryHtml("atSeamTape","Adhesive seam tape (price per roll)","seam tape (price per roll)",["price"])}
+    ${pavingProductLibraryHtml("beddingMaterials","Bedding materials (price per tonne — shared by Block paving and Artificial turf)","bedding material (price per tonne)",["price"])}
+    ${pavingProductLibraryHtml("atSeamTape","Jointing tape (price per roll)","jointing tape",["price","rollLengthM"],{rollLengthM:20})}
     ${pavingProductLibraryHtml("atInfill","Infill sand (price per bag)","infill sand (price per bag)",["price"])}
-    ${pavingProductLibraryHtml("atEdgingStyles","Edging styles","edging style",["piecesPerMetre","price"])}
+    ${pavingProductLibraryHtml("edgingStyles","Edging styles (one list shared by every service)","edging style",["piecesPerMetre","price"])}
     <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Pergola</div>
     <div class="hint" style="margin-bottom:10px;">Per row: posts = 2 × (ROUNDUP(length ÷ post spacing) + 1), each cut at the shared in-ground depth + the row's height from the stock post length; beams = 2 × ROUNDUP(width ÷ joist length); rafters = (ROUNDUP(length ÷ rafter centres) + 1) × ROUNDUP(width ÷ joist length). Postcrete uses the shared bags-per-post setting. Products have no built-in default — add them from the dropdowns on a quote or here. A quote can't be finalised while any line in use has a £0 price.</div>
     <div class="row">
@@ -7798,7 +8101,7 @@ function renderSettings(){
     ${pavingProductLibraryHtml("pgJoists","Joists (price per piece)","joist",["price","lengthMm"])}
     ${pavingProductLibraryHtml("pgDpm","Blackjack DPM (price per tin)","DPM (price per tin)",["price"])}
     ${pavingProductLibraryHtml("pgScrews","Screws (price per box)","screws (price per box)",["price"])}
-    ${pavingProductLibraryHtml("pgOsb","OSB board (price per board)","OSB board (price per board)",["price"])}
+    ${pavingProductLibraryHtml("pgOsb","Roofing boards (price per board)","roofing board (price per board)",["price"])}
     ${pavingProductLibraryHtml("pgCoverings","Roof coverings","roof covering",["price","coverageM2"])}
     <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Concrete base</div>
     <div class="hint" style="margin-bottom:10px;">Each row's concrete depth = its dig-out depth − the MOT depth below. Type 1 MOT = ROUNDUP(Σ area × baseline rate × (MOT depth ÷ baseline depth)). Mixed-on-site concrete scales the baseline (area × depth) to the job's mixed volume; ready-mix rows use a ready-mix product per m³ instead (no sand/ballast/cement or mixer). Mesh sheets = ROUNDUP(Σ area ÷ sheet area). The default dig-out depth per row is in the Waste &amp; spoil table above. A quote can't be finalised while any line in use has a £0 price.</div>
@@ -7833,11 +8136,12 @@ function renderSettings(){
     </div>
     ${customStyleOptionsListHtml("paving","Slab types","slab type")}
     ${pavingProductLibraryHtml("pavingJointingCompounds","Jointing compounds","jointing compound",["price","coverage"])}
-    ${pavingProductLibraryHtml("pavingEdgingStyles","Edging styles","edging style",["piecesPerMetre","price"])}
+    ${pavingProductLibraryHtml("pavingCovers","Recessed manhole covers (material + fitting price)","manhole cover",["price","labourPrice"])}
+    ${pavingProductLibraryHtml("edgingStyles","Edging styles (one list shared by every service)","edging style",["piecesPerMetre","price"])}
     <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Block paving</div>
     <div class="hint" style="margin-bottom:10px;">Type 1 MOT depth = dig-out depth − surface build-up (the laying course plus the block). MOT quantity = area × baseline rate × (MOT depth ÷ baseline depth), rounded up to whole tonnes — the defaults give 12 tonnes for 40m². Wastage for cut blocks is asked on each Block paving quote ("Wastage for cuts"). Blocks are added straight from the Block style dropdown on a Block paving quote ("+ Add new…") — the list below just lets you delete one. Jointing compounds and edging styles can be added from their own dropdowns on a quote too, or from here.</div>
     <div class="row">
-      <div class="field"><label>Surface build-up (mm)</label><input id="st_blockSurfaceBuildUp" type="text" inputmode="decimal" value="${s.blockPavingSurfaceBuildUp!=null?s.blockPavingSurfaceBuildUp:100}"></div>
+      <div class="hint" style="margin-bottom:10px;">Type 1 MOT depth = dig-out depth − 100mm (50mm bedding + 50mm block).</div>
     </div>
     <div class="row">
       <div class="field"><label>MOT baseline coverage (tonnes/m²)</label><input id="st_blockMotRate" type="text" inputmode="decimal" value="${s.blockPavingMotBaselineRate!=null?s.blockPavingMotBaselineRate:0.3}"></div>
@@ -7848,8 +8152,9 @@ function renderSettings(){
       <div class="field"><label>Edging productivity (m/day/person)</label><input id="st_blockEdgingProd" type="text" inputmode="decimal" value="${s.productivity && s.productivity.blockpavingEdging!=null ? s.productivity.blockpavingEdging : 12}"></div>
     </div>
     ${customStyleOptionsListHtml("block","Block types","block type")}
+    ${pavingProductLibraryHtml("beddingMaterials","Bedding materials (price per tonne — shared by Block paving and Artificial turf)","bedding material (price per tonne)",["price"])}
     ${pavingProductLibraryHtml("blockJointingCompounds","Jointing compounds","jointing compound",["price","coverage"],{coverage:8})}
-    ${pavingProductLibraryHtml("blockEdgingStyles","Edging styles","edging style",["piecesPerMetre","price"])}
+    ${pavingProductLibraryHtml("edgingStyles","Edging styles (one list shared by every service)","edging style",["piecesPerMetre","price"])}
     <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 6px;">Composite decking</div>
     <div class="hint" style="margin-bottom:10px;">Everything is worked out per measurement row in whole mm. Deck boards, decking screws and fascia boards have no built-in default — add them straight from their dropdowns on a Composite decking quote ("+ Add new…") or from here, and delete any you no longer use. A quote can't be finalised with a £0 board, screw, fascia or postcrete price. Post, joist and postcrete prices are edited in the Materials tab (the Composite posts price is per stock post).</div>
     <div class="row">
@@ -8286,6 +8591,7 @@ function modalHtml(){
       </div>
     </div>`;
   }
+  if(m.type==="resinSystem") return resinSystemModalHtml(m);
   if(m.type==="addMaterialOption"){
     return `<div class="modal-overlay" data-action="modalStop">
       <div class="modal-box" data-action="modalStop" style="max-width:420px;">
@@ -8351,6 +8657,81 @@ function showAddMaterialOption(groupKey, onSave){ S._modal = {type:"addMaterialO
    new…" sentinel (see optionFieldHtml's `source` branch and the data-opt input listener), so a
    tenant can add one of these without leaving the quote they're building. onSaved (optional)
    receives the newly-saved {id, name, ...} entry once it's persisted. */
+/* Resin system editor: the system's name and its materials — each with a unit, its cost, an m²
+   coverage per unit (or "once per job") and a supplier. Used in first-time setup, Settings and
+   the quote's "+ Add new…". Every material is also put in the Materials list. */
+function openResinSystemModal(existing, onSaved){
+  const sys = existing ? deepClone(existing) : {id:"rs_"+uid(), name:"", vatIncluded:true, lines:[{material:"", unit:"", price:"", coverage:"", perJob:false, supplier:""}]};
+  if(!sys.lines || !sys.lines.length) sys.lines = [{material:"", unit:"", price:"", coverage:"", perJob:false, supplier:""}];
+  S._modal = {type:"resinSystem", sys, editingId: existing ? existing.id : null, oldName: existing ? existing.name : null, error:"", _onSave:onSaved};
+  render();
+}
+function resinSystemModalHtml(m){
+  const L = m.sys.lines;
+  return `<div class="modal-overlay" data-action="modalStop">
+    <div class="modal-box" data-action="modalStop" style="max-width:640px;">
+      <div style="font-weight:800;font-size:15px;margin-bottom:4px;">${m.editingId?'Edit':'Add'} a resin system</div>
+      <div class="hint" style="margin-bottom:12px;">Name the system, then list everything it uses. Each material needs what it costs you, the area one unit covers (m²) — or tick "Once per job" — and the supplier.</div>
+      <div class="field"><label>Resin system name</label><input type="text" data-rs-name value="${esc(m.sys.name)}" placeholder="e.g. Addagrip Addagrid"></div>
+      <label class="checkline" style="margin-bottom:10px;"><input type="checkbox" data-rs-vat ${m.sys.vatIncluded!==false?'checked':''}> Prices include VAT</label>
+      ${L.map((l,i)=>`<div class="card" data-rs-line="${i}" style="padding:10px 12px;margin-bottom:8px;">
+        <div class="row" style="gap:8px;align-items:end;">
+          <div class="field" style="flex:2 1 180px;margin:0;"><label>Material</label><input type="text" data-rs-f="material" value="${esc(l.material||'')}" placeholder="e.g. Resin kit"></div>
+          <div class="field" style="flex:1 1 80px;margin:0;"><label>Unit</label><input type="text" data-rs-f="unit" value="${esc(l.unit||'')}" placeholder="kit"></div>
+          <div class="field" style="flex:1 1 90px;margin:0;"><label>Cost (£)</label><input type="text" inputmode="decimal" data-rs-f="price" value="${esc(l.price==null?'':l.price)}" placeholder="0.00"></div>
+          <button type="button" class="icon-btn" data-action="removeResinLine" data-idx="${i}" title="Remove" ${L.length<2?'disabled':''}>✕</button>
+        </div>
+        <div class="row" style="gap:8px;align-items:end;margin-top:8px;">
+          <div class="field" style="flex:1 1 120px;margin:0;"><label>Covers (m² per unit)</label><input type="text" inputmode="decimal" data-rs-f="coverage" value="${esc(l.coverage==null?'':l.coverage)}" placeholder="e.g. 4" ${l.perJob?'disabled':''}></div>
+          <label class="checkline" style="flex:0 0 auto;margin:0;"><input type="checkbox" data-rs-f="perJob" ${l.perJob?'checked':''}> Once per job</label>
+          <div class="field" style="flex:1 1 140px;margin:0;"><label>Supplier</label><input type="text" data-rs-f="supplier" value="${esc(l.supplier||'')}" placeholder="e.g. AWBS"></div>
+        </div>
+      </div>`).join('')}
+      <button type="button" class="btn btn-ghost btn-sm" data-action="addResinLine">+ Add material</button>
+      ${m.error?`<div class="msg msg-err" style="margin-top:10px;">${esc(m.error)}</div>`:''}
+      <div class="row" style="gap:8px;margin-top:14px;">
+        <button class="btn btn-ghost" data-action="modalCancel">Cancel</button>
+        <button id="modalConfirmBtn" class="btn btn-primary" data-action="modalOk" style="flex:1;">Save system</button>
+      </div>
+    </div>
+  </div>`;
+}
+async function saveResinSystemFromModal(m){
+  const sys = m.sys;
+  sys.name = String(sys.name||'').trim();
+  const lines = sys.lines.filter(l=>String(l.material||'').trim() || String(l.price||'').trim());
+  if(!sys.name) return "Give the resin system a name.";
+  if((S.settings.resinSystems||[]).some(x=>x.name.toLowerCase()===sys.name.toLowerCase() && x.id!==m.editingId)) return `There's already a resin system called "${sys.name}".`;
+  if(!lines.length) return "Add at least one material.";
+  for(const l of lines){
+    const nm = String(l.material||'').trim();
+    if(!nm) return "Every material needs a name.";
+    if(!(Number(l.price)>0)) return `Enter what "${nm}" costs you (more than £0).`;
+    if(!l.perJob && !(Number(l.coverage)>0)) return `Enter the area one unit of "${nm}" covers (m²), or tick "Once per job".`;
+    if(!String(l.supplier||'').trim()) return `Enter the supplier for "${nm}".`;
+  }
+  const clean = {id:sys.id, name:sys.name, vatIncluded:sys.vatIncluded!==false, lines:lines.map(l=>({material:String(l.material).trim(), unit:String(l.unit||'').trim()||'unit',
+    price:Number(l.price), coverage:l.perJob?0:Number(l.coverage), perJob:!!l.perJob, supplier:String(l.supplier).trim()}))};
+  if(!Array.isArray(S.settings.resinSystems)) S.settings.resinSystems = [];
+  const i = S.settings.resinSystems.findIndex(x=>x.id===clean.id);
+  if(i>=0) S.settings.resinSystems[i] = clean; else S.settings.resinSystems.push(clean);
+  clean.lines.forEach(l=>{ const cur = S.settings.materials[l.material];
+    S.settings.materials[l.material] = Object.assign({}, cur||{}, {unit:l.unit, section:(cur&&cur.section)||'Resin Bound', price:l.price, supplier:l.supplier, vatIncluded:clean.vatIncluded}); });
+  if(S.settings.onboarded) await saveSettings({resinSystems:S.settings.resinSystems, materials:S.settings.materials});
+  return clean;
+}
+function resinSystemsListHtml(){
+  const list = S.settings.resinSystems||[];
+  return `<div class="card" style="padding:14px 16px;margin:10px 0;">
+    <div style="font-weight:800;font-size:13px;margin-bottom:8px;">Resin systems</div>
+    ${list.length ? `<div class="stack" style="gap:6px;margin-bottom:10px;">${list.map(r=>`<div class="row" style="align-items:center;gap:10px;">
+      <div style="flex:1;font-weight:600;">${esc(r.name)}</div><div class="hint" style="min-width:110px;text-align:right;">${(r.lines||[]).length} material${(r.lines||[]).length===1?'':'s'}</div>
+      <button type="button" class="btn btn-ghost btn-sm" data-action="editResinSystem" data-id="${esc(r.id)}">Edit</button>
+      <button type="button" class="icon-btn" data-action="removeResinSystem" data-id="${esc(r.id)}" title="Remove">✕</button></div>`).join('')}</div>`
+      : `<div class="hint" style="margin-bottom:10px;">None yet.</div>`}
+    <button type="button" class="btn btn-ghost btn-sm" data-action="addResinSystem">+ Add resin system</button>
+  </div>`;
+}
 function openPavingProductModal(libKey, singular, fieldKeys, onSaved, fieldDefaults, existing, errorMsg){
   // `existing` (a library entry) opens the same dialog pre-filled to EDIT that product in place —
   // its id is kept, and a rename is carried onto the quote being built (renameLibraryRefs).
@@ -8397,7 +8778,7 @@ function openPavingProductModal(libKey, singular, fieldKeys, onSaved, fieldDefau
    Materials list, under the service it's for, with its unit, cost and supplier. The product
    library stays the source of truth for the quote maths; the two are kept in step both ways
    (editing either one updates the other — see saveMaterialsForm). */
-const PRODUCT_UNITS = {atTurf:'m²', atGrano:'tonne', atInfill:'bag', atSeamTape:'roll', pavingJointingCompounds:'unit', blockJointingCompounds:'unit',
+const PRODUCT_UNITS = {edgingStyles:'each', beddingMaterials:'tonne', gravelGrids:'m²', pavingCovers:'each', fenceGates:'each', fencePanels:'each', atTurf:'m²', atGrano:'tonne', atInfill:'bag', atSeamTape:'roll', pavingJointingCompounds:'unit', blockJointingCompounds:'unit',
   steelEdgingProducts:'m', steelRebar:'bar', brickwallRebar:'bar', compositeDeckScrews:'box', sleeperScrews:'box', cbScrews:'box', pgScrews:'box',
   cbShuttering:'board', cbMesh:'sheet', cbReadyMix:'m³', pgJoists:'piece', pgDpm:'tin', pgOsb:'board', pgCoverings:'unit', wfPebbles:'bag', wasteSkips:'skip'};
 function productLibraryKeys(){
@@ -8410,6 +8791,8 @@ function productLibraryKeys(){
   return [...keys];
 }
 function productSection(libKey){
+  if(libKey==="edgingStyles") return "Edging (all services)";
+  if(libKey==="beddingMaterials") return "Bedding (Block paving & Artificial turf)";
   for(const [k, def] of Object.entries(SERVICES)){
     if((def.options||[]).some(o=>o.source===libKey) || (def.rowSelects||[]).some(r=>r.source===libKey)) return def.label;
   }
@@ -8725,6 +9108,11 @@ App.addEventListener("click", async (e)=>{
         if(!value) break; // require a value — leave the dialog open
         const cb = m._onYes; S._modal = null;
         if(cb) await cb(value);
+      } else if(m.type==="resinSystem"){
+        const res = await saveResinSystemFromModal(m);
+        if(typeof res==="string"){ m.error = res; render(); break; }
+        const cb = m._onSave; S._modal = null;
+        if(cb) cb(res);
       } else if(m.type==="addMaterialOption"){
         const nameInp = document.getElementById('modalMatName');
         const priceInp = document.getElementById('modalMatPrice');
@@ -8789,6 +9177,29 @@ App.addEventListener("click", async (e)=>{
       }
       render();
       break;
+    }
+    case "addResinLine": case "removeResinLine": {
+      const m = S._modal; if(!m || m.type!=="resinSystem") break;
+      if(action==="addResinLine") m.sys.lines.push({material:"", unit:"", price:"", coverage:"", perJob:false, supplier:""});
+      else if(m.sys.lines.length>1) m.sys.lines.splice(parseInt(t.getAttribute("data-idx"),10), 1);
+      render(); break;
+    }
+    case "addResinSystem": openResinSystemModal(null, ()=>{ if(S.screen==="setup") renderSetup(); else { S._savedMsg = "Resin system saved."; render(); } }); break;
+    case "editResinSystem": { const r = (S.settings.resinSystems||[]).find(x=>x.id===t.getAttribute("data-id")); if(r) openResinSystemModal(r, ()=>{ if(S.screen==="setup") renderSetup(); else { S._savedMsg = "Resin system saved."; render(); } }); break; }
+    case "removeResinSystem": {
+      const r = (S.settings.resinSystems||[]).find(x=>x.id===t.getAttribute("data-id")); if(!r) break;
+      showConfirm(`Remove the resin system "${r.name}"? Quotes already saved keep their prices.`, async ()=>{
+        S.settings.resinSystems = (S.settings.resinSystems||[]).filter(x=>x.id!==r.id);
+        if(S.settings.onboarded) await saveSettings({resinSystems:S.settings.resinSystems});
+      }, {confirmLabel:"Remove", danger:true});
+      break;
+    }
+    case "setupResin": {
+      const yes = t.getAttribute("data-val")==="true";
+      const list = S.settings.servicesEnabled;
+      if(yes && !list.includes("resinbound")) list.push("resinbound");
+      if(!yes) S.settings.servicesEnabled = list.filter(k=>k!=="resinbound");
+      S.settings._resinAnswered = true; renderSetup(); break;
     }
     case "modalCancel": {
       const wasRc = S._modal && S._modal.type==="runningCostCalc";
@@ -9078,10 +9489,14 @@ App.addEventListener("click", async (e)=>{
       if(isFence){
         addMaterial(b.postMaterial, 'each', b.postPrice, b.postSupplier||'', 'Fencing');
         const prev = b.editKey ? fenceTypeById(b.editKey) : null;
+        // The chosen panel is one per bay, ahead of the other lines.
+        const panel = (b.panel||'').trim();
+        const fenceLines = lines.filter(l=>!(panel && l.material===panel));
+        if(panel) fenceLines.unshift({material:panel, basis:'bay', amount:1, per:1, roundUp:false, onlyIf:'', optionKey:''});
         const entry = {id: b.editKey || ('ft_'+uid()), builtin: !!(prev && prev.builtin), name:b.name.trim(),
           heightMm:Number(b.heightMm), postSpacingMm:Number(b.postSpacingMm), stockLengthMm:Number(b.stockLengthMm),
-          postMaterial:b.postMaterial.trim(), postKind:b.postKind==="composite"?"composite":"timber", productivity,
-          options, lines, plant, letter};
+          postMaterial:b.postMaterial.trim(), postKind:b.postKind==="composite"?"composite":"timber", productivity, panel,
+          options, lines:fenceLines, plant, letter};
         if(!Array.isArray(S.settings.fenceTypes)) S.settings.fenceTypes = [];
         const i = S.settings.fenceTypes.findIndex(x=>x.id===entry.id);
         if(i>=0) S.settings.fenceTypes[i] = entry; else S.settings.fenceTypes.push(entry);
@@ -9166,8 +9581,6 @@ App.addEventListener("click", async (e)=>{
       if(edgingProd>0) S.settings.productivity.pavingEdging = edgingProd;
       // Block paving's own sub-base/wastage/consumables/edging-productivity settings. Surface
       // build-up and consumables may legitimately be 0; the baselines and productivity must be > 0.
-      const blockBuildUp = numval('st_blockSurfaceBuildUp');
-      if(blockBuildUp>=0) S.settings.blockPavingSurfaceBuildUp = blockBuildUp;
       const blockMotRate = numval('st_blockMotRate');
       if(blockMotRate>0) S.settings.blockPavingMotBaselineRate = blockMotRate;
       const blockMotDepth = numval('st_blockMotDepth');
@@ -9224,8 +9637,6 @@ App.addEventListener("click", async (e)=>{
       compSet('st_bwRebarLines','brickwallRebarLines');
       compSet('st_bwRebarLap','brickwallRebarLap',true);
       compSet('st_bwBlocksPerM2','brickwallBlocksPerM2');
-      compSet('st_bwWallThk','brickwallWallThickness',true);
-      compSet('st_bwOverhang','brickwallCopingOverhang',true);
       compSet('st_bwFinishProd','brickwallFinishingProductivity');
       compSet('st_bwConsumables','brickwallConsumablesQty',true);
       { const gep = numval('st_gravelEdgingProd'); if(gep>0) S.settings.productivity.gravelEdging = gep; }
@@ -10006,6 +10417,12 @@ App.addEventListener("click", async (e)=>{
 
 App.addEventListener("change", async (e)=>{
   const t = e.target;
+  // Fence type builder: "+ Add new…" on the panel dropdown saves a new panel and picks it.
+  if(t.id==="svcPanel" && t.value==="__add_other__" && S._svcBuilder){
+    const b = S._svcBuilder; readSvcBuilderStep(b); t.value = b.panel||'';
+    openPavingProductModal("fencePanels", "fence panel", ["price"], (entry)=>{ b.panel = entry.name; render(); });
+    return;
+  }
   if(t.matches && t.matches('[data-logo-upload]')){
     const file = t.files && t.files[0];
     if(!file) return;
@@ -10050,6 +10467,16 @@ App.addEventListener("input", (e)=>{
     const k = t.getAttribute('data-rc-setting'); const n = parseFloat(t.value);
     S.settings[k] = t.value.trim()==='' || isNaN(n) ? null : n;
     rcRefreshFigures(); rcSaveSoon();
+    return;
+  }
+  if(t.matches('[data-rs-name],[data-rs-vat],[data-rs-f]') && S._modal && S._modal.type==="resinSystem"){
+    const m = S._modal;
+    if(t.matches('[data-rs-name]')) m.sys.name = t.value;
+    else if(t.matches('[data-rs-vat]')) m.sys.vatIncluded = t.checked;
+    else {
+      const i = parseInt(t.closest('[data-rs-line]').getAttribute('data-rs-line'),10), f = t.getAttribute('data-rs-f');
+      if(m.sys.lines[i]){ m.sys.lines[i][f] = t.type==="checkbox" ? t.checked : t.value; if(f==="perJob"){ const c = t.closest('[data-rs-line]').querySelector('[data-rs-f="coverage"]'); if(c) c.disabled = t.checked; } }
+    }
     return;
   }
   if(t.matches('[data-step-f]')){
@@ -10119,7 +10546,10 @@ App.addEventListener("input", (e)=>{
     const customGroup = t.getAttribute('data-customizable');
     const sourceAddKey = t.getAttribute('data-source-add');
     const addAction = t.getAttribute('data-add-action');
-    if(addAction==="fenceTypeBuilder" && t.value === "__add_other__"){
+    if(addAction==="resinSystemBuilder" && t.value === "__add_other__"){
+      t.value = st.options[optKey]||'';
+      openResinSystemModal(null, (sys)=>{ st.options[optKey] = sys.name; rememberOption(key, optKey, sys.name); reflow(); });
+    } else if(addAction==="fenceTypeBuilder" && t.value === "__add_other__"){
       // "+ Add other…" on Fencing's fence type opens the builder for a new type; saving it comes
       // back to this quote with the new type selected (see saveServiceBuilder).
       openServiceBuilder("fence", null, {returnToQuote:true});
@@ -10127,7 +10557,7 @@ App.addEventListener("input", (e)=>{
       // Don't save the sentinel as the option value — open the "add a material" dialog instead,
       // and only set the option once a name is actually saved. Re-rendering (inside
       // showAddMaterialOption) puts the dropdown's visible selection back to its real value.
-      showAddMaterialOption(customGroup, (name)=>{ st.options[optKey] = name; reflow(); });
+      showAddMaterialOption(customGroup, (name)=>{ st.options[optKey] = name; rememberOption(key, optKey, name); reflow(); });
     } else if(customGroup && t.value === "__edit_current__"){
       // "✎ Edit …" on a materials-list dropdown (slab type, gravel style…) — edit that material's
       // price, supplier and VAT setting; the name stays, since the Materials list is keyed by it.
@@ -10151,9 +10581,10 @@ App.addEventListener("input", (e)=>{
       const fieldKeys = (t.getAttribute('data-add-fields')||'').split(',').filter(Boolean);
       let fieldDefaults; const defaultsRaw = t.getAttribute('data-add-field-defaults');
       if(defaultsRaw){ try{ fieldDefaults = JSON.parse(defaultsRaw); }catch(e){ fieldDefaults = undefined; } }
-      openPavingProductModal(sourceAddKey, singular, fieldKeys, (entry)=>{ st.options[optKey] = entry.name; if(key==="gravel" || key==="flowerbeds" || key==="artificialturf") syncGravelSteelEdging(d); reflow(); }, fieldDefaults);
+      openPavingProductModal(sourceAddKey, singular, fieldKeys, (entry)=>{ st.options[optKey] = entry.name; rememberOption(key, optKey, entry.name); if(key==="gravel" || key==="flowerbeds" || key==="artificialturf") syncGravelSteelEdging(d); reflow(); }, fieldDefaults);
     } else {
       st.options[optKey] = t.value;
+      rememberOption(key, optKey, t.value);
       if(key==="gravel" || key==="flowerbeds" || key==="artificialturf") syncGravelSteelEdging(d);
       if(key==="fence" && optKey==="fenceType") applyFenceTypeDefaults(st);
       reflow();

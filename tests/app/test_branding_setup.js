@@ -45,9 +45,12 @@ const fs = require('fs');
   await page.fill('#f_pin','1234'); await page.fill('#f_pin2','1234');
   await click(page, 'button[data-action="setupNext"]');
   let b = await store(page);
-  const priced = Object.values(b.materials).filter(m=>(m.price||0)>0).length;
-  const supplied = Object.values(b.materials).filter(m=>m.supplier).length;
-  check('new business: no material prices or suppliers', priced===0 && supplied===0);
+  // Only the two built-in starting products carry a price: the reference gravel grid and the
+  // customer-supplied water feature (both editable).
+  const seeded = n => /^Gravel grid 590 × 390mm|^Customer-supplied water feature$/.test(n);
+  const priced = Object.entries(b.materials).filter(([n,m])=>!seeded(n) && (m.price||0)>0).length;
+  const supplied = Object.entries(b.materials).filter(([n,m])=>!seeded(n) && m.supplier).length;
+  check('new business: no material prices or suppliers (apart from the built-in gravel grid and customer-supplied water feature)', priced===0 && supplied===0);
   check('setup answers saved (rates, mark-up 15, VAT 0.2, Sat working, 8am)', b.dayRatePerPerson===180 && b.expensesPerDay===90 && b.markupPercent===15 && b.vatRate===0.2 && b.workingDays[6]===true && b.workStart==='08:00');
   check('not flagged as Infinity; brand colour saved', b.brandInfinity===false && /^#/.test(b.brandColor||''));
   check('top bar shows their logo', !!(await page.$('.topbar img.brand-logo')));

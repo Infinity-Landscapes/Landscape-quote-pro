@@ -44,7 +44,7 @@ const fs = require('fs');
   check('blocker until a fence type is picked', /Select a fence type/.test(await txt()));
   await page.selectOption('select[data-opt="fenceType"]','closeboard'); await settle();
   t = await txt();
-  check('productivity starts at the type rate (5)', await v('[data-opt="productivity"]')==='5');
+  check('productivity starts at the type rate (Close-board 8 m/day)', await v('[data-opt="productivity"]')==='8');
   check('stock posts = 5 + 3 = 8 (cut 2400 = stock)', t.includes('100x100 treated timber fence post8'));
   check('sleeves = 8 posts', t.includes('Post saver sleeve8'));
   check('postcrete = 8 × 2 = 16', t.includes('Postcrete16'));
@@ -52,7 +52,7 @@ const fs = require('fs');
   check('feather edge = ROUNDUP(100) + ROUNDUP(45) = 145', t.includes('Feather edge board145'));
   check('gravel board / capping / counter = 6', t.includes('Timber gravel board6') && t.includes('Capping rail6') && t.includes('Counter rail6'));
   check('nails = ROUNDUP(14.5/20) = 1', t.includes('Box of nails1'));
-  check('labour = 14.5/5 × £150 = £435.00', /435\.00/.test(t));
+  check('labour = 14.5/8 × £150 = £271.88', /271\.88/.test(t));
   check('£0 blockers name the lines', /"100x100 treated timber fence post" has no price/.test(t) && /"Nail gun" has no daily rate/.test(t) && /"Arris rail" has no price/.test(t));
   // common options
   await click('button[data-action="setOpt"][data-opt="removeOld"][data-val="true"]');
@@ -60,14 +60,19 @@ const fs = require('fs');
   await page.fill('[data-opt="gateCount"]','2'); await settle();
   t = await txt();
   check('remove old fence = 14.5 m', t.includes('Remove old fence14.5'));
-  check('gates = 2', t.includes('Gate2'));
+  check('gate type dropdown, blocker until one is picked', !!(await page.$('select[data-opt="gateType"]')) && /Select a gate type/.test(t));
+  await page.selectOption('select[data-opt="gateType"]','__add_other__'); await settle();
+  await page.fill('#mf_name','Featheredge gate'); await page.fill('#mf_price','350'); await page.fill('#mf_supplier','Jewson');
+  await click('button[data-action="modalOk"]');
+  t = await txt();
+  check('gates = 2 of the chosen gate type', /Featheredge gate( \(Jewson\))?\s*2/.test(t));
 
   // --- Panel
   await page.selectOption('select[data-opt="fenceType"]','panel'); await settle();
   t = await txt();
   check('panel: gravel board option appears, ticked by default', !!(await page.$('button[data-action="setOpt"][data-opt="t_gravelBoard"][data-val="true"].btn-primary')));
   check('panel: posts 7 + 4 = 11, lap panels 9, gravel 9, screws 1', t.includes('100x100 treated timber fence post11') && t.includes('Lap panel9') && t.includes('Timber gravel board9') && t.includes('Box of 5x80mm screws1'));
-  check('panel: productivity switched to 8.3', await v('[data-opt="productivity"]')==='8.3');
+  check('panel: productivity switched to 10', await v('[data-opt="productivity"]')==='10');
   await click('button[data-action="setOpt"][data-opt="t_gravelBoard"][data-val="false"]');
   check('panel: no gravel board when unticked', !(await txt()).includes('Timber gravel board9'));
   // --- Composite
@@ -123,7 +128,7 @@ const fs = require('fs');
   check('letter: cleared + old fencing removed', /Fence line cleared and old fencing removed\./.test(t));
   check('letter: post holes at the in-ground depth', /Post holes dug to 600mm\./.test(t));
   check('letter: counter rail + capping lines', /Counter rail fitted to the back of the fence\./.test(t) && /Finished with a capping rail\./.test(t));
-  check('letter: gates line', /2 matching gates installed\./.test(t));
+  check('letter: gates line names the gate type', /2 gates installed \(Featheredge gate\)\./.test(t));
 
   // --- Upgraded custom service builder: options, rules, plant, letter, edit
   await click('button[data-nav="settings"]');

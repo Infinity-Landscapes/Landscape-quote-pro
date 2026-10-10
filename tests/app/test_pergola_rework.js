@@ -50,7 +50,7 @@ const fs = require('fs');
   check('joists = (2 + 16) + (2 + 11) = 31 pieces', t.includes('6x2 oak31'));
   check('screws = ROUNDUP(28/10) = 3', t.includes('Hexhead box3'));
   check('consumables 1', t.includes('Consumables1'));
-  check('labour = 28/16.7 × £150 = £251.50', /251\.50/.test(t));
+  check('labour = 28/9 × £150 = £466.67', /466\.67/.test(t));
   check('no blockers', !/Needs attention/.test(t));
   await page.fill('[data-row="1"] input[data-mf="heightMm"]','2700'); await settle();
   check('blocker: cut longer than stock post', /3300mm post cut \(in-ground 600mm \+ height 2700mm\) is longer than the 3000mm stock post/.test(await txt()));
@@ -63,7 +63,7 @@ const fs = require('fs');
   await click('button[data-action="wizNext"]');
   for (let i=0;i<4 && !(await page.$('button[data-action="saveSentQuote"]')); i++){ const b = await page.$('button[data-action="wizNext"]'); if(!b) break; await b.click(); await settle(); }
   t = await txt();
-  check('no waste page; letter lines incl. roof', /Oak post posts set in postcrete footings/.test(t) && /Roof deck of OSB board fixed across the rafters\./.test(t) && /Roof finished with Felt roll\./.test(t) && !/Waste removal &amp; site clearance/.test(t));
+  check('no waste page; letter lines incl. roof', /Oak post posts set in postcrete footings/.test(t) && /Roof deck of OSB 18mm fixed across the rafters\./.test(t) && /Roof finished with Felt roll\./.test(t) && !/Waste removal &amp; site clearance/.test(t));
   check('quote can be saved', !!(await page.$('button[data-action="saveSentQuote"]')));
   // existing business seeds
   await page.evaluate(()=>{ const st = JSON.parse(localStorage.getItem('__mockdb__')); for (const k of Object.keys(st)){ const d = st[k]; if(d && d.materials){ delete d.pgSeeded; ['pgPosts','pgJoists','pgDpm','pgScrews'].forEach(x=>d[x]=[]); } } localStorage.setItem('__mockdb__', JSON.stringify(st)); });

@@ -38,7 +38,7 @@ const fs = require('fs');
   await page.fill('[data-row="1"] input[data-mf="desc"]','Side'); await page.fill('[data-row="1"] input[data-mf="width"]','2'); await page.fill('[data-row="1"] input[data-mf="length"]','3');
   await page.fill('[data-row="1"] input[data-mf="digOutDepth"]','100'); await settle();
   let t = await txt();
-  check('blockers: turf, grano, infill', /Select an artificial turf/.test(t) && /Select a grano dust/.test(t) && /Select an infill sand/.test(t));
+  check('blockers: turf, grano, infill', /Select an artificial turf/.test(t) && /Select a bedding material/.test(t) && /Select an infill sand/.test(t));
   check('artificial turf step asks wastage for cuts, starting at 0', await page.$eval('[data-opt="wastagePct"]', e=>e.value)==='0');
   await page.fill('[data-opt="wastagePct"]','20'); await page.dispatchEvent('[data-opt="wastagePct"]','change'); await settle();
   await addVia('[data-row="0"] select[data-mf="turfType"]', {name:'AT 35mm', price:18});
@@ -55,15 +55,19 @@ const fs = require('fs');
   // edging
   await addVia('select[data-opt="edgingStyle"]', {name:'Kerb', piecesPerMetre:4, price:2});
   await page.fill('[data-opt="edgingLength"]','18'); await settle();
-  check('blocker: seam tape needed with edging', /Select an adhesive seam tape/.test(await txt()));
-  await addVia('select[data-opt="seamTape"]', {name:'Tape 20m', price:15});
+  check('edging alone needs no tape (tape is for joins)', !/seam tape|jointing tape/i.test(await txt()));
+  // joins: tape by join length ÷ roll length, plus a quarter day per join
+  await click('[data-action="setOpt"][data-opt="joins"][data-val="true"]');
+  await page.fill('[data-opt="joinCount"]','2'); await page.fill('[data-opt="joinLength"]','18'); await settle();
+  check('blocker: jointing tape needed for the joins', /Select a jointing tape/.test(await txt()));
+  await addVia('select[data-opt="seamTape"]', {name:'Tape 20m', price:15, rollLengthM:20});
   t = await txt();
-  check('edging 72 pieces, tape 1 roll, sand 2, ballast 2, cement 24', t.includes('Kerb72') && t.includes('Tape 20m1') && t.includes('Sharp sand2') && t.includes('Ballast2') && t.includes('Cement24'));
-  check('labour = (26/5 + 18/12) × £150 = £1,005.00', /1,005\.00/.test(t));
+  check('edging 72 pieces, tape 1 roll (18m of joins ÷ 20m roll), sand 2, ballast 2, cement 24', t.includes('Kerb72') && t.includes('Tape 20m1') && t.includes('Sharp sand2') && t.includes('Ballast2') && t.includes('Cement24'));
+  check('labour = (26/5 + 18/12 + 2 joins × 0.25) × £150 = £1,080.00', /1,080\.00/.test(t));
   // steel
   await page.selectOption('select[data-opt="edgingStyle"]','__steel_edging__'); await settle();
   t = await txt();
-  check('steel: no edging, concrete or tape here; Steel Edging added', !t.includes('Kerb72') && !t.includes('Tape 20m1') && !t.includes('Sharp sand2') && /Step 1 of 3/.test(t));
+  check('steel: no edging or concrete here; Welded Steel Edging added; joins tape stays', !t.includes('Kerb72') && t.includes('Tape 20m1') && !t.includes('Sharp sand2') && /Step 1 of 3/.test(t));
   await page.selectOption('select[data-opt="edgingStyle"]','Kerb'); await settle();
   // surface build-up blocker
   await page.fill('[data-row="1"] input[data-mf="digOutDepth"]','25'); await settle();

@@ -25,6 +25,9 @@ const fs = require('fs');
   await page.selectOption('[data-row="0"] select[data-mf="blockType"]','__add_other__'); await page.waitForTimeout(200);
   await page.fill('#modalMatName','Test Block'); await page.fill('#modalMatPrice','50');
   { const __s = await page.$('#mf_supplier, #modalMatSupplier'); if (__s && !(await __s.inputValue())) await __s.fill('Test supplier'); } await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
+  await page.selectOption('select[data-opt="bedding"]','__add_other__'); await page.waitForTimeout(200);
+  await page.fill('#mf_name','Granite dust'); await page.fill('#mf_price','60'); await page.fill('#mf_supplier','AWBS');
+  await (await page.$('button[data-action="modalOk"]')).click(); await page.waitForTimeout(250);
   const go = async () => { for (let i=0;i<6;i++){ const b = await page.$('button[data-action="wizNext"]'); if(!b) break; await b.click(); await page.waitForTimeout(300); if(/Area excavated/.test(await txt())) return true; } return /Area excavated/.test(await txt()); };
   // Uniform 250mm -> "250mm" dig-out and 150mm MOT (250 - 100 build-up)
   check('reached letter preview', await go());
@@ -32,7 +35,7 @@ const fs = require('fs');
   check('letter: excavated to 250mm', /Area excavated to a depth of 250mm\./.test(t));
   check('letter: 150mm Type 1 MOT sub-base', /A 150mm compacted Type 1 MOT sub-base laid\./.test(t));
   check('letter: no edge restraint line without edging', !/Edge restraints installed/.test(t));
-  check('letter: 50mm sand laying course restored', /A 50mm sharp sand laying course screeded level\./.test(t));
+  check('letter: 50mm laying course in the chosen bedding', /A 50mm Granite dust laying course screeded level\./.test(t));
   // Go back, add a shallower row + edging -> varied depths, avg and edging line
   for (let i=0;i<6;i++){ const b = await page.$('button[data-action="wizBack"]'); if(!b) break; await b.click(); await page.waitForTimeout(250); if(await page.$('[data-row="0"] input[data-mf="width"]')) break; }
   await page.fill('[data-row="1"] input[data-mf="width"]','2'); await page.fill('[data-row="1"] input[data-mf="length"]','5');

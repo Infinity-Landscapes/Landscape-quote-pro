@@ -56,7 +56,7 @@ const fs = require('fs');
   check('two different features on one quote', /Kaskada \(Maidenhead Aquatics\)\s*2/.test(t) && /Bubbler( \([^)]*\))?\s*1\b/.test(t));
   check('pebbles = 3 bags', t.includes('Slate pebbles3'));
   check('consumables 1', t.includes('Consumables1'));
-  check('labour = 3 / 0.7 × £150 = £642.86', /642\.86/.test(t));
+  check('labour = 3 / 0.5 × £150 = £900.00', /900\.00/.test(t));
   check('no blockers', !/Needs attention/.test(t));
   await click('button[data-action="wizNext"]');
   t = await txt();
