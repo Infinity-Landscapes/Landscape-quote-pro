@@ -222,6 +222,26 @@ async function adminGet(docPath){ return rest('GET', `${FS}/${docPath}`, 'owner'
   check('Apple plan in the iPhone app: can switch plan through Apple', !!(await B.page.$('#pfPlans [data-pf="buy"]')));
   await B.page.evaluate(()=>window.__platform.openAccount ? window.__platform.openAccount() : null); await settle(B.page, 300);
   await B.page.evaluate(()=>{ const o=document.getElementById('pfPlans'); if(o) o.remove(); });
+  // Website (Stripe): plans can be bought here; Manage opens Stripe's portal
+  await B.page.evaluate(()=>{ delete window.__purchases; });
+  await adminPatch(`accounts/${uid}`, { store: null, periodEnd: new Date(Date.now() - 86400000), graceUntil: null }); await settle(B.page, 2000);
+  const apiCalls = [], stripeNav = [];
+  await B.page.route('**/api/checkout', route => { apiCalls.push({ path:'checkout', auth: route.request().headers()['authorization'], body: route.request().postDataJSON() }); route.fulfill({ status:200, contentType:'application/json', body: JSON.stringify({ url:'https://checkout.stripe.com/c/pay/cs_test_1' }) }); });
+  await B.page.route('**/api/portal', route => { apiCalls.push({ path:'portal', auth: route.request().headers()['authorization'] }); route.fulfill({ status:200, contentType:'application/json', body: JSON.stringify({ url:'https://billing.stripe.com/p/session/test_1' }) }); });
+  await B.page.route(/https:\/\/(checkout|billing)\.stripe\.com\/.*/, route => { stripeNav.push(route.request().url()); route.fulfill({ status:204, body:"" }); });
+  pl = await plansText();
+  check('website, not subscribed: every plan can be chosen here, VAT and Stripe explained', (await B.page.$$('#pfPlans [data-pf="buy"]')).length===3 && /Prices exclude VAT, which is added at 20%/.test(pl) && /taken securely by Stripe/.test(pl));
+  await click(B.page, '#pfPlans [data-pf="period"][data-period="yearly"]');
+  await click(B.page, '#pfPlans [data-pf="buy"][data-plan="team"]'); await settle(B.page, 800);
+  check('choosing Team yearly asks our server for a checkout page (signed in) and goes to Stripe', apiCalls[0] && apiCalls[0].body.plan==='team' && apiCalls[0].body.period==='yearly' && /^Bearer /.test(apiCalls[0].auth) && stripeNav.some(u=>/checkout\.stripe\.com/.test(u)));
+  await settle(B.page, 4300);
+  await B.page.evaluate(()=>{ const o=document.getElementById('pfPlans'); if(o) o.remove(); });
+  await adminPatch(`accounts/${uid}`, { store: 'stripe', tier: 'team', periodEnd: new Date(Date.now() + 30*86400000) }); await settle(B.page, 2000);
+  await B.page.evaluate(()=>{ const a=document.getElementById('pfAccount'); if(a) a.remove(); window.__platform.openAccount(); }); await settle(B.page, 300);
+  await click(B.page, '#pfAccount [data-pf="manage"]'); await settle(B.page, 800);
+  check('website subscriber: Manage subscription opens the Stripe customer portal', apiCalls.some(c=>c.path==='portal') && stripeNav.some(u=>/billing\.stripe\.com/.test(u)));
+  await B.page.unroute('**/api/checkout'); await B.page.unroute('**/api/portal');
+  await B.page.evaluate(()=>{ const a=document.getElementById('pfAccount'); if(a) a.remove(); });
   // free account: nothing to buy anywhere
   await adminPatch(`accounts/${uid}`, { freeForever: true }); await settle(B.page, 2000);
   pl = await plansText();

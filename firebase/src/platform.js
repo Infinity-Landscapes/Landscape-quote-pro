@@ -497,10 +497,16 @@
       return fetch("/api/" + what, { method:"POST", headers:{ "Content-Type":"application/json", "Authorization":"Bearer " + tok }, body: JSON.stringify(Object.assign({ origin: location.origin }, body || {})) });
     }).then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ return { ok:r.ok, j:j }; }); })
       .then(function(x){
-        if (x.ok && x.j.url && /^https:\/\/(checkout|billing)\.stripe\.com\//.test(x.j.url)) { location.href = x.j.url; return; }
+        if (x.ok && x.j.url && /^https:\/\/(checkout|billing)\.stripe\.com\//.test(x.j.url)) {
+          location.href = x.j.url;
+          // If the page is kept (back button, or the browser didn't leave), make the buttons usable again.
+          setTimeout(function(){ planBusy = false; if (el("pfPlans") && el("pfPlans").style.display !== "none") drawPlans(); }, 4000);
+          return;
+        }
         done((x.j && x.j.error) || "Couldn't reach the payment page — please try again.");
       }).catch(function(){ done("Couldn't reach the payment page — check your connection and try again."); });
   }
+  window.addEventListener("pageshow", function(e){ if (e.persisted && planBusy) { planBusy = false; if (el("pfPlans") && el("pfPlans").style.display !== "none") drawPlans(); } });
   // Back from Stripe: say what happened, then tidy the address bar.
   (function(){
     var b = params.get("billing"); if (!b) return;
