@@ -437,12 +437,13 @@
         (yearly ? '<div class="pf-meta" style="font-size:13px;color:var(--pf-muted)">2 months free</div>' : '') +
         '<ul><li>Use on up to <b>' + pl.devices + '</b> devices</li><li>Unlimited quotes &amp; jobs</li><li>Payment plans, calendar &amp; job finance</li></ul>' +
         (current ? '<button class="pf-btn pf-ghost" disabled>Current plan</button>'
-          : (!p || noSale) ? ''
+          : noSale ? ''
           : '<button class="pf-btn" data-pf="buy" data-plan="' + pl.id + '" ' + (planBusy ? 'disabled' : '') + '>' +
             (st.state === "trial" || st.state === "lapsed" ? 'Choose ' + pl.name : 'Switch to ' + pl.name) + '</button>') +
         '</div>';
     }).join("");
-    var webNote = noSale ? '<div class="pf-msg ok">' + esc(noSale) + '</div>' : !p ? '<div class="pf-msg warn">Subscriptions are taken in the <b>Infinity Landscape Quote Pro</b> app for iPhone and Android — download it, sign in with this account and choose your plan there. It then unlocks here on the website too.</div>' : '';
+    var webNote = noSale ? '<div class="pf-msg ok">' + esc(noSale) + '</div>'
+      : (!p && st.state === "trial" && daysLeft(st.trialEnd) > 2) ? '<div class="pf-msg ok">Choose a plan now and you won\'t be charged until your free trial ends on ' + fmtDate(st.trialEnd) + '.</div>' : '';
     o.innerHTML = '<div class="pf-box pf-wide"><button class="pf-close" data-pf="close" aria-label="Close">×</button>' +
       '<div class="pf-brand">Infinity Landscape <b>Quote Pro</b></div><h1>Choose your plan</h1>' +
       '<p class="pf-sub">One subscription covers your whole business. Every plan has every feature — the difference is how many devices can be signed in at once.' +
@@ -452,7 +453,8 @@
       '<button data-pf="period" data-period="yearly" class="' + (yearly ? 'on' : '') + '">Yearly — 2 months free</button></div>' +
       '<div class="pf-plans">' + cards + '</div>' +
       (p && p.restore ? '<button class="pf-btn pf-ghost" data-pf="restore" style="margin-top:14px">Restore purchases</button>' : '') +
-      '<p class="pf-fine">' + (p ? 'Payment is taken by ' + esc(p.storeName || 'your app store') + ' when you confirm. Subscriptions renew automatically until cancelled; you can cancel any time in your ' + esc(p.storeName || 'store') + ' account settings at least 24 hours before the renewal date. ' : 'Website prices shown exclude VAT. ') +
+      '<p class="pf-fine">' + (p ? 'Payment is taken by ' + esc(p.storeName || 'your app store') + ' when you confirm. Subscriptions renew automatically until cancelled; you can cancel any time in your ' + esc(p.storeName || 'store') + ' account settings at least 24 hours before the renewal date. '
+        : 'Prices exclude VAT, which is added at 20%. Payment is taken securely by Stripe — we never see your card details. Your subscription renews automatically; cancel any time from Account → Manage subscription and you keep access until the end of the period you\'ve paid for. You get a VAT invoice by email each time you pay. ') +
       'See the <a href="/terms" target="_blank" rel="noopener">terms</a> and <a href="/privacy" target="_blank" rel="noopener">privacy policy</a>.</p></div>';
     if (!o._wired) {
       o._wired = true;
@@ -470,7 +472,7 @@
     var p = purchases();
     var ns = noSaleNote(status());
     if (ns) { planMsg = { ok:true, text:ns }; return drawPlans(); }
-    if (!p) { planMsg = { ok:false, text:"Subscribing is done in the iPhone or Android app — download it and sign in with this account." }; return drawPlans(); }
+    if (!p) return webBilling("checkout", { plan: planId, period: planPeriod });
     planBusy = true; drawPlans();
     Promise.resolve(p.purchase(planId, planPeriod)).then(function(r){
       planMsg = r && r.cancelled ? "" : { ok:true, text:"Thanks — your " + planOf(planId).name + " plan is active." };
@@ -484,8 +486,33 @@
       .catch(function(e){ planMsg = { ok:false, text:"Couldn't restore purchases: " + ((e && e.message) || "please try again") + "." }; })
       .then(function(){ planBusy = false; drawPlans(); });
   }
+  /* Website payments (Stripe): our server makes a Stripe Checkout or customer-portal page for
+     this account and we go there; Stripe brings the customer back to /?billing=… afterwards. */
+  function webBilling(what, body){
+    if (planBusy) return;
+    planBusy = true; planMsg = ""; if (el("pfPlans") && el("pfPlans").style.display !== "none") drawPlans();
+    var done = function(text){ planBusy = false; planMsg = text ? { ok:false, text:text } : ""; if (what === "portal" && text) { acctMsg = { kind:"err", text:text }; if (el("pfAccount") && el("pfAccount").style.display !== "none") drawAccount(); } if (el("pfPlans") && el("pfPlans").style.display !== "none") drawPlans(); };
+    if (!navigator.onLine) return done("You're offline — connect to the internet to subscribe or manage your plan.");
+    user.getIdToken().then(function(tok){
+      return fetch("/api/" + what, { method:"POST", headers:{ "Content-Type":"application/json", "Authorization":"Bearer " + tok }, body: JSON.stringify(Object.assign({ origin: location.origin }, body || {})) });
+    }).then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ return { ok:r.ok, j:j }; }); })
+      .then(function(x){
+        if (x.ok && x.j.url && /^https:\/\/(checkout|billing)\.stripe\.com\//.test(x.j.url)) { location.href = x.j.url; return; }
+        done((x.j && x.j.error) || "Couldn't reach the payment page — please try again.");
+      }).catch(function(){ done("Couldn't reach the payment page — check your connection and try again."); });
+  }
+  // Back from Stripe: say what happened, then tidy the address bar.
+  (function(){
+    var b = params.get("billing"); if (!b) return;
+    try { history.replaceState(null, "", location.pathname); } catch(e) {}
+    var text = b === "success" ? "Thanks — your subscription is set up. It can take a few seconds to show here."
+      : b === "updated" ? "Your plan has been changed." : b === "cancelled" ? "No payment was taken — choose a plan whenever you're ready." : "";
+    // (after start-up has run, once the app is open)
+    if (text) setTimeout(function(){ ready.then(function(){ planMsg = { ok:true, text:text }; drawPlans(); }); }, 0);
+  })();
   function manageSubscription(){
     var p = purchases(), st = status();
+    if (!inStoreApp() && st.store === "stripe") return webBilling("portal");
     if (p && p.manage && (!st.store || st.store === storeHere())) return p.manage();
     // Inside a phone app, a plan paid outside the app stores: acknowledge it, never link out.
     if (inStoreApp() && st.store && !isAppStoreBilling(st.store)) return openPlans();
@@ -599,7 +626,9 @@
     var o = overlay("pfDelete", "pf-centre");
     o.innerHTML = '<div class="pf-box"><button class="pf-close" data-pf="close" aria-label="Close">×</button>' +
       '<h1>Delete your account?</h1><p class="pf-sub">This permanently deletes your business settings, every quote and job, your calendar, logo and login. It can\'t be undone — consider downloading your data first.</p>' +
-      '<div class="pf-msg warn">If you subscribed through the App Store or Google Play, deleting your account does not cancel the subscription — cancel it in your store account settings.</div>' +
+      ((status().store === "stripe" && (status().state === "active" || status().state === "grace") && !status().cancelled && !inStoreApp())
+        ? '<div class="pf-msg warn">You still have a subscription paid on the website. Cancel it first (Account → Manage subscription), or you\'ll keep being charged.</div>'
+        : '<div class="pf-msg warn">If you subscribed through the App Store or Google Play, deleting your account does not cancel the subscription — cancel it in your store account settings.</div>') +
       (delMsg ? '<div class="pf-msg err">' + esc(delMsg) + '</div>' : '') +
       '<label>Type DELETE to confirm<input type="text" id="pfDelConfirm" autocomplete="off"></label>' +
       '<label>Your password<input type="password" id="pfDelPass" autocomplete="current-password"></label>' +

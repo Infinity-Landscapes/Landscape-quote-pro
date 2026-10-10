@@ -71,6 +71,8 @@ async function deployHosting(){
   const base = `https://firebasehosting.googleapis.com/v1beta1/sites/${SITE}`;
   const config = {};
   if(FB.hosting.cleanUrls) config.cleanUrls = true;
+  // /api/... → the payment functions (Cloud Run services), same origin as the website.
+  if(Array.isArray(FB.hosting.rewrites) && !args.includes('--no-rewrites')) config.rewrites = FB.hosting.rewrites.map(r => Object.assign({ glob: r.source }, r.run ? { run: r.run } : {}, r.destination ? { path: r.destination } : {}));
   const version = await call('POST', `${base}/versions`, { config });
   const files = {}, gz = {};
   for(const f of listFiles(pub)){

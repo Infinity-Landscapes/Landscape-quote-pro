@@ -1,10 +1,50 @@
 {
-  "firestore": { "rules": "firestore.rules", "indexes": "firestore.indexes.json" },
-  "hosting": { "public": "public", "ignore": ["firebase.json", "**/.*"], "cleanUrls": true },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "functions/**"
+    ],
+    "cleanUrls": true,
+    "rewrites": [
+      {
+        "source": "/api/checkout",
+        "run": {
+          "serviceId": "stripe-checkout",
+          "region": "europe-west2"
+        }
+      },
+      {
+        "source": "/api/portal",
+        "run": {
+          "serviceId": "stripe-portal",
+          "region": "europe-west2"
+        }
+      },
+      {
+        "source": "/api/stripe-webhook",
+        "run": {
+          "serviceId": "stripe-webhook",
+          "region": "europe-west2"
+        }
+      }
+    ]
+  },
   "emulators": {
-    "auth": { "port": 9099 },
-    "firestore": { "port": 8080 },
-    "ui": { "enabled": false },
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": false
+    },
     "singleProjectMode": true
   }
 }
