@@ -17,6 +17,9 @@ CONFIG = {
     "appId": "1:572546781213:web:3f3cf8a3869b8f1b2776f4",
 }
 
+# Website payments (Stripe) switch on once the payment functions are deployed and set up.
+WEB_BILLING = os.environ.get("WEB_BILLING", "0") == "1"
+
 CSS_FILE = os.path.join(ROOT, "src", "platform.css")
 
 def main():
@@ -28,12 +31,16 @@ def main():
     shutil.copy(os.path.join(ROOT, "src", "platform.js"), os.path.join(PUB, "platform.js"))
     for f in os.listdir(os.path.join(ROOT, "src", "legal")):
         shutil.copy(os.path.join(ROOT, "src", "legal", f), os.path.join(PUB, f))
+    # Public front page (/home) and its images.
+    site = os.path.join(ROOT, "src", "site")
+    if os.path.isdir(site):
+        shutil.copytree(site, PUB, dirs_exist_ok=True)
     html = (
         "<!doctype html>\n<html lang=\"en-GB\">\n<head>\n<meta charset=\"utf-8\">\n"
         "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n"
         "<title>Infinity Landscape Quote Pro</title>\n"
         "<style>html,body{margin:0;padding:0;}\n" + open(CSS_FILE, encoding="utf-8").read() + "</style>\n"
-        "<script>window.__FIREBASE_CONFIG__ = " + json.dumps(CONFIG) + ";</script>\n"
+        "<script>window.__FIREBASE_CONFIG__ = " + json.dumps(CONFIG) + ";window.__WEB_BILLING__ = " + ("true" if WEB_BILLING else "false") + ";</script>\n"
         "<script src=\"/sdk/firebase-app-compat.js\"></script>\n"
         "<script src=\"/sdk/firebase-auth-compat.js\"></script>\n"
         "<script src=\"/sdk/firebase-firestore-compat.js\"></script>\n"

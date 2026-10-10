@@ -192,7 +192,7 @@
   /* ======================================================================
      Sign-in screen
      ====================================================================== */
-  var mode = "signin", busy = false, msg = "", msgKind = "err", typedEmail = "";
+  var mode = params.get("signup") ? "signup" : "signin", busy = false, msg = "", msgKind = "err", typedEmail = "";
   try { var carried = sessionStorage.getItem("lqp_signout_msg"); if (carried) { msg = carried; msgKind = "warn"; sessionStorage.removeItem("lqp_signout_msg"); } } catch(e) {}
   function errText(e){
     var c = (e && e.code) || "";
@@ -232,6 +232,7 @@
       (mode === "signin" ? '<a href="#" data-auth="reset">Forgotten your password?</a><a href="#" data-auth="signup">New here? Create an account</a>' :
        '<a href="#" data-auth="signin">Back to sign in</a>') +
       '</div>' +
+      (inStoreApp() ? '' : '<p class="pf-fine" style="text-align:center"><a href="/home">What is Quote Pro? See features and prices</a></p>') +
       (mode === "signup" ? '<p class="pf-fine">By creating an account you agree to the <a href="/terms" target="_blank" rel="noopener">terms of service</a> and <a href="/privacy" target="_blank" rel="noopener">privacy policy</a>.</p>' : '') +
       '</div>';
     var em = el("agEmail"); if (em) { em.value = typedEmail; em.focus(); }
@@ -403,6 +404,9 @@
     return /apple|app store|ios/i.test(n) ? "app_store" : /google|play/i.test(n) ? "play_store" : "unknown";
   }
   function inStoreApp(){ return !!purchases(); }
+  // The website sells plans itself (Stripe) once that's switched on in the build.
+  function webSells(){ return !purchases() && window.__WEB_BILLING__ === true; }
+  var WEB_SOON = "Paid plans can be bought here very soon. Your free trial carries on as normal — if it runs out before then, email " + SUPPORT_EMAIL + " and we'll extend it.";
   function isAppStoreBilling(store){ return store === "app_store" || store === "play_store"; }
   function storeLabel(store){ return store === "app_store" ? "the App Store (Apple)" : store === "play_store" ? "Google Play" : "the website"; }
   // A paid plan billed through some other system than the one this screen uses.
@@ -437,12 +441,13 @@
         (yearly ? '<div class="pf-meta" style="font-size:13px;color:var(--pf-muted)">2 months free</div>' : '') +
         '<ul><li>Use on up to <b>' + pl.devices + '</b> devices</li><li>Unlimited quotes &amp; jobs</li><li>Payment plans, calendar &amp; job finance</li></ul>' +
         (current ? '<button class="pf-btn pf-ghost" disabled>Current plan</button>'
-          : noSale ? ''
+          : (noSale || (!p && !webSells())) ? ''
           : '<button class="pf-btn" data-pf="buy" data-plan="' + pl.id + '" ' + (planBusy ? 'disabled' : '') + '>' +
             (st.state === "trial" || st.state === "lapsed" ? 'Choose ' + pl.name : 'Switch to ' + pl.name) + '</button>') +
         '</div>';
     }).join("");
     var webNote = noSale ? '<div class="pf-msg ok">' + esc(noSale) + '</div>'
+      : (!p && !webSells()) ? '<div class="pf-msg warn">' + esc(WEB_SOON) + '</div>'
       : (!p && st.state === "trial" && daysLeft(st.trialEnd) > 2) ? '<div class="pf-msg ok">Choose a plan now and you won\'t be charged until your free trial ends on ' + fmtDate(st.trialEnd) + '.</div>' : '';
     o.innerHTML = '<div class="pf-box pf-wide"><button class="pf-close" data-pf="close" aria-label="Close">×</button>' +
       '<div class="pf-brand">Infinity Landscape <b>Quote Pro</b></div><h1>Choose your plan</h1>' +
@@ -454,6 +459,7 @@
       '<div class="pf-plans">' + cards + '</div>' +
       (p && p.restore ? '<button class="pf-btn pf-ghost" data-pf="restore" style="margin-top:14px">Restore purchases</button>' : '') +
       '<p class="pf-fine">' + (p ? 'Payment is taken by ' + esc(p.storeName || 'your app store') + ' when you confirm. Subscriptions renew automatically until cancelled; you can cancel any time in your ' + esc(p.storeName || 'store') + ' account settings at least 24 hours before the renewal date. '
+        : !webSells() ? 'Prices exclude VAT, which is added at 20%. '
         : 'Prices exclude VAT, which is added at 20%. Payment is taken securely by Stripe — we never see your card details. Your subscription renews automatically; cancel any time from Account → Manage subscription and you keep access until the end of the period you\'ve paid for. You get a VAT invoice by email each time you pay. ') +
       'See the <a href="/terms" target="_blank" rel="noopener">terms</a> and <a href="/privacy" target="_blank" rel="noopener">privacy policy</a>.</p></div>';
     if (!o._wired) {
@@ -472,6 +478,7 @@
     var p = purchases();
     var ns = noSaleNote(status());
     if (ns) { planMsg = { ok:true, text:ns }; return drawPlans(); }
+    if (!p && !webSells()) { planMsg = { ok:false, text:WEB_SOON }; return drawPlans(); }
     if (!p) return webBilling("checkout", { plan: planId, period: planPeriod });
     planBusy = true; drawPlans();
     Promise.resolve(p.purchase(planId, planPeriod)).then(function(r){
@@ -724,6 +731,10 @@
       afterSignIn();
     } else {
       if (user) { location.reload(); return; }
+      // Visitors who aren't signed in see the front page first (not inside the phone apps, and
+      // not when they've come to sign in or sign up).
+      if (location.pathname === "/" && !params.get("signin") && !params.get("signup") && !params.get("app") && !inStoreApp() && !msg
+          && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) { location.replace("/home"); return; }
       drawGate();
     }
   });

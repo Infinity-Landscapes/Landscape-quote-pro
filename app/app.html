@@ -3841,9 +3841,17 @@ function jobOrderGroups(q){
     const items = checklist.filter(c=>c.name===L.name && c.source!=="extra");
     L.ordered = items.length && items.every(c=>c.ordered) ? "yes" : (items.some(c=>c.ordered) ? "part" : "no");
   });
-  const groups = {};
-  Object.values(lines).forEach(L=>{ (groups[L.supplier] = groups[L.supplier]||[]).push(L); });
-  return Object.keys(groups).sort((a,b)=> a==='No supplier set' ? 1 : b==='No supplier set' ? -1 : a.localeCompare(b)).map(sup=>({supplier:sup, lines:groups[sup].sort((a,b)=>a.name.localeCompare(b.name))}));
+  // "Minster Paving" and "Minster paving" are the same supplier: one group, one order.
+  const groups = {}, names = {};
+  Object.values(lines).forEach(L=>{ const k = supplierKey(L.supplier); (groups[k] = groups[k]||[]).push(L); (names[k] = names[k]||[]).push(L.supplier); });
+  return Object.keys(groups).map(k=>({supplier: supplierDisplayName(names[k]), lines:groups[k].sort((a,b)=>a.name.localeCompare(b.name))}))
+    .sort((a,b)=> a.supplier==='No supplier set' ? 1 : b.supplier==='No supplier set' ? -1 : a.supplier.localeCompare(b.supplier));
+}
+function supplierKey(s){ return String(s||'').trim().replace(/\s+/g,' ').toLowerCase(); }
+// The spelling used most often (ties: the first one seen).
+function supplierDisplayName(list){
+  const c = {}; list.forEach(n=>{ const t = String(n||'').trim().replace(/\s+/g,' '); c[t] = (c[t]||0)+1; });
+  return Object.keys(c).sort((a,b)=>c[b]-c[a])[0] || 'No supplier set';
 }
 function orderText(q, g){
   const fmtQ = n => (Math.round(n*100)/100).toString();
@@ -8482,11 +8490,13 @@ function renderSettings(){
     Object.entries(s.materials).forEach(([name,m])=>{
       const sup = String(m.supplier||'').trim();
       if(q && !name.toLowerCase().includes(q) && !String(m.section||'').toLowerCase().includes(q) && !sup.toLowerCase().includes(q)) return;
-      const g = sup || NO_SUP;
+      const g = supplierKey(sup) || NO_SUP;
       (bySection[g] = bySection[g]||[]).push({name,...m});
     });
     Object.values(bySection).forEach(list=>list.sort((a,b)=>a.name.localeCompare(b.name)));
-    const sections = Object.keys(bySection).sort((a,b)=> a===NO_SUP ? 1 : b===NO_SUP ? -1 : a.localeCompare(b));
+    // Spelling differences ("Minster Paving" / "Minster paving") share one heading.
+    const supName = {}; Object.keys(bySection).forEach(k=>{ supName[k] = k===NO_SUP ? NO_SUP : supplierDisplayName(bySection[k].map(m=>m.supplier)); });
+    const sections = Object.keys(bySection).sort((a,b)=> a===NO_SUP ? 1 : b===NO_SUP ? -1 : supName[a].localeCompare(supName[b]));
     body = `
     <div class="msg msg-ok" style="margin-bottom:10px;">📅 Check your prices with each supplier roughly once a month, so your quotes keep up with what you're actually paying.</div>
     <div class="field" style="max-width:320px;"><input id="matFilter" type="text" placeholder="Search materials, suppliers or categories…" value="${esc(S._matFilter||"")}"></div>
@@ -8498,7 +8508,7 @@ function renderSettings(){
     <div class="hint" style="margin:2px 0 10px;">Tick or untick the switch above to set every material below the same way in one go (search first to limit it to one supplier or category) — you can still flip any single material individually, and nothing is saved until you hit "Save changes".</div>
     <div class="tbl-wrap">
     ${sections.map(sec=>`
-      <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 6px;">${esc(sec)}</div>
+      <div style="font-weight:800;font-size:12px;color:var(--green-700);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 6px;">${esc(supName[sec])}</div>
       <table><tr><th>Material</th><th style="text-align:right;">Unit price</th><th style="text-align:center;">Inc. VAT</th><th>Unit</th><th>Supplier</th></tr>
       ${bySection[sec].map(m=>`<tr>
         <td>${esc(m.name)}${m.section?`<div class="hint" style="margin:0;font-size:11px;">${esc(m.section)}</div>`:''}</td>
