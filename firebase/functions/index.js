@@ -218,6 +218,7 @@ functions.http('checkout', wrap(async (req, res) => {
     billing_address_collection: 'required',
     tax_id_collection: { enabled: true },
     customer_update: { name: 'auto', address: 'auto' },
+    custom_text: { submit: { message: `By subscribing you agree to the Landscape Quote Pro terms of service (${SITE}/terms). Your subscription renews automatically until you cancel; you can cancel any time from Account → Manage subscription.` } },
     success_url: origin + '/?billing=success',
     cancel_url: origin + '/?billing=cancelled',
   });

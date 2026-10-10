@@ -234,7 +234,7 @@
        '<a href="#" data-auth="signin">Back to sign in</a>') +
       '</div>' +
       (inStoreApp() ? '' : '<p class="pf-fine" style="text-align:center"><a href="/home">What is Quote Pro? See features and prices</a></p>') +
-      (mode === "signup" ? '<p class="pf-fine">By creating an account you agree to the <a href="/terms" target="_blank" rel="noopener">terms of service</a> and <a href="/privacy" target="_blank" rel="noopener">privacy policy</a>.</p>' : '') +
+      (mode === "signup" ? '<p class="pf-fine">By creating an account you agree to the <a href="/terms" target="_blank" rel="noopener">terms of service</a> (including the <a href="/data-processing" target="_blank" rel="noopener">data processing terms</a>) and <a href="/privacy" target="_blank" rel="noopener">privacy policy</a>.</p>' : '') +
       '</div>';
     var em = el("agEmail"); if (em) { em.value = typedEmail; em.focus(); }
   }
