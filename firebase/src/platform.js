@@ -368,6 +368,7 @@
     if (!navigator.onLine) html = '<div class="pf-b warn">You\'re offline — you can carry on; changes will sync when you\'re back online.</div>';
     else if (failedSync) html = '<div class="pf-b err">Some changes couldn\'t be saved. <button data-pf="account">Check account</button></div>';
     if (st.state === "lapsed") html += '<div class="pf-b err">Your ' + (account && account.periodEnd ? 'subscription' : 'free trial') + ' has ended — you can view and download your quotes, but not create or change anything. <button data-pf="plans">Choose a plan</button></div>';
+    else if (st.state === "grace" && inStoreApp() && st.store && !isAppStoreBilling(st.store)) html += '<div class="pf-b warn">There\'s a problem with this account\'s payment — it needs sorting by ' + fmtDate(st.graceUntil) + ' to keep using the app.</div>';
     else if (st.state === "grace") html += '<div class="pf-b warn">There\'s a problem with your payment — please update it by ' + fmtDate(st.graceUntil) + ' to keep using the app. <button data-pf="manage">Fix payment</button></div>';
     else if (st.state === "trial") { var dl = daysLeft(st.trialEnd); html += '<div class="pf-b info">Free trial: ' + dl + ' day' + (dl === 1 ? '' : 's') + ' left. <button data-pf="plans">Choose a plan</button></div>'; }
     b.innerHTML = html;
@@ -388,10 +389,43 @@
      ====================================================================== */
   var planPeriod = "monthly", planMsg = "", planBusy = false;
   function purchases(){ return window.__purchases || null; }
+  /* Which billing system this screen sells through: the phone's own store in the iPhone/Android
+     apps, the website (Stripe, once added) otherwise. A subscription bought through a DIFFERENT
+     system is never sold again here (no double paying), and inside the phone apps a plan paid
+     outside the app stores is never pointed at — no link, no mention of where it was paid
+     (Apple 3.1.3(b) / Google Play payments policy). Access itself never depends on this: it
+     comes from the account record alone (see status()). */
+  function storeHere(){
+    var p = purchases();
+    if (!p) return "stripe";
+    if (p.store) return p.store;
+    var n = String(p.storeName || "");
+    return /apple|app store|ios/i.test(n) ? "app_store" : /google|play/i.test(n) ? "play_store" : "unknown";
+  }
+  function inStoreApp(){ return !!purchases(); }
+  function isAppStoreBilling(store){ return store === "app_store" || store === "play_store"; }
+  function storeLabel(store){ return store === "app_store" ? "the App Store (Apple)" : store === "play_store" ? "Google Play" : "the website"; }
+  // A paid plan billed through some other system than the one this screen uses.
+  function billedElsewhere(st){
+    st = st || status();
+    return (st.state === "active" || st.state === "grace") && !!st.store && st.store !== storeHere();
+  }
+  // What to say instead of offering to sell a plan; null when selling is fine.
+  function noSaleNote(st){
+    if (st.state === "free") return "This account is free — there's nothing to pay.";
+    if (!billedElsewhere(st)) return null;
+    var plan = st.plan ? st.plan.name + " plan" : "plan";
+    // Inside a phone app, a plan paid outside the app stores is just acknowledged — never named or linked.
+    if (inStoreApp() && !isAppStoreBilling(st.store)) return "Your " + plan + " is already active on this account — there's nothing to pay here. Carry on using the app.";
+    var where = st.store === "app_store" ? "the Apple device it was bought on (Settings → your name → Subscriptions)"
+      : st.store === "play_store" ? "the Google Play Store on an Android device" : storeLabel(st.store);
+    return "Your " + plan + " is billed through " + storeLabel(st.store) + ", so there's nothing to pay here. To change or cancel it, use " + where + ".";
+  }
   function openPlans(){ planMsg = ""; drawPlans(); }
   function drawPlans(){
     var st = status(), p = purchases(), yearly = planPeriod === "yearly";
     var o = overlay("pfPlans");
+    var noSale = noSaleNote(st);
     var cards = PLANS.map(function(pl){
       var current = st.tier === pl.id && (st.state === "active" || st.state === "grace");
       var price = p && p.priceFor ? p.priceFor(pl.id, planPeriod) : null;
@@ -403,12 +437,12 @@
         (yearly ? '<div class="pf-meta" style="font-size:13px;color:var(--pf-muted)">2 months free</div>' : '') +
         '<ul><li>Use on up to <b>' + pl.devices + '</b> devices</li><li>Unlimited quotes &amp; jobs</li><li>Payment plans, calendar &amp; job finance</li></ul>' +
         (current ? '<button class="pf-btn pf-ghost" disabled>Current plan</button>'
-          : !p ? ''
+          : (!p || noSale) ? ''
           : '<button class="pf-btn" data-pf="buy" data-plan="' + pl.id + '" ' + (planBusy ? 'disabled' : '') + '>' +
             (st.state === "trial" || st.state === "lapsed" ? 'Choose ' + pl.name : 'Switch to ' + pl.name) + '</button>') +
         '</div>';
     }).join("");
-    var webNote = !p ? '<div class="pf-msg warn">Subscriptions are taken in the <b>Infinity Landscape Quote Pro</b> app for iPhone and Android — download it, sign in with this account and choose your plan there. It then unlocks here on the website too.</div>' : '';
+    var webNote = noSale ? '<div class="pf-msg ok">' + esc(noSale) + '</div>' : !p ? '<div class="pf-msg warn">Subscriptions are taken in the <b>Infinity Landscape Quote Pro</b> app for iPhone and Android — download it, sign in with this account and choose your plan there. It then unlocks here on the website too.</div>' : '';
     o.innerHTML = '<div class="pf-box pf-wide"><button class="pf-close" data-pf="close" aria-label="Close">×</button>' +
       '<div class="pf-brand">Infinity Landscape <b>Quote Pro</b></div><h1>Choose your plan</h1>' +
       '<p class="pf-sub">One subscription covers your whole business. Every plan has every feature — the difference is how many devices can be signed in at once.' +
@@ -434,6 +468,8 @@
   }
   function buy(planId){
     var p = purchases();
+    var ns = noSaleNote(status());
+    if (ns) { planMsg = { ok:true, text:ns }; return drawPlans(); }
     if (!p) { planMsg = { ok:false, text:"Subscribing is done in the iPhone or Android app — download it and sign in with this account." }; return drawPlans(); }
     planBusy = true; drawPlans();
     Promise.resolve(p.purchase(planId, planPeriod)).then(function(r){
@@ -450,7 +486,9 @@
   }
   function manageSubscription(){
     var p = purchases(), st = status();
-    if (p && p.manage) return p.manage();
+    if (p && p.manage && (!st.store || st.store === storeHere())) return p.manage();
+    // Inside a phone app, a plan paid outside the app stores: acknowledge it, never link out.
+    if (inStoreApp() && st.store && !isAppStoreBilling(st.store)) return openPlans();
     var url = st.store === "app_store" ? "https://apps.apple.com/account/subscriptions"
       : st.store === "play_store" ? "https://play.google.com/store/account/subscriptions" : null;
     if (url) window.open(url, "_blank", "noopener"); else openPlans();
@@ -482,8 +520,10 @@
       '<p class="pf-sub">Signed in as <b>' + esc(user ? user.email : "") + '</b></p>' +
       (acctMsg ? '<div class="pf-msg ' + acctMsg.kind + '">' + esc(acctMsg.text) + '</div>' : '') +
       '<h2>Plan</h2><p class="pf-sub" style="margin-bottom:8px">' + esc(statusLine(st)) + '</p>' +
-      (st.state === "free" ? '<button class="pf-btn pf-ghost" data-pf="plans">See plans</button>' : (st.state === "active" || st.state === "grace")
-        ? '<button class="pf-btn pf-ghost" data-pf="manage">Manage subscription</button><button class="pf-btn pf-ghost" data-pf="plans">Change plan</button>'
+      (st.state === "free" ? '' : (st.state === "active" || st.state === "grace")
+        ? ((inStoreApp() && st.store && !isAppStoreBilling(st.store)) ? '' : billedElsewhere(st)
+            ? '<div class="pf-fine" style="margin:0 0 8px">' + esc(noSaleNote(st)) + '</div>'
+            : '<button class="pf-btn pf-ghost" data-pf="manage">Manage subscription</button><button class="pf-btn pf-ghost" data-pf="plans">Change plan</button>')
         : '<button class="pf-btn" data-pf="plans">Choose a plan</button>') +
       '<h2>Devices (' + list.length + ' of ' + st.limit + ')</h2>' +
       '<div>' + (devRows || '<p class="pf-sub">No devices yet.</p>') + '</div>' +

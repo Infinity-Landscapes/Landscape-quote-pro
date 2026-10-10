@@ -170,11 +170,13 @@ async function adminGet(docPath){ return rest('GET', `${FS}/${docPath}`, 'owner'
   check('account panel: email, Team plan renewal, devices out of 5', /matt@test\.co\.uk/.test(acc) && /Team plan \(monthly\) — renews/.test(acc) && /Devices \(2 of 5\)/.test(acc));
   check('account panel: this device marked, download / delete / sign out offered', /This device/.test(acc) && /Download all my data/.test(acc) && /Delete my account/.test(acc) && /Sign out of this device/.test(acc));
 
+  check('account panel on the website, Google Play plan: says where it is billed instead of offering a web plan change', /billed through Google Play/.test(acc) && !(await B.page.$('#pfAccount [data-pf="plans"]')));
   // ---------- 7. plans screen ----------
-  await click(B.page, '#pfAccount [data-pf="plans"]');
+  await click(B.page, '#pfAccount [data-pf="close"]');
+  await B.page.evaluate(()=>window.__platform.openPlans()); await settle(B.page, 300);
   let pl = await B.page.textContent('#pfPlans');
   check('plans: Solo / Team / Business with device counts and prices', /Solo/.test(pl) && /Team/.test(pl) && /Business/.test(pl) && /£30/.test(pl) && /£45/.test(pl) && /£70/.test(pl) && /up to 10 devices/.test(pl.replace(/\s+/g,' ')));
-  check('plans: current plan marked, website explains subscribing in the phone app', /Your plan/.test(pl) && /iPhone and Android/.test(pl));
+  check('plans: current plan marked; on the website a Google Play plan is acknowledged, nothing to buy', /Your plan/.test(pl) && /billed through Google Play, so there's nothing to pay here/.test(pl) && !(await B.page.$('#pfPlans [data-pf="buy"]')));
   await click(B.page, '#pfPlans [data-pf="period"][data-period="yearly"]');
   pl = await B.page.textContent('#pfPlans');
   check('plans: yearly shows £300 / £450 / £700 and 2 months free', /£300/.test(pl) && /£450/.test(pl) && /£700/.test(pl) && /2 months free/.test(pl));
@@ -186,6 +188,46 @@ async function adminGet(docPath){ return rest('GET', `${FS}/${docPath}`, 'owner'
   await click(B.page, '#pfPlans [data-pf="buy"][data-plan="business"]');
   check('choosing Business hands the purchase to the store', (await B.page.evaluate(()=>window.__bought))==='business/monthly');
   await click(B.page, '#pfPlans [data-pf="close"]');
+
+  // ---------- 7b. one subscription, any platform — never sold twice, no web link in the phone apps ----------
+  const plansText = async () => { await B.page.evaluate(()=>{ const o=document.getElementById('pfPlans'); if(o) o.remove(); }); await B.page.evaluate(()=>window.__platform.openPlans()); await settle(B.page, 300); return B.page.textContent('#pfPlans'); };
+  const iosApp = () => B.page.evaluate(()=>{ window.__bought = null; window.__purchases = { store:'app_store', storeName:'the App Store', priceFor:(t)=>({solo:'£35.99',team:'£54.99',business:'£83.99'})[t], purchase:(t,p)=>{ window.__bought = t+'/'+p; return Promise.resolve({}); }, restore:()=>Promise.resolve(), manage:()=>{ window.__managed = true; } }; });
+  await iosApp();
+  pl = await plansText();
+  check('Google Play plan opened in the iPhone app: full access, no buy buttons, says where it is billed', !(await B.page.$('#pfPlans [data-pf="buy"]')) && /billed through Google Play/.test(pl));
+  await B.page.evaluate(()=>window.__platform.openPlans()); 
+  await adminPatch(`accounts/${uid}`, { store: 'stripe' }); await settle(B.page, 2000);
+  pl = await plansText();
+  check('web-paid plan in the iPhone app: acknowledged, no buy buttons', /already active on this account — there's nothing to pay here/.test(pl) && !(await B.page.$('#pfPlans [data-pf="buy"]')));
+  check('…and never names or links to the website or Stripe', !/website|stripe|web\b/i.test(pl) && !(await B.page.$$eval('#pfPlans a', as=>as.some(a=>!/\/(terms|privacy)$/.test(a.getAttribute('href')||'')))));
+  await B.page.evaluate(()=>{ const o=document.getElementById('pfPlans'); if(o) o.remove(); });
+  await click(B.page, 'button[data-action="account"]');
+  let acc2 = await B.page.textContent('#pfAccount');
+  check('…account panel: plan shown, no Manage/Change buttons, no website mention', /Team plan/.test(acc2) && !(await B.page.$('#pfAccount [data-pf="manage"]')) && !(await B.page.$('#pfAccount [data-pf="plans"]')) && !/website|stripe/i.test(acc2));
+  await click(B.page, '#pfAccount [data-pf="close"]');
+  await adminPatch(`accounts/${uid}`, { periodEnd: new Date(Date.now() - 86400000), graceUntil: new Date(Date.now() + 5*86400000) }); await settle(B.page, 2000);
+  const ban = await B.page.evaluate(()=>{ const b=document.getElementById('pfBanner'); return b?b.innerHTML:''; });
+  check('…payment problem banner in the iPhone app: no button, no website mention, still usable', /needs sorting/.test(ban) && !/data-pf=/.test(ban) && !/website|stripe/i.test(ban));
+  await B.page.evaluate(()=>{ window.__managed=false; }); await B.page.evaluate(()=>window.__platform.openPlans());
+  r = await rest('PATCH', `${FS}/businesses/${uid}?updateMask.fieldPaths=x`, (await signIn('matt@test.co.uk','password123')).idToken, {fields:{x:{stringValue:'grace'}}});
+  check('…grace still counts as subscribed in the rules', r.status===200);
+  // Apple plan on the website: acknowledged with where to manage it, nothing to buy
+  await adminPatch(`accounts/${uid}`, { store: 'app_store', periodEnd: new Date(Date.now() + 30*86400000), graceUntil: null }); await settle(B.page, 2000);
+  await B.page.evaluate(()=>{ delete window.__purchases; });
+  pl = await plansText();
+  check('Apple plan seen on the website: billed through the App Store, nothing to buy', /billed through the App Store \(Apple\)/.test(pl) && !(await B.page.$('#pfPlans [data-pf="buy"]')));
+  // Apple plan in the iPhone app (same store): Manage goes to the store, switching plans allowed
+  await iosApp();
+  pl = await plansText();
+  check('Apple plan in the iPhone app: can switch plan through Apple', !!(await B.page.$('#pfPlans [data-pf="buy"]')));
+  await B.page.evaluate(()=>window.__platform.openAccount ? window.__platform.openAccount() : null); await settle(B.page, 300);
+  await B.page.evaluate(()=>{ const o=document.getElementById('pfPlans'); if(o) o.remove(); });
+  // free account: nothing to buy anywhere
+  await adminPatch(`accounts/${uid}`, { freeForever: true }); await settle(B.page, 2000);
+  pl = await plansText();
+  check('free account: nothing to buy', /This account is free/.test(pl) && !(await B.page.$('#pfPlans [data-pf="buy"]')));
+  await adminPatch(`accounts/${uid}`, { freeForever: false, store: 'play_store' }); await settle(B.page, 1500);
+  await B.page.evaluate(()=>{ delete window.__purchases; const o=document.getElementById('pfPlans'); if(o) o.remove(); const a=document.getElementById('pfAccount'); if(a) a.remove(); });
 
   // ---------- 8. offline ----------
   if (await B.page.isVisible('#pfAccount')) await B.page.click('#pfAccount [data-pf="close"]');
