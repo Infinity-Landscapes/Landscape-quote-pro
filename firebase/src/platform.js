@@ -319,7 +319,7 @@
     }).join("");
     o.innerHTML = '<div class="pf-box"><div class="pf-brand">' + BRAND_LOGO + 'Landscape <b>Quote Pro</b></div>' +
       '<h1>Too many devices</h1>' +
-      '<p class="pf-sub">Your ' + esc(plan) + ' can be used on ' + st.limit + ' device' + (st.limit === 1 ? '' : 's') + ' at once. ' +
+      '<p class="pf-sub">Your ' + esc(plan) + ' allows ' + st.limit + ' device' + (st.limit === 1 ? '' : 's') + ' registered to this account. ' +
       (left > 0 ? 'To use it here, sign one of these out. You can swap devices ' + MAX_SWAPS + ' times a month — ' + left + ' swap' + (left === 1 ? '' : 's') + ' left this month.'
                : 'You\'ve used both device swaps this month. You can swap again on ' + fmtDate(firstOfNextMonth()) + '.') + '</p>' +
       (note ? '<div class="pf-msg err">' + esc(note) + '</div>' : '') +
@@ -446,7 +446,7 @@
         '<div class="pf-pname">' + pl.name + (current ? '<span class="pf-tag">Your plan</span>' : '') + '</div>' +
         '<div class="pf-price">' + shown + '</div>' +
         (yearly ? '<div class="pf-meta" style="font-size:13px;color:var(--pf-muted)">2 months free</div>' : '') +
-        '<ul><li>Use on up to <b>' + pl.devices + '</b> devices</li><li>Unlimited quotes &amp; jobs</li><li>Payment plans, calendar &amp; job finance</li></ul>' +
+        '<ul><li>Up to <b>' + pl.devices + '</b> devices registered</li><li>Unlimited quotes &amp; jobs</li><li>Payment plans, calendar &amp; job finance</li></ul>' +
         (current ? '<button class="pf-btn pf-ghost" disabled>Current plan</button>'
           : (noSale || (!p && !webSells())) ? ''
           : '<button class="pf-btn" data-pf="buy" data-plan="' + pl.id + '" ' + (planBusy ? 'disabled' : '') + '>' +
@@ -457,8 +457,8 @@
       : (!p && !webSells()) ? '<div class="pf-msg warn">' + esc(WEB_SOON) + '</div>'
       : (!p && st.state === "trial" && daysLeft(st.trialEnd) > 2) ? '<div class="pf-msg ok">Choose a plan now and you won\'t be charged until your free trial ends on ' + fmtDate(st.trialEnd) + '.</div>' : '';
     o.innerHTML = '<div class="pf-box pf-wide"><button class="pf-close" data-pf="close" aria-label="Close">×</button>' +
-      '<div class="pf-brand">' + BRAND_LOGO + 'Landscape <b>Quote Pro</b></div><h1>Choose your plan</h1>' +
-      '<p class="pf-sub">One subscription covers your whole business. Every plan has every feature — the difference is how many devices can be signed in at once.' +
+      '<div class="pf-brand">' + BRAND_LOGO + '<span>Landscape <b>Quote Pro</b></span></div><h1>Choose your plan</h1>' +
+      '<p class="pf-sub">One subscription covers your whole business. Every plan has every feature — the difference is how many devices can be registered to your account.' +
       (st.state === "trial" ? ' Your free trial ends ' + fmtDate(st.trialEnd) + '.' : '') + '</p>' +
       (planMsg ? '<div class="pf-msg ' + (planMsg.ok ? 'ok' : 'err') + '">' + esc(planMsg.text) + '</div>' : '') + webNote +
       '<div class="pf-toggle"><button data-pf="period" data-period="monthly" class="' + (yearly ? '' : 'on') + '">Monthly</button>' +
@@ -563,7 +563,7 @@
         (me ? '' : left > 0 ? '<button class="pf-btn pf-small pf-ghost" data-pf="remove" data-id="' + esc(d.id) + '">Remove</button>' : '') + '</div>';
     }).join("");
     o.innerHTML = '<div class="pf-box"><button class="pf-close" data-pf="close" aria-label="Close">×</button>' +
-      '<div class="pf-brand">' + BRAND_LOGO + 'Landscape <b>Quote Pro</b></div><h1>Account</h1>' +
+      '<div class="pf-brand">' + BRAND_LOGO + '<span>Landscape <b>Quote Pro</b></span></div><h1>Account</h1>' +
       '<p class="pf-sub">Signed in as <b>' + esc(user ? user.email : "") + '</b></p>' +
       (acctMsg ? '<div class="pf-msg ' + acctMsg.kind + '">' + esc(acctMsg.text) + '</div>' : '') +
       '<h2>Plan</h2><p class="pf-sub" style="margin-bottom:8px">' + esc(statusLine(st)) + '</p>' +

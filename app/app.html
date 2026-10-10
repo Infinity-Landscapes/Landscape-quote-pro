@@ -11309,6 +11309,8 @@ window.addEventListener("scroll", ()=>{ if(S._tour) tourPlace(); }, {passive:tru
 /* ---- Help screen: replay the tour + FAQ ---- */
 function helpFaq(){
   const plat = tourHasPlatform();
+  // Inside the phone apps billing is the store's; never mention website payments there.
+  const storeApp = !!window.__purchases;
   return [
     ["Account and setup", [
       ["Where do I change my company details, logo or bank details?", "Materials &amp; settings → <b>Company details</b>. Your logo also sets the app's colours. Bank details are only printed on payment plans and invoices you send."],
@@ -11332,18 +11334,28 @@ function helpFaq(){
       ["What does the Business overview show?", "Profit, money owed, money paid and anything overdue, added up from every job's finance tracker. Log materials, labour, running costs and payments on each job to keep it accurate."],
       ["How do I record a payment from a customer?", "Open the job and, in its finance tracker, tap <b>+ Log payment received</b>."],
     ]],
-    ["Billing and plans", [
+    ["Billing and plans", (storeApp ? [
       ["Is there a free trial?", "Yes — 7 days with everything unlocked."],
-      ["What do the plans cost?", "Solo £35.99, Team £54.99 and Business £83.99 a month in the App Store and Google Play (yearly saves two months). Every plan has every feature; they differ in how many devices can be signed in."],
-      ["How do I subscribe or change plan?", "In the iPhone or Android app" + (plat ? ": person button → Choose a plan (or Change plan)." : ".") + " Your plan then works on all your devices, including the website."],
+      ["What do the plans cost?", "Solo £35.99, Team £54.99 and Business £83.99 a month in the App Store and Google Play (yearly saves two months). Every plan has every feature; they differ in how many devices can be registered to your account."],
+      ["How do I subscribe or change plan?", "Person button → Choose a plan (or Change plan). Your plan then works on all your devices."],
       ["How do I get a VAT receipt?", "Apple and Google send a receipt for every payment to the email on your App Store or Google Play account."],
-    ]],
-    ["Cancelling", [
+    ] : [
+      ["Is there a free trial?", "Yes — 7 days with everything unlocked, and no card needed to start."],
+      ["What do the plans cost?", "Solo £30, Team £45 and Business £70 a month, plus VAT (yearly saves two months). Every plan has every feature; they differ in how many devices can be registered to your account (2, 5 or 10)."],
+      ["How do I subscribe or change plan?", (plat ? "Person button → <b>Choose a plan</b> (or <b>Change plan</b>). " : "") + "Payment is taken securely by Stripe. If you choose a plan during your free trial, you aren't charged until it ends."],
+      ["How do I get a VAT invoice?", "Stripe emails a VAT invoice every time you pay. You can also see them all under person button → <b>Manage subscription</b>."],
+    ])],
+    ["Cancelling", (storeApp ? [
       ["How do I cancel?", "In your <b>App Store</b> (Settings → your name → Subscriptions) or <b>Google Play</b> (Payments &amp; subscriptions → Subscriptions). Cancel at least 24 hours before it renews."],
       ["What happens when my subscription ends?", "You keep full access until the end of the period you've paid for. After that the app is read-only — you can still open, download and print your quotes — and your data is kept for 12 months. Subscribe again and everything is back straight away."],
       ["Can I get a refund?", "Payments go to Apple or Google, so refunds are requested from them (reportaproblem.apple.com, or your Google Play order history)."],
-      ["How do I delete my account and data?", plat ? "Person button → <b>Delete my account</b>. You can download all your data first. Deleting your account doesn't cancel a store subscription — cancel that too." : "Email support@landscapequotepro.co.uk."],
-    ]],
+    ] : [
+      ["How do I cancel?", "Person button → <b>Manage subscription</b> → Cancel. You won't be charged again."],
+      ["What happens when my subscription ends?", "You keep full access until the end of the period you've paid for. After that the app is read-only — you can still open, download and print your quotes — and your data is kept for 12 months. Subscribe again and everything is back straight away."],
+      ["Can I get a refund?", "Email support@landscapequotepro.co.uk and we'll sort it out."],
+    ]).concat([
+      ["How do I delete my account and data?", plat ? "Person button → <b>Delete my account</b>. You can download all your data first. " + (storeApp ? "Deleting your account doesn't cancel a store subscription — cancel that too." : "Cancel your subscription first (Manage subscription), or it will keep renewing.") : "Email support@landscapequotepro.co.uk."],
+    ])],
   ];
 }
 function renderHelp(){

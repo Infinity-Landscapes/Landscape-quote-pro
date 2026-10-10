@@ -92,6 +92,14 @@ function trialEndOf(a){
   if (extra && extra > end) end = extra;
   return end;
 }
+function endOfUkDay(d){
+  const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  // 23:59 London time that day (BST is UTC+1, GMT is UTC+0).
+  const noonUtc = new Date(ymd + 'T12:00:00Z');
+  const londonNoon = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', hour12: false }).format(noonUtc);
+  const offsetH = Number(londonNoon) - 12;
+  return new Date(Date.parse(ymd + 'T23:59:00Z') - offsetH * 3600000);
+}
 function wrap(fn){
   return async (req, res) => {
     try { await fn(req, res); }
@@ -191,7 +199,9 @@ functions.http('checkout', wrap(async (req, res) => {
     await ref.set({ stripeCustomerId: customer }, { merge: true });
   }
   // Still in the free trial: billing starts when it ends (Stripe needs that to be 2+ days away).
-  const trialEnd = trialEndOf(a);
+  // Billing starts at the end of the trial's last day (UK time), so Stripe shows the full number
+  // of days left rather than rounding a few minutes short down to one day fewer.
+  const trialEnd = endOfUkDay(trialEndOf(a));
   const trialSecs = Math.floor(trialEnd.getTime() / 1000);
   const subData = { metadata: { uid: user.uid, plan, period }, default_tax_rates: [cfg.taxRateId] };
   if (!a.stripeSubscriptionId && trialSecs > Math.floor(Date.now() / 1000) + 2 * 86400 + 600) subData.trial_end = trialSecs;
@@ -273,7 +283,7 @@ functions.http('admin', wrap(async (req, res) => {
       let price = await findPrice(lk);
       if (!price) {
         if (!products[id]) {
-          const p = await stripe('POST', 'products', { name: `Landscape Quote Pro — ${pl.name}`, description: `Use on up to ${pl.devices} devices. Every feature included.`, metadata: { plan: id }, tax_code: 'txcd_10103001' });
+          const p = await stripe('POST', 'products', { name: `Landscape Quote Pro — ${pl.name}`, description: `Up to ${pl.devices} devices registered to the account. Every feature included.`, metadata: { plan: id }, tax_code: 'txcd_10103001' });
           products[id] = p.id;
         }
         price = await stripe('POST', 'prices', { product: products[id], currency: 'gbp', unit_amount: pl[period], tax_behavior: 'exclusive',
@@ -283,7 +293,8 @@ functions.http('admin', wrap(async (req, res) => {
       // Keep the product's name in step with the app's name (it shows at checkout and on invoices).
       const want = `Landscape Quote Pro — ${pl.name}`;
       const prod = await stripe('GET', `products/${products[id]}`);
-      if (prod.name !== want) await stripe('POST', `products/${products[id]}`, { name: want });
+      const wantDesc = `Up to ${pl.devices} devices registered to the account. Every feature included.`;
+      if (prod.name !== want || prod.description !== wantDesc) await stripe('POST', `products/${products[id]}`, { name: want, description: wantDesc });
       prices[`${id}_${period}`] = price.id;
     }
   }
@@ -319,4 +330,4 @@ functions.http('admin', wrap(async (req, res) => {
   send(res, 200, Object.assign({}, out, { setupAt: new Date().toISOString() }));
 }));
 
-module.exports = { syncSubscription, form, planFromSub, trialEndOf };
+module.exports = { syncSubscription, form, planFromSub, trialEndOf, endOfUkDay };

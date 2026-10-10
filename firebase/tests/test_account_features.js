@@ -175,7 +175,7 @@ async function adminGet(docPath){ return rest('GET', `${FS}/${docPath}`, 'owner'
   await click(B.page, '#pfAccount [data-pf="close"]');
   await B.page.evaluate(()=>window.__platform.openPlans()); await settle(B.page, 300);
   let pl = await B.page.textContent('#pfPlans');
-  check('plans: Solo / Team / Business with device counts and prices', /Solo/.test(pl) && /Team/.test(pl) && /Business/.test(pl) && /£30/.test(pl) && /£45/.test(pl) && /£70/.test(pl) && /up to 10 devices/.test(pl.replace(/\s+/g,' ')));
+  check('plans: Solo / Team / Business with device counts and prices', /Solo/.test(pl) && /Team/.test(pl) && /Business/.test(pl) && /£30/.test(pl) && /£45/.test(pl) && /£70/.test(pl) && /Up to 10 devices registered/.test(pl.replace(/\s+/g,' ')));
   check('plans: current plan marked; on the website a Google Play plan is acknowledged, nothing to buy', /Your plan/.test(pl) && /billed through Google Play, so there's nothing to pay here/.test(pl) && !(await B.page.$('#pfPlans [data-pf="buy"]')));
   await click(B.page, '#pfPlans [data-pf="period"][data-period="yearly"]');
   pl = await B.page.textContent('#pfPlans');
