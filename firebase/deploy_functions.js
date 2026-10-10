@@ -106,18 +106,25 @@ async function deploy(){
   for (const [f, op] of ops) {
     const fn = await waitOp(op.name, 'https://cloudfunctions.googleapis.com/v2');
     console.log(`${f.id} ready: ${fn.serviceConfig && fn.serviceConfig.uri}`);
-    // Public functions: anyone may call them (each checks the signed-in user, or fetches the event back from Stripe).
-    const svc = `https://run.googleapis.com/v1/projects/${PROJECT}/locations/${REGION}/services/${f.id}`;
-    const pol = await call('GET', `${svc}:getIamPolicy`);
-    pol.bindings = (pol.bindings || []).filter(b => !(b.role === 'roles/run.invoker' && b.members.includes('allUsers')));
-    if (f.public) pol.bindings.push({ role: 'roles/run.invoker', members: ['allUsers'] });
-    await call('POST', `${svc}:setIamPolicy`, { policy: pol });
+    // Public functions: anyone may call them (each checks the signed-in user, or fetches the event
+    // back from Stripe). The organisation doesn't allow "allUsers" in IAM, so the Cloud Run
+    // invoker check is switched off on these services instead; the admin one keeps it.
+    await setPublic(f.id, f.public);
   }
+}
+async function setPublic(id, on){
+  const u = `https://run.googleapis.com/v2/projects/${PROJECT}/locations/${REGION}/services/${id}`;
+  const svc = await call('GET', u);
+  if (!!svc.invokerIamDisabled === !!on) { console.log(`${id}: ${on ? 'public' : 'private'}`); return; }
+  delete svc.template.revision; // a fresh revision name, or Cloud Run refuses the change
+  await call('PATCH', `${u}?updateMask=invokerIamDisabled,template`, { invokerIamDisabled: !!on, template: svc.template });
+  for (let i = 0; i < 60; i++) { await sleep(4000); const s = await call('GET', u); if (!s.reconciling) { console.log(`${id}: ${on ? 'public' : 'private'} (${s.terminalCondition && s.terminalCondition.state})`); return; } }
+  throw new Error('timed out making ' + id + (on ? ' public' : ' private'));
 }
 async function adminCall(body){
   const fn = await call('GET', `https://cloudfunctions.googleapis.com/v2/projects/${PROJECT}/locations/${REGION}/functions/stripe-admin`);
   const url = fn.serviceConfig.uri;
-  const idc = await auth.getIdTokenClient(url);
+  const idc = await new GoogleAuth().getIdTokenClient(url); // ID tokens can't carry scopes
   const r = await idc.request({ url, method: 'POST', data: body });
   return r.data;
 }
